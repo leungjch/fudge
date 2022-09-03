@@ -1,5 +1,5 @@
 # force-graph
-An implementation of the force-directed graph drawing algorithm in C++
+An implementation of the force-directed graph drawing algorithm in C++.
 
 ## Building
-```make && ./fdg``
+```make && ./fdg```
