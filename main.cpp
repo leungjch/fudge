@@ -10,6 +10,6 @@ int main() {
     int n2 = graph.add_node("B");
     graph.add_edge(n1,n2);
 
-    Universe universe(graph, 0.1, 100, 1.0, 1.0, 1.0 );
+    Universe universe(graph, 0.1, 1.0, 1.0, 1.0 );
     return 0;
 }

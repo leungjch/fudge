@@ -12,6 +12,35 @@ double Vec3D::distance(Vec3D v1, Vec3D v2)
 Vec3D Vec3D::zero() {
     return Vec3D(0.0,0.0,0.0);
 }
+Vec3D operator+(const Vec3D& lhs, const Vec3D& rhs) {
+    return Vec3D(
+                lhs.x + rhs.x,
+                lhs.y + rhs.y,
+                lhs.z + rhs.z
+    );
+}
+Vec3D operator*(const double lhs, const Vec3D& rhs) {
+    return Vec3D(
+        lhs*rhs.x,
+        lhs*rhs.y,
+        lhs*rhs.z
+    );
+}
+Vec3D operator*(const Vec3D& lhs, const double rhs) {
+    return Vec3D(
+        rhs*lhs.x,
+        rhs*lhs.y,
+        rhs*lhs.z
+    );
+}
+
+Vec3D operator/(const Vec3D& lhs, const Vec3D& rhs) {
+    return Vec3D(
+        lhs.x/rhs.y,
+        lhs.y/rhs.y,
+        lhs.z/rhs.z
+    );
+}
 
 Vec3D Vec3D::random(double range) {
    double lower_bound = 0.0;

@@ -2,7 +2,7 @@
 #define NODE_H
 #include <string>
 #include "vec3d.h"
-
+#include "rgb.h"
 using namespace std;
 
 class Node {
@@ -14,10 +14,12 @@ class Node {
         Vec3D pos;
         Vec3D vel;
         Vec3D acc;
+        double mass;
         int radius;
         double repulsion;
         double stiffness;
         double damping;
+        Rgb color;
 
         Node(int _id, string _data);
 };
