@@ -24,6 +24,7 @@ double mouseX = 0;
 double mouseY = 0;
 double mouseScroll = 0;
 bool mouseDown = false;
+bool autoRotateX = false;
 
 Universe universe(graph,
                   0.05, // dt
@@ -39,7 +40,7 @@ void init_graph()
     int n1 = graph.add_node("A");
     int n2 = graph.add_node("B");
     std::srand(time(NULL));
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         int n3 = graph.add_node("C");
         int rd = rand() % (graph.node_list.size());
@@ -86,7 +87,9 @@ void draw_graph(float yloc)
                   nd.color.b / 255.0);
         GLUquadric *quad;
         quad = gluNewQuadric();
-        double radius = (-exp(-nd.degree*0.1)+1)*1;
+        // Radius is determined by a node's degree
+        // Apply nonlinear scaling
+        double radius = log(nd.degree+1)*0.5;
         glTranslatef(nd.pos.x, nd.pos.y, nd.pos.z);
         gluSphere(quad, radius, 25, 10);
         glTranslatef(-nd.pos.x, -nd.pos.y, -nd.pos.z);
@@ -176,11 +179,6 @@ int main(int ArgCount, char **Args)
             universe.update(1.0 / timeDelta);
         }
 
-        // while (timeAccumulator >= timeDelta) {
-        //     universe.update(1.0/timeDelta);
-        //     timeAccumulator -= timeDelta;
-        //     timeSimulatedThisIteration += timeDelta;
-        // }
         currentTime = SDL_GetTicks();
         cout << "Update time: " << currentTime - startTime << endl;
 
@@ -234,7 +232,9 @@ int main(int ArgCount, char **Args)
                 case 'a':
                     camera.angle.y -= 1.0;
                     break;
-
+                case 'r':
+                    autoRotateX = not autoRotateX;
+                    break;
                 case 'f':
                     fullScreen = !fullScreen;
                     if (fullScreen)
@@ -254,6 +254,9 @@ int main(int ArgCount, char **Args)
             {
                 running = 0;
             }
+        }
+        if (autoRotateX) {
+            camera.angle.y += 1.0;
         }
 
         glViewport(0, 0, WIN_WIDTH, WIN_HEIGHT);
