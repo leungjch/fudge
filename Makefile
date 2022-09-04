@@ -7,7 +7,8 @@ EXEC=fdg
 
 
 ${EXEC}: ${OBJECTS}
-	${CXX} ${OBJECTS} -o ${EXEC}
+	${CXX} ${OBJECTS} -o ${EXEC} -I/usr/X11R6/include -L/usr/X11R6/lib \
+    -lGL -lGLEW -lSDL2 -lGLU -lglfw
 	rm ${OBJECTS} ${DEPENDS}
 -include ${DEPENDS}
 
