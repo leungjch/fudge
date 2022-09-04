@@ -4,7 +4,7 @@
 class MyCamera {
     public:
         Vec3D pos;
-        double angle;
+        Vec3D angle;
         MyCamera(Vec3D initPos);
 };
 #endif

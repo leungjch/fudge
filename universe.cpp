@@ -68,7 +68,7 @@ void Universe::update(double deltaT) {
             
         }
         // Optional: pull towards the origin
-        // f_spring = f_spring - compute_spring_force_general(0.5, n1.pos, Vec3D::zero());
+        f_spring = f_spring - compute_spring_force_general(0.25, n1.pos, Vec3D::zero());
 
         // Integrate laws of motion
         Vec3D f_net = f_spring + f_repulsion;
