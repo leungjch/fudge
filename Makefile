@@ -1,6 +1,6 @@
 CXX= g++
-CXXFLAGS=-std=c++17 -fopenmp -g -MMD 
-OBJECTS=main.o graph.o node.o vec3d.o universe.o rgb.o
+CXXFLAGS=-std=c++17 -fopenmp -MMD 
+OBJECTS=main.o graph.o node.o vec3d.o universe.o rgb.o mycamera.o
 
 DEPENDS=${OBJECTS:.o=.d}
 EXEC=fdg

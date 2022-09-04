@@ -21,6 +21,9 @@ Universe::Universe(Graph graph,
 Vec3D Universe::compute_spring_force(Node n1, Node n2) {
     return default_spring_k*(n2.pos - n1.pos);
 }
+Vec3D Universe::compute_spring_force_general(double k, Vec3D v1, Vec3D v2) {
+    return k*(v1-v2);
+}
 
 // Coloumb's Law: F_repulsion = k (q1 * q2) / r^2
 Vec3D Universe::compute_repulsion_force(Node n1, Node n2) {
@@ -64,6 +67,8 @@ void Universe::update(double deltaT) {
             }
             
         }
+        // Optional: pull towards the origin
+        // f_spring = f_spring - compute_spring_force_general(0.5, n1.pos, Vec3D::zero());
 
         // Integrate laws of motion
         Vec3D f_net = f_spring + f_repulsion;

@@ -4,6 +4,8 @@
 #include "graph.h"
 #include "universe.h"
 #include "vec3d.h"
+#include "mycamera.h"
+#include <GL/glut.h>
 #include <time.h> /* time */
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -13,15 +15,16 @@
 using namespace std;
 bool movingUp = false;       // Whether or not we are moving up or down
 float yLocation = 0.0f;      // Keep track of our position on the y axis.
-int n_iterations = 500;
+int n_iterations = 200;
 
 Graph graph;
+MyCamera camera(Vec3D(0,0,25));
 
 Universe universe(graph,
                   0.05, // dt
-                  0.5,  // repulsion
+                  1.0,   // repulsion
                   1.0,  // spring
-                  0.1   // damping
+                  1.0   // damping
 );
 // --------------------------------------------------------------------------------------------
 
@@ -30,7 +33,7 @@ Universe universe(graph,
 void init_graph() {
     int n1 = graph.add_node("A");
     int n2 = graph.add_node("B");
-    for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 1000; i++)
     {
         srand(time(NULL));
         int n3 = graph.add_node("C");
@@ -53,28 +56,16 @@ void init_graph() {
 
 void draw_graph(float yloc)
 {
-    int b;
     static int n_nodes = universe.graph.adj_list.size();
-    static float balls[10000][3];
-    static float lines[10000][2][3]; // [n][to/from][x/y/z]
-    static short first = true;
-
-    // Populate the node positions
-    // for (b = 0; b < n_nodes; b++)
-    // {
-    //     Vec3D pos = universe.graph.node_list[b].pos;
-    //     balls[b][0] = pos.x; // float(b % 100 - 50) / 10.0;
-    //     balls[b][1] = pos.y; // float(b % 100 - 50) / 10.0;
-    //     balls[b][2] = pos.z;
-    // }
 
     for (int i = 0; i < n_nodes; i++)
     { // Translate balls towards and away from front plane.
+        Node nd = universe.graph.node_list[i];
         // glPushMatrix();
         // glTranslatef(balls[b][0], balls[b][1], balls[b][2]);
         // glutSolidSphere(0.2, 16, 10);
         // glPopMatrix();
-        Node nd = universe.graph.node_list[i];
+
         glPointSize(10);
         glBegin(GL_POINTS);
         glVertex3f(nd.pos.x, nd.pos.y, nd.pos.z);
@@ -103,23 +94,14 @@ void render(void)
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Clear the background of our window to red
     glClear(GL_COLOR_BUFFER_BIT);         // Clear the colour buffer (more buffers later on)
     glLoadIdentity();                     // Load the Identity Matrix to reset our drawing locations
-
-    // gluLookAt(10,0,0,
-    // 0,0,0,
-    // 0,0,0);
-    glTranslatef(0.0f, 0.0f, -20.0f); // Push eveything 5 units back into the scene, otherwise we won't see the primitive
+    
+    // Set the camera
+    gluLookAt(camera.pos.x, 0.0f, camera.pos.z, camera.pos.x, 0.0f, camera.pos.z-1.0f, 0.0f, 1.0f, 0.0f);
+    glRotatef(camera.angle, 1, 0, 0);
+    camera.angle += 0.25f;
 
     draw_graph(yLocation);
     glTranslatef(0.0f, 0.0f, yLocation); // Translate our object along the y axis
-    // glRotatef (yRotationAngle, 0.0f, 1.0f, 0.0f); // Rotate our object around the y axis
-
-    // glFlush(); // Flush the OpenGL buffers to the window
-    // glutSwapBuffers();
-    cout << "yloc" << yLocation << endl;
-    if (movingUp)            // If we are moving up
-        yLocation -= 0.15f; // Move up along our yLocation
-    else                     // Otherwise
-        yLocation += 0.105f; // Move down along our yLocation
 }
 
 typedef int32_t i32;
@@ -151,8 +133,7 @@ int main(int ArgCount, char **Args)
     /* Set rendering settings */
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    // glOrtho(-2.0, 2.0, -2.0, 2.0, -100.0, 100.0);
-    gluPerspective(90, (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT, 1.0, 400.0); // Set the Field of view angle (in degrees), the aspect ratio of our window, and the new and far planes
+    gluPerspective(60, (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT, 1.0, 400.0); // Set the Field of view angle (in degrees), the aspect ratio of our window, and the new and far planes
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
@@ -189,6 +170,11 @@ int main(int ArgCount, char **Args)
         SDL_Event Event;
         while (SDL_PollEvent(&Event))
         {
+            // if (Event.type == SDL_MOUSEMOTION)
+            // {
+            //     cout << "Moved mouse " << Event.motion.x << endl;
+            //     cout << "Moved mouse " << Event.motion.y << endl;
+            // }
             if (Event.type == SDL_KEYDOWN)
             {
                 switch (Event.key.keysym.sym)
@@ -196,6 +182,8 @@ int main(int ArgCount, char **Args)
                 case SDLK_ESCAPE:
                     running = 0;
                     break;
+                case 'w':
+                    
                 case 'f':
                     fullScreen = !fullScreen;
                     if (fullScreen)
@@ -240,10 +228,6 @@ int main(int ArgCount, char **Args)
     }
     return 0;
 }
-
-// // --------------------------------------------------------------------------------------------
-
-
 // // --------------------------------------------------------------------------------------------
 
 // void reshape(int width, int height)

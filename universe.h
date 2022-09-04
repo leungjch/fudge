@@ -19,5 +19,6 @@ public:
   void update(double deltaT);
   Vec3D compute_spring_force(Node n1, Node n2);
   Vec3D compute_repulsion_force(Node n1, Node n2);
+  Vec3D compute_spring_force_general(double k, Vec3D v1, Vec3D v2);
   void set_graph(Graph graph);
 };
