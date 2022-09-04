@@ -48,7 +48,7 @@ Vec3D operator*(const Vec3D &lhs, const double rhs)
 Vec3D operator/(const Vec3D &lhs, const Vec3D &rhs)
 {
     return Vec3D(
-        lhs.x / rhs.x,
+        lhs.x / rhs.y,
         lhs.y / rhs.y,
         lhs.z / rhs.z);
 }
@@ -65,7 +65,7 @@ Vec3D Vec3D::random(double range)
     double lower_bound = -range;
     double upper_bound = range;
     std::random_device rd;  
-    std::mt19937 gen(rd()); 
+    std::minstd_rand gen(rd()); 
     std::uniform_real_distribution<double> unif(lower_bound, upper_bound);
     double rand_x = unif(rd);
     double rand_y = unif(rd);

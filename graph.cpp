@@ -18,6 +18,9 @@ int Graph::add_node(string data) {
 }
 
 void Graph::add_edge(int node_id_1, int node_id_2) {
+    if (node_id_1 == node_id_2) {
+        return;
+    }
     this->adj_list[node_id_1].insert(node_id_2);
     this->adj_list[node_id_2].insert(node_id_1);
 }

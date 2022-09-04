@@ -2,6 +2,7 @@
 #include <iostream>
 #include "universe.h"
 #include "graph.h"
+#include <omp.h>
 using namespace std;
 Universe::Universe(Graph graph, 
     double dt,
@@ -43,6 +44,8 @@ void Universe::update(double deltaT) {
         // Vec3D f_repulsion = Vec3D::random(10.0);
         Vec3D f_spring = Vec3D::zero();
         Vec3D f_repulsion = Vec3D::zero();
+
+        #pragma omp parallel for
         for (int j = 0; j < this->graph.adj_list.size(); j++) {
             if (i == j) {
                 continue;
