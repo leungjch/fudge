@@ -13,7 +13,8 @@ Node::Node(int id, string data) :
     radius{1},
     repulsion{1.0},
     stiffness{1.0},
-    damping{1.0}
+    damping{1.0},
+    degree{0}
 
 
 {}

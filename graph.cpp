@@ -24,3 +24,9 @@ void Graph::add_edge(int node_id_1, int node_id_2) {
     this->adj_list[node_id_1].insert(node_id_2);
     this->adj_list[node_id_2].insert(node_id_1);
 }
+
+void Graph::update_degrees() {
+    for (int i = 0; i < this->adj_list.size(); i++) {
+        this->node_list[i].degree = this->adj_list[i].size();
+    }
+}

@@ -19,6 +19,7 @@ class Node {
         double repulsion;
         double stiffness;
         double damping;
+        int degree;
         Rgb color;
 
         Node(int _id, string _data);

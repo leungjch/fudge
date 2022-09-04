@@ -23,5 +23,8 @@ class Graph {
 
         // Add an edge connecting node_1 and node_2
         void add_edge(int node_id_1, int node_id_2);
+
+        // Update the degree of each node
+        void update_degrees();
 };
 #endif

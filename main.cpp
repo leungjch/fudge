@@ -15,7 +15,7 @@
 using namespace std;
 bool movingUp = false;  // Whether or not we are moving up or down
 float yLocation = 0.0f; // Keep track of our position on the y axis.
-int n_iterations = 250;
+int n_iterations = 200;
 
 Graph graph;
 MyCamera camera(Vec3D(0, 0, 35));
@@ -28,7 +28,7 @@ bool mouseDown = false;
 Universe universe(graph,
                   0.05, // dt
                   0.5,  // repulsion
-                  5.0,  // spring
+                  1.0,  // spring
                   1.0   // damping
 );
 
@@ -39,7 +39,7 @@ void init_graph()
     int n1 = graph.add_node("A");
     int n2 = graph.add_node("B");
     std::srand(time(NULL));
-    for (int i = 0; i < 200; i++)
+    for (int i = 0; i < 1000; i++)
     {
         int n3 = graph.add_node("C");
         int rd = rand() % (graph.node_list.size());
@@ -86,8 +86,9 @@ void draw_graph(float yloc)
                   nd.color.b / 255.0);
         GLUquadric *quad;
         quad = gluNewQuadric();
+        double radius = (-exp(-nd.degree*0.1)+1)*1;
         glTranslatef(nd.pos.x, nd.pos.y, nd.pos.z);
-        gluSphere(quad, 0.25, 25, 10);
+        gluSphere(quad, radius, 25, 10);
         glTranslatef(-nd.pos.x, -nd.pos.y, -nd.pos.z);
 
         // // Draw as points
@@ -212,7 +213,7 @@ int main(int ArgCount, char **Args)
 
             if (Event.type == SDL_MOUSEWHEEL)
             {
-                camera.pos.z += Event.wheel.y;
+                camera.pos.z -= Event.wheel.y;
             }
             if (Event.type == SDL_KEYDOWN)
             {

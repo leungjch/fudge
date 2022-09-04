@@ -36,6 +36,7 @@ Vec3D Universe::compute_repulsion_force(Node n1, Node n2) {
 }
 void Universe::set_graph(Graph graph) {
     this->graph = graph;
+    this->graph.update_degrees();
 }
 
 void Universe::update(double deltaT) {
