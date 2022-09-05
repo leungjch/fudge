@@ -1,8 +1,8 @@
 #ifndef NODE_H
 #define NODE_H
 #include <string>
-#include "vec3d.h"
-#include "rgb.h"
+#include "utils/vec3d.h"
+#include "utils/rgb.h"
 using namespace std;
 
 class Node {

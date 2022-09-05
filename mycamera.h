@@ -1,7 +1,7 @@
 #ifndef MYCAMERA_H
 #define MYCAMERA_H
 #include "glm/glm/ext.hpp"
-#include "vec3d.h"
+#include "utils/vec3d.h"
 class MyCamera {
     public:
         glm::vec3 pos;

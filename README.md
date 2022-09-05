@@ -1,4 +1,4 @@
-# fudge - 3D force directed graphs
+# fudge - 3D force directed graph explorer
 
 ## Build
 ```make && ./fdg```

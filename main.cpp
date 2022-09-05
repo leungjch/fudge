@@ -7,7 +7,7 @@
 #include <iostream>
 #include "graph.h"
 #include "universe.h"
-#include "vec3d.h"
+#include "utils/vec3d.h"
 #include "mycamera.h"
 #include <GLFW/glfw3.h>
 #include <ctime>
@@ -36,7 +36,7 @@ MyCamera camera(WIN_WIDTH, WIN_HEIGHT);
 double mouseX = 0;
 double mouseY = 0;
 double mouseScroll = 0;
-float scroll_sensitivity = 0.2f;
+float scroll_sensitivity = 0.5f;
 float drag_sensitivity = 1.5;
 bool mouseDown = false;
 bool mouseDownFirst = false;
@@ -51,6 +51,7 @@ Universe universe(graph,
                   1.0,  // spring
                   1.0   // damping
 );
+
 
 // GL_LINES is deprecated, use this instead 
 // https://stackoverflow.com/questions/14486291/how-to-draw-line-in-opengl
