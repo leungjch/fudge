@@ -1,6 +1,6 @@
 # fudge - 3D force directed graph explorer
 
-Fudge is a 
+Fudge is a 3D graph visualization tool that uses the force-directed technique of drawing graphs.  We can consider the graph as a physical system where every vertex of a graph as a particle exerting a repelling force on every other vertex, and any two vertices connected by an edge are pulled towards each other by a spring force. Over time, the system settles into a stable configuration which results in an aesthetically pleasing visualization of the graph.
 
 ## Build
 
