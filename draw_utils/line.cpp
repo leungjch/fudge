@@ -4,9 +4,9 @@
 #include <iostream>
 #include "line.h"
 using namespace std;
+
 // GL_LINES is deprecated, use this instead
 // https://stackoverflow.com/questions/14486291/how-to-draw-line-in-opengl
-
 Line::Line(glm::vec3 start, glm::vec3 end)
 {
 
@@ -14,6 +14,9 @@ Line::Line(glm::vec3 start, glm::vec3 end)
     endPoint = end;
     lineColor = glm::vec3(1, 1, 1);
 
+}
+
+void Line::init() {
     const char *vertexShaderSource = "#version 300 es \n"
                                      "layout (location = 0) in vec3 aPos;\n"
                                      "uniform mat4 MVP;\n"
@@ -70,15 +73,15 @@ Line::Line(glm::vec3 start, glm::vec3 end)
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    vertices = {
-        start.x,
-        start.y,
-        start.z,
-        end.x,
-        end.y,
-        end.z,
+    // vertices = {
+    //     start.x,
+    //     start.y,
+    //     start.z,
+    //     end.x,
+    //     end.y,
+    //     end.z,
 
-    };
+    // };
 
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -92,6 +95,20 @@ Line::Line(glm::vec3 start, glm::vec3 end)
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+}
+void Line::setVertices(glm::vec3 start, glm::vec3 end)
+{
+    vertices = {
+        start.x,
+        start.y,
+        start.z,
+        end.x,
+        end.y,
+        end.z,
+
+    };
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
 }
 
 int Line::setMVP(glm::mat4 mvp)

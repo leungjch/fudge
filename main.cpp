@@ -8,6 +8,8 @@
 #include "graph.h"
 #include "universe.h"
 #include "utils/vec3d.h"
+#include "draw_utils/line.h"
+#include "draw_utils/solid_sphere.h"
 #include "mycamera.h"
 #include <GLFW/glfw3.h>
 #include <ctime>
@@ -28,7 +30,7 @@ typedef int32_t b32;
 using namespace std;
 bool movingUp = false;  // Whether or not we are moving up or down
 float yLocation = 0.0f; // Keep track of our position on the y axis.
-int n_iterations = 50;
+int n_iterations = 500;
 
 Graph graph;
 MyCamera camera(WIN_WIDTH, WIN_HEIGHT);
@@ -53,133 +55,17 @@ Universe universe(graph,
 );
 
 
-// GL_LINES is deprecated, use this instead 
-// https://stackoverflow.com/questions/14486291/how-to-draw-line-in-opengl
-class Line {
-    int shaderProgram;
-    unsigned int VBO, VAO;
-    vector<float> vertices;
-    glm::vec3 startPoint;
-    glm::vec3 endPoint;
-    glm::mat4 MVP = glm::mat4(1.0);
-    glm::vec3 lineColor;
-public:
-    Line(glm::vec3 start, glm::vec3 end) {
- 
-        startPoint = start;
-        endPoint = end;
-        lineColor = glm::vec3(1,1,1);
- 
-        const char *vertexShaderSource = "#version 300 es \n"
-            "layout (location = 0) in vec3 aPos;\n"
-            "uniform mat4 MVP;\n"
-            "void main()\n"
-            "{\n"
-            "   gl_Position = MVP * vec4(aPos.x, aPos.y, aPos.z, 1.0f);\n"
-            "}\0";
-        const char *fragmentShaderSource = "#version 300 es \n"
-            "precision mediump float;\n"
-            "out vec4 FragColor;\n"
-            "uniform vec3 color;\n"
-            "void main()\n"
-            "{\n"
-            "   FragColor = vec4(color, 1.0f);\n"
-            "}\n\0";
- 
-        int success;
-        char infoLog[512];
-        // vertex shader
-        int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-        glCompileShader(vertexShader);
-        // check for shader compile errors
-        glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
 
-        // check for shader compile errors
-        if(!success)
-        {
-            glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-            std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
-        };
-        // fragment shader
-        int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-        glCompileShader(fragmentShader);
-        glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-
-        // check for shader compile errors
-        if(!success)
-        {
-            glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-            std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
-        };
-
-        // link shaders
-        shaderProgram = glCreateProgram();
-        glAttachShader(shaderProgram, vertexShader);
-        glAttachShader(shaderProgram, fragmentShader);
-        glLinkProgram(shaderProgram);
-        // check for linking errors
- 
-
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
- 
-        vertices = {
-             start.x, start.y, start.z,
-             end.x, end.y, end.z,
- 
-        };
-        
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-        glBindVertexArray(VAO);
- 
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices)*vertices.size(), vertices.data(), GL_STATIC_DRAW);
- 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
- 
-        glBindBuffer(GL_ARRAY_BUFFER, 0); 
-        glBindVertexArray(0); 
- 
-    }
- 
-    int setMVP(glm::mat4 mvp) {
-        MVP = mvp;
-        return 1;
-    }
- 
-    int setColor(glm::vec3 color) {
-        lineColor = color;
-        return 1;
-    }
- 
-    int draw() {
-        glUseProgram(shaderProgram);
- 
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "MVP"), 1, GL_FALSE, &MVP[0][0]);
-        glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &lineColor[0]);
- 
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_LINES, 0, 2);
-        return 1;
-    }
- 
-    ~Line() {
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteBuffers(1, &VBO);
-        glDeleteProgram(shaderProgram);
-    }
-};
-
+SolidSphere sphere(
+        10.0f,12,24
+    );
+Line line(glm::vec3(0,0,0), glm::vec3(0,0,0));
 void init_graph()
 {
     int n1 = graph.add_node("A");
     int n2 = graph.add_node("B");
     std::srand(time(NULL));
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 100; i++)
     {
         int n3 = graph.add_node("C");
         int rd = rand() % (graph.node_list.size());
@@ -215,7 +101,7 @@ void draw_graph(float yloc)
             // glVertex3f(node_i.pos.x, node_i.pos.y, node_i.pos.z);
             // glVertex3f(node_j.pos.x, node_j.pos.y, node_j.pos.z);
             // glEnd();
-            Line line(
+            line.setVertices(
                 glm::vec3(node_i.pos.x, node_i.pos.y, node_i.pos.z),
                 glm::vec3(node_j.pos.x, node_j.pos.y, node_j.pos.z)
             );
@@ -228,27 +114,13 @@ void draw_graph(float yloc)
     { 
         Node nd = universe.graph.node_list[i];
 
-        // // Draw as spheres
-        // glColor3f(nd.color.r / 255.0,
-        //           nd.color.g / 255.0,
-        //           nd.color.b / 255.0);
-        // GLUquadric *quad;
-        // quad = gluNewQuadric();
-        // // Radius is determined by a node's degree
-        // // Apply nonlinear scaling
-        // double radius = log(nd.degree+1)*0.5;
-        // glTranslatef(nd.pos.x, nd.pos.y, nd.pos.z);
-        // gluSphere(quad, radius, 25, 10);
-        // glTranslatef(-nd.pos.x, -nd.pos.y, -nd.pos.z);
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(nd.pos.x, nd.pos.y, nd.pos.z));
+        glm::vec3 scale = glm::vec3(0.2f, 0.2f, 0.2f);
+        model = glm::scale(model, scale);
 
-        // // Draw as points
-        // glPointSize(10);
-        // glColor3f(nd.color.r/255.0,
-        //         nd.color.g/255.0,
-        //         nd.color.b/255.0);
-        // glBegin(GL_POINTS);
-        // glVertex3f(nd.pos.x, nd.pos.y, nd.pos.z);
-        // glEnd();
+        sphere.setMVP(model, view, projection);
+        sphere.draw();
     }
 }
 void render(void)
@@ -341,6 +213,7 @@ void main_loop() { loop(); }
 
 int main(int ArgCount, char **Args)
 {
+
     cout << "Starting fudge..." << endl;
     srand(time(NULL));
     #ifndef __EMSCRIPTEN__
@@ -393,6 +266,9 @@ int main(int ArgCount, char **Args)
     glm::radians<float>(60.0f), (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT,
     // Near and far planes
     0.1f, 100.0f);
+
+    sphere.init();
+    line.init();
 
     glEnable(GL_DEPTH_TEST);
 

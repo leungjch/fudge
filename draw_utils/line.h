@@ -16,7 +16,9 @@ class Line {
     public:
     int setMVP(glm::mat4 mvp);
     int setColor(glm::vec3 color);
+    void setVertices(glm::vec3 start, glm::vec3 end);
     int draw();
+    void init();
     Line(glm::vec3 start, glm::vec3 end);
     ~Line();
 };

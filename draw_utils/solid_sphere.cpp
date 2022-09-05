@@ -5,19 +5,23 @@
 #include "../glm/glm/ext.hpp"
 #include "solid_sphere.h"
 // Utility class for drawing a sphere
-// From https://stackoverflow.com/questions/5988686/creating-a-3d-sphere-in-opengl-using-visual-c
+// Adapted to modern OpenGL from https://stackoverflow.com/questions/5988686/creating-a-3d-sphere-in-opengl-using-visual-c
 SolidSphere::SolidSphere(float radius, unsigned int rings, unsigned int sectors)
 {
-    float const R = 1. / (float)(rings - 1);
-    float const S = 1. / (float)(sectors - 1);
-    int r, s;
+    radius = radius; 
+}
+
+void SolidSphere::init() {
+
 
     const char *vertexShaderSource = "#version 300 es \n"
                                      "layout (location = 0) in vec3 aPos;\n"
-                                     "uniform mat4 MVP;\n"
+                                     "uniform mat4 model;\n"
+                                     "uniform mat4 view;\n"
+                                     "uniform mat4 projection;\n"
                                      "void main()\n"
                                      "{\n"
-                                     "   gl_Position = MVP * vec4(aPos.x, aPos.y, aPos.z, 1.0f);\n"
+                                     "   gl_Position = projection * view * model * vec4(aPos, 1.0f);\n"
                                      "}\0";
     const char *fragmentShaderSource = "#version 300 es \n"
                                        "precision mediump float;\n"
@@ -69,41 +73,47 @@ SolidSphere::SolidSphere(float radius, unsigned int rings, unsigned int sectors)
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
     
-    vertices.resize(rings * sectors * 3);
-    normals.resize(rings * sectors * 3);
-    texcoords.resize(rings * sectors * 2);
-    std::vector<GLfloat>::iterator v = vertices.begin();
-    std::vector<GLfloat>::iterator n = normals.begin();
-    std::vector<GLfloat>::iterator t = texcoords.begin();
-    for (r = 0; r < rings; r++)
-        for (s = 0; s < sectors; s++)
-        {
-            float const y = sin(-M_PI_2 + M_PI * r * R);
-            float const x = cos(2 * M_PI * s * S) * sin(M_PI * r * R);
-            float const z = sin(2 * M_PI * s * S) * sin(M_PI * r * R);
 
-            *t++ = s * S;
-            *t++ = r * R;
+    vertices = {
+    -1.0f,-1.0f,-1.0f, // triangle 1 : begin
+    -1.0f,-1.0f, 1.0f,
+    -1.0f, 1.0f, 1.0f, // triangle 1 : end
+    1.0f, 1.0f,-1.0f, // triangle 2 : begin
+    -1.0f,-1.0f,-1.0f,
+    -1.0f, 1.0f,-1.0f, // triangle 2 : end
+    1.0f,-1.0f, 1.0f,
+    -1.0f,-1.0f,-1.0f,
+    1.0f,-1.0f,-1.0f,
+    1.0f, 1.0f,-1.0f,
+    1.0f,-1.0f,-1.0f,
+    -1.0f,-1.0f,-1.0f,
+    -1.0f,-1.0f,-1.0f,
+    -1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f,-1.0f,
+    1.0f,-1.0f, 1.0f,
+    -1.0f,-1.0f, 1.0f,
+    -1.0f,-1.0f,-1.0f,
+    -1.0f, 1.0f, 1.0f,
+    -1.0f,-1.0f, 1.0f,
+    1.0f,-1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f,-1.0f,-1.0f,
+    1.0f, 1.0f,-1.0f,
+    1.0f,-1.0f,-1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f,-1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f,-1.0f,
+    -1.0f, 1.0f,-1.0f,
+    1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f,-1.0f,
+    -1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f, 1.0f,
+    1.0f,-1.0f, 1.0f
+};
 
-            *v++ = x * radius;
-            *v++ = y * radius;
-            *v++ = z * radius;
 
-            *n++ = x;
-            *n++ = y;
-            *n++ = z;
-        }
-
-    indices.resize(rings * sectors * 4);
-    std::vector<GLushort>::iterator i = indices.begin();
-    for (r = 0; r < rings; r++)
-        for (s = 0; s < sectors; s++)
-        {
-            *i++ = r * sectors + s;
-            *i++ = r * sectors + (s + 1);
-            *i++ = (r + 1) * sectors + (s + 1);
-            *i++ = (r + 1) * sectors + s;
-        }
 
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -112,19 +122,29 @@ SolidSphere::SolidSphere(float radius, unsigned int rings, unsigned int sectors)
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    glVertexAttribPointer(
+        0,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+        3,                                // size
+        GL_FLOAT,                         // type
+        GL_FALSE,                         // normalized?
+        0,                                // stride
+        (void*)0                          // array buffer offset
+    );
+
     glEnableVertexAttribArray(0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
-
-void SolidSphere::setMVP(glm::mat4 mvp)
+void SolidSphere::setMVP(glm::mat4 m, glm::mat4 v, glm::mat4 p)
 {
-    MVP = mvp;
+   model = m;
+   view = v;
+   projection = p; 
 }
 
-void SolidSphere::draw(GLfloat x, GLfloat y, GLfloat z)
+void SolidSphere::draw()
 {
     // glMatrixMode(GL_MODELVIEW);
     // glPushMatrix();
@@ -142,10 +162,12 @@ void SolidSphere::draw(GLfloat x, GLfloat y, GLfloat z)
 
     glUseProgram(shaderProgram);
 
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "MVP"), 1, GL_FALSE, &MVP[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, &model[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, &projection[0][0]);
     glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &color[0]);
 
     glBindVertexArray(VAO);
-    glDrawArrays(GL_LINES, 0, 2);
+    glDrawArrays(GL_TRIANGLES, 0, 12*3);
 
 }
