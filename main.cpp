@@ -127,7 +127,7 @@ void draw_graph(float yloc)
 void render(void)
 {
 
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Clear the background of our window to red
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f); // Clear the background of our window to red
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);         // Clear the colour buffer (more buffers later on)
 
     // update camera position (rotating)
