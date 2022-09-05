@@ -8,7 +8,7 @@ EXEC=fdg.html
 
 ${EXEC}: ${OBJECTS}
 	${CXX} ${OBJECTS} -o ${EXEC} -I/usr/X11R6/include -L/usr/X11R6/lib \
-    -lGL -lGLEW -lGLU -lglfw -sLINKABLE=1 -sEXPORT_ALL=1 -sLEGACY_GL_EMULATION -s USE_GLFW=3
+    -lGL -lGLEW -lGLU -lglfw -s USE_WEBGL2=1 -s USE_GLFW=3 -s WASM=1 -sLINKABLE=1 -sEXPORT_ALL=1 -sLEGACY_GL_EMULATION
 
 	rm ${OBJECTS} ${DEPENDS}
 

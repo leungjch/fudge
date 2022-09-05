@@ -12,6 +12,8 @@
 #include <GLFW/glfw3.h>
 #include <ctime>
 #include <assert.h>
+#include <functional>
+#include "glm/glm/ext.hpp"
 #ifndef __EMSCRIPTEN__
     #include <omp.h>
 #endif
@@ -38,6 +40,108 @@ Universe universe(graph,
                   1.0   // damping
 );
 
+
+// https://stackoverflow.com/questions/14486291/how-to-draw-line-in-opengl
+class Line {
+    int shaderProgram;
+    unsigned int VBO, VAO;
+    vector<float> vertices;
+    glm::vec3 startPoint;
+    glm::vec3 endPoint;
+    glm::mat4 MVP = glm::mat4(1.0);
+    glm::vec3 lineColor;
+public:
+    Line(vec3 start, vec3 end) {
+ 
+        startPoint = start;
+        endPoint = end;
+        lineColor = glm::vec3(1,1,1);
+ 
+        const char *vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "uniform mat4 MVP;\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = MVP * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+            "}\0";
+        const char *fragmentShaderSource = "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "uniform vec3 color;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(color, 1.0f);\n"
+            "}\n\0";
+ 
+        // vertex shader
+        int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+        // check for shader compile errors
+ 
+        // fragment shader
+        int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+        // check for shader compile errors
+ 
+        // link shaders
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+        // check for linking errors
+ 
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+ 
+        vertices = {
+             start.x, start.y, start.z,
+             end.x, end.y, end.z,
+ 
+        };
+        
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glBindVertexArray(VAO);
+ 
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices)*vertices.size(), vertices.data(), GL_STATIC_DRAW);
+ 
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+ 
+        glBindBuffer(GL_ARRAY_BUFFER, 0); 
+        glBindVertexArray(0); 
+ 
+    }
+ 
+    int setMVP(glm::mat4 mvp) {
+        MVP = mvp;
+        return 1;
+    }
+ 
+    int setColor(glm::vec3 color) {
+        lineColor = color;
+        return 1;
+    }
+ 
+    int draw() {
+        glUseProgram(shaderProgram);
+ 
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "MVP"), 1, GL_FALSE, &MVP[0][0]);
+        glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &lineColor[0]);
+ 
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_LINES, 0, 2);
+        return 1;
+    }
+ 
+    ~Line() {
+        glDeleteVertexArrays(1, &VAO);
+        glDeleteBuffers(1, &VBO);
+        glDeleteProgram(shaderProgram);
+    }
+};
 
 void init_graph()
 {
@@ -111,7 +215,7 @@ void draw_graph(float yloc)
 void render(void)
 {
 
-    glClearColor(0.0f, 1.0f, 0.0f, 1.0f); // Clear the background of our window to red
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Clear the background of our window to red
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);         // Clear the colour buffer (more buffers later on)
     glLoadIdentity();                     // Load the Identity Matrix to reset our drawing locations
 
@@ -151,7 +255,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     if (key == GLFW_KEY_A) {
         camera.angle.y += 1.0;
     }
-    if (key == GLFW_KEY_S) {
+    if (key == GLFW_KEY_D) {
         camera.angle.y -= 1.0;
     }
     if (key == GLFW_KEY_R && action == GLFW_PRESS) {
@@ -163,6 +267,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     // If first time mouse down, reset the mouse positions
     // This prevents the camera from jerking when initially rotating
     if (mouseDownFirst) {
+    cout << "Mouse clicked" << endl;
         mouseX = xpos;
         mouseY = ypos;
         mouseDownFirst = false;
@@ -180,6 +285,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 }
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
+    cout << "Scroll clicked" << endl;
     camera.pos.z -= yoffset;
 }
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -191,9 +297,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         mouseDown = false;
 }
 
+std::function<void()> loop;
+void main_loop() { loop(); }
+
 
 int main(int ArgCount, char **Args)
 {
+    cout << "Starting fudge..." << endl;
     srand(time(NULL));
     #ifndef __EMSCRIPTEN__
     // Test if openMP is working
@@ -205,8 +315,9 @@ int main(int ArgCount, char **Args)
     }
     #endif
 
+    cout << "Initiating graph..." << endl;
     init_graph();
-
+    cout << "Done initiating graph with n=" << universe.graph.node_list.size() << endl;
     GLFWwindow* window;
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
@@ -231,7 +342,17 @@ int main(int ArgCount, char **Args)
     /* Set rendering settings */
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(60, (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT, 1.0, 400.0); // Set the Field of view angle (in degrees), the aspect ratio of our window, and the new and far planes
+    glm::mat4 projection = glm::perspective(
+    // FOV & aspect
+    glm::radians<float>(60.0f), (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT,
+    // Near and far planes
+    0.001f, 1000.0f);
+
+    // If you're using the now deprecated matrix stacks
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(glm::value_ptr(projection));
+
+
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glEnable(GL_DEPTH_TEST);
@@ -246,10 +367,7 @@ int main(int ArgCount, char **Args)
     u32 currentTime = glfwGetTime();
     u32 startTime = glfwGetTime();
     u32 initTime = glfwGetTime();
-
-    while (!glfwWindowShouldClose(window))
-    {
-
+    loop = [&] {
         timeSimulatedThisIteration = 0;
         startTime = glfwGetTime();
         ++frames;
@@ -261,7 +379,7 @@ int main(int ArgCount, char **Args)
         }
 
         currentTime = glfwGetTime();
-        cout << "Update time: " << currentTime - startTime << endl;
+        // cout << "Update time: " << currentTime - startTime << endl;
 
         if (autoRotateX) {
             camera.angle.y += 1.0;
@@ -273,14 +391,22 @@ int main(int ArgCount, char **Args)
         u32 renderStart = (float) glfwGetTime();
         render();
         u32 renderEnd = glfwGetTime();
-        cout << "Render time: " << renderEnd - renderStart << endl;
+        // cout << "Render time: " << renderEnd - renderStart << endl;
         // Render();
         currentTime = glfwGetTime();
         timeAccumulator += currentTime - startTime;
         glfwSwapBuffers(window);
         glfwPollEvents();
-    }
+    };
 
+    #ifdef __EMSCRIPTEN__
+        emscripten_set_main_loop(main_loop, 0, true);
+    #else 
+        while (!glfwWindowShouldClose(window))
+            main_loop();
+    #endif
+
+    
     currentTime = glfwGetTime();
     if (currentTime > initTime)
     {
@@ -290,7 +416,5 @@ int main(int ArgCount, char **Args)
 
     glfwDestroyWindow(window);
     glfwTerminate();
-
-
-    return 0;
+    exit(EXIT_SUCCESS);
 }

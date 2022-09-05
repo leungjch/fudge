@@ -1163,8 +1163,8 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  380684: ($0) => { if (!$0) { AL.alcErr = 0xA004 ; return 1; } },  
- 380732: ($0) => { if (!AL.currentCtx) { err("alGetProcAddress() called without a valid context"); return 1; } if (!$0) { AL.currentCtx.err = 0xA003 ; return 1; } }
+  383052: ($0) => { if (!$0) { AL.alcErr = 0xA004 ; return 1; } },  
+ 383100: ($0) => { if (!AL.currentCtx) { err("alGetProcAddress() called without a valid context"); return 1; } if (!$0) { AL.currentCtx.err = 0xA003 ; return 1; } }
 };
 
 
@@ -6613,7 +6613,7 @@ var ASM_CONSTS = {
           var contextAttributes = {
             antialias: false,
             alpha: false,
-            majorVersion: 1,
+            majorVersion: (typeof WebGL2RenderingContext != 'undefined') ? 2 : 1,
           };
   
           if (webGLContextAttributes) {
@@ -11031,12 +11031,24 @@ var ASM_CONSTS = {
     }
   Module["__webgl_enable_WEBGL_draw_buffers"] = __webgl_enable_WEBGL_draw_buffers;
   
+  function __webgl_enable_WEBGL_draw_instanced_base_vertex_base_instance(ctx) {
+      // Closure is expected to be allowed to minify the '.dibvbi' property, so not accessing it quoted.
+      return !!(ctx.dibvbi = ctx.getExtension('WEBGL_draw_instanced_base_vertex_base_instance'));
+    }
+  Module["__webgl_enable_WEBGL_draw_instanced_base_vertex_base_instance"] = __webgl_enable_WEBGL_draw_instanced_base_vertex_base_instance;
+  
+  function __webgl_enable_WEBGL_multi_draw_instanced_base_vertex_base_instance(ctx) {
+      // Closure is expected to be allowed to minify the '.mdibvbi' property, so not accessing it quoted.
+      return !!(ctx.mdibvbi = ctx.getExtension('WEBGL_multi_draw_instanced_base_vertex_base_instance'));
+    }
+  Module["__webgl_enable_WEBGL_multi_draw_instanced_base_vertex_base_instance"] = __webgl_enable_WEBGL_multi_draw_instanced_base_vertex_base_instance;
+  
   function __webgl_enable_WEBGL_multi_draw(ctx) {
       // Closure is expected to be allowed to minify the '.multiDrawWebgl' property, so not accessing it quoted.
       return !!(ctx.multiDrawWebgl = ctx.getExtension('WEBGL_multi_draw'));
     }
   Module["__webgl_enable_WEBGL_multi_draw"] = __webgl_enable_WEBGL_multi_draw;
-  var GL = {counter:1,buffers:[],programs:[],framebuffers:[],renderbuffers:[],textures:[],shaders:[],vaos:[],contexts:[],offscreenCanvases:{},queries:[],byteSizeByTypeRoot:5120,byteSizeByType:[1,1,2,2,4,4,4,2,3,4,8],stringCache:{},unpackAlignment:4,recordError:function recordError(errorCode) {
+  var GL = {counter:1,buffers:[],programs:[],framebuffers:[],renderbuffers:[],textures:[],shaders:[],vaos:[],contexts:[],offscreenCanvases:{},queries:[],samplers:[],transformFeedbacks:[],syncs:[],byteSizeByTypeRoot:5120,byteSizeByType:[1,1,2,2,4,4,4,2,3,4,8],stringCache:{},stringiCache:{},unpackAlignment:4,recordError:function recordError(errorCode) {
         if (!GL.lastError) {
           GL.lastError = errorCode;
         }
@@ -11173,6 +11185,10 @@ var ASM_CONSTS = {
         }
   
         var ctx = 
+          (webGLContextAttributes.majorVersion > 1)
+          ?
+            canvas.getContext("webgl2", webGLContextAttributes)
+          :
           (canvas.getContext("webgl", webGLContextAttributes)
             // https://caniuse.com/#feat=webgl
             );
@@ -11230,7 +11246,21 @@ var ASM_CONSTS = {
         __webgl_enable_ANGLE_instanced_arrays(GLctx);
         __webgl_enable_OES_vertex_array_object(GLctx);
         __webgl_enable_WEBGL_draw_buffers(GLctx);
+        // Extensions that are available from WebGL >= 2 (no-op if called on a WebGL 1 context active)
+        __webgl_enable_WEBGL_draw_instanced_base_vertex_base_instance(GLctx);
+        __webgl_enable_WEBGL_multi_draw_instanced_base_vertex_base_instance(GLctx);
   
+        // On WebGL 2, EXT_disjoint_timer_query is replaced with an alternative
+        // that's based on core APIs, and exposes only the queryCounterEXT()
+        // entrypoint.
+        if (context.version >= 2) {
+          GLctx.disjointTimerQueryExt = GLctx.getExtension("EXT_disjoint_timer_query_webgl2");
+        }
+  
+        // However, Firefox exposes the WebGL 1 version on WebGL 2 as well and
+        // thus we look for the WebGL 1 version again if the WebGL 2 version
+        // isn't present. https://bugzilla.mozilla.org/show_bug.cgi?id=1328882
+        if (context.version < 2 || !GLctx.disjointTimerQueryExt)
         {
           GLctx.disjointTimerQueryExt = GLctx.getExtension("EXT_disjoint_timer_query");
         }
@@ -11317,6 +11347,7 @@ var ASM_CONSTS = {
             GL.recordError(0x500); // GL_INVALID_ENUM
           }
           return; // Do not write anything to the out pointer, since no binary formats are supported.
+        case 0x87FE: // GL_NUM_PROGRAM_BINARY_FORMATS
         case 0x8DF9: // GL_NUM_SHADER_BINARY_FORMATS
           ret = 0;
           break;
@@ -11327,6 +11358,23 @@ var ASM_CONSTS = {
           ret = formats ? formats.length : 0;
           break;
   
+        case 0x821D: // GL_NUM_EXTENSIONS
+          if (GL.currentContext.version < 2) {
+            GL.recordError(0x502 /* GL_INVALID_OPERATION */); // Calling GLES3/WebGL2 function with a GLES2/WebGL1 context
+            return;
+          }
+          // .getSupportedExtensions() can return null if context is lost, so coerce to empty array.
+          var exts = GLctx.getSupportedExtensions() || [];
+          ret = 2 * exts.length; // each extension is duplicated, first in unprefixed WebGL form, and then a second time with "GL_" prefix.
+          break;
+        case 0x821B: // GL_MAJOR_VERSION
+        case 0x821C: // GL_MINOR_VERSION
+          if (GL.currentContext.version < 2) {
+            GL.recordError(0x500); // GL_INVALID_ENUM
+            return;
+          }
+          ret = name_ == 0x821B ? 3 : 0; // return version 3.0
+          break;
       }
   
       if (ret === undefined) {
@@ -11353,6 +11401,17 @@ var ASM_CONSTS = {
                 case 0x8CA7: // RENDERBUFFER_BINDING
                 case 0x8069: // TEXTURE_BINDING_2D
                 case 0x85B5: // WebGL 2 GL_VERTEX_ARRAY_BINDING, or WebGL 1 extension OES_vertex_array_object GL_VERTEX_ARRAY_BINDING_OES
+                case 0x8F36: // COPY_READ_BUFFER_BINDING or COPY_READ_BUFFER
+                case 0x8F37: // COPY_WRITE_BUFFER_BINDING or COPY_WRITE_BUFFER
+                case 0x88ED: // PIXEL_PACK_BUFFER_BINDING
+                case 0x88EF: // PIXEL_UNPACK_BUFFER_BINDING
+                case 0x8CAA: // READ_FRAMEBUFFER_BINDING
+                case 0x8919: // SAMPLER_BINDING
+                case 0x8C1D: // TEXTURE_BINDING_2D_ARRAY
+                case 0x806A: // TEXTURE_BINDING_3D
+                case 0x8E25: // TRANSFORM_FEEDBACK_BINDING
+                case 0x8C8F: // TRANSFORM_FEEDBACK_BUFFER_BINDING
+                case 0x8A28: // UNIFORM_BUFFER_BINDING
                 case 0x8514: { // TEXTURE_BINDING_CUBE_MAP
                   ret = 0;
                   break;
@@ -11439,6 +11498,8 @@ var ASM_CONSTS = {
           case 0x1F02 /* GL_VERSION */:
             var glVersion = GLctx.getParameter(0x1F02 /*GL_VERSION*/);
             // return GLES version string corresponding to the version of the WebGL context
+            if (GL.currentContext.version >= 2) glVersion = 'OpenGL ES 3.0 (' + glVersion + ')';
+            else
             {
               glVersion = 'OpenGL ES 2.0 (' + glVersion + ')';
             }
@@ -11540,6 +11601,19 @@ var ASM_CONSTS = {
         GLctx.currentElementArrayBufferBinding = buffer;
       }
   
+      if (target == 0x88EB /*GL_PIXEL_PACK_BUFFER*/) {
+        // In WebGL 2 glReadPixels entry point, we need to use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_PACK_BUFFER_BINDING point, so must keep track whether that binding point is non-null to know what is
+        // the proper API function to call.
+        GLctx.currentPixelPackBufferBinding = buffer;
+      } else if (target == 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/) {
+        // In WebGL 2 gl(Compressed)Tex(Sub)Image[23]D entry points, we need to
+        // use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_UNPACK_BUFFER_BINDING point, so must keep track whether that
+        // binding point is non-null to know what is the proper API function to
+        // call.
+        GLctx.currentPixelUnpackBufferBinding = buffer;
+      }
       GLctx.bindBuffer(target, GL.buffers[buffer]);
     }
   Module["_glBindBuffer"] = _glBindBuffer;
@@ -16233,10 +16307,18 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glBegin"] = _emscripten_glBegin;
 
+  function _emscripten_glBeginQuery(target, id) {
+      GLctx['beginQuery'](target, GL.queries[id]);
+    }
+  Module["_emscripten_glBeginQuery"] = _emscripten_glBeginQuery;
+
   function _emscripten_glBeginQueryEXT(target, id) {
       GLctx.disjointTimerQueryExt['beginQueryEXT'](target, GL.queries[id]);
     }
   Module["_emscripten_glBeginQueryEXT"] = _emscripten_glBeginQueryEXT;
+
+  function _emscripten_glBeginTransformFeedback(x0) { GLctx['beginTransformFeedback'](x0) }
+  Module["_emscripten_glBeginTransformFeedback"] = _emscripten_glBeginTransformFeedback;
 
   function _emscripten_glBindAttribLocation(program, index, name) {
       GLctx.bindAttribLocation(GL.programs[program], index, UTF8ToString(name));
@@ -16251,9 +16333,32 @@ var ASM_CONSTS = {
         GLctx.currentElementArrayBufferBinding = buffer;
       }
   
+      if (target == 0x88EB /*GL_PIXEL_PACK_BUFFER*/) {
+        // In WebGL 2 glReadPixels entry point, we need to use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_PACK_BUFFER_BINDING point, so must keep track whether that binding point is non-null to know what is
+        // the proper API function to call.
+        GLctx.currentPixelPackBufferBinding = buffer;
+      } else if (target == 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/) {
+        // In WebGL 2 gl(Compressed)Tex(Sub)Image[23]D entry points, we need to
+        // use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_UNPACK_BUFFER_BINDING point, so must keep track whether that
+        // binding point is non-null to know what is the proper API function to
+        // call.
+        GLctx.currentPixelUnpackBufferBinding = buffer;
+      }
       GLctx.bindBuffer(target, GL.buffers[buffer]);
     }
   Module["_emscripten_glBindBuffer"] = _emscripten_glBindBuffer;
+
+  function _emscripten_glBindBufferBase(target, index, buffer) {
+      GLctx['bindBufferBase'](target, index, GL.buffers[buffer]);
+    }
+  Module["_emscripten_glBindBufferBase"] = _emscripten_glBindBufferBase;
+
+  function _emscripten_glBindBufferRange(target, index, buffer, offset, ptrsize) {
+      GLctx['bindBufferRange'](target, index, GL.buffers[buffer], offset, ptrsize);
+    }
+  Module["_emscripten_glBindBufferRange"] = _emscripten_glBindBufferRange;
 
   function _emscripten_glBindFramebuffer(target, framebuffer) {
   
@@ -16272,10 +16377,20 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glBindRenderbuffer"] = _emscripten_glBindRenderbuffer;
 
+  function _emscripten_glBindSampler(unit, sampler) {
+      GLctx['bindSampler'](unit, GL.samplers[sampler]);
+    }
+  Module["_emscripten_glBindSampler"] = _emscripten_glBindSampler;
+
   function _emscripten_glBindTexture(target, texture) {
       GLctx.bindTexture(target, GL.textures[texture]);
     }
   Module["_emscripten_glBindTexture"] = _emscripten_glBindTexture;
+
+  function _emscripten_glBindTransformFeedback(target, id) {
+      GLctx['bindTransformFeedback'](target, GL.transformFeedbacks[id]);
+    }
+  Module["_emscripten_glBindTransformFeedback"] = _emscripten_glBindTransformFeedback;
 
   function _glEnableClientState(cap) {
       var attrib = GLEmulation.getAttributeFromCapability(cap);
@@ -16323,6 +16438,13 @@ var ASM_CONSTS = {
       }
     }
   Module["_emulGlBindVertexArray"] = _emulGlBindVertexArray;
+  function _emscripten_glBindVertexArray(vao) {
+      _emulGlBindVertexArray(vao);
+      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
+      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
+    }
+  Module["_emscripten_glBindVertexArray"] = _emscripten_glBindVertexArray;
+
   function _emscripten_glBindVertexArrayOES(vao) {
       _emulGlBindVertexArray(vao);
       var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
@@ -16345,6 +16467,9 @@ var ASM_CONSTS = {
   function _emscripten_glBlendFuncSeparate(x0, x1, x2, x3) { GLctx['blendFuncSeparate'](x0, x1, x2, x3) }
   Module["_emscripten_glBlendFuncSeparate"] = _emscripten_glBlendFuncSeparate;
 
+  function _emscripten_glBlitFramebuffer(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) { GLctx['blitFramebuffer'](x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) }
+  Module["_emscripten_glBlitFramebuffer"] = _emscripten_glBlitFramebuffer;
+
   function _emscripten_glBufferData(target, size, data, usage) {
       switch (usage) { // fix usages, WebGL 1 only has *_DRAW
         case 0x88E1: // GL_STREAM_READ
@@ -16361,13 +16486,28 @@ var ASM_CONSTS = {
           break;
       }
   
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        // If size is zero, WebGL would interpret uploading the whole input arraybuffer (starting from given offset), which would
+        // not make sense in WebAssembly, so avoid uploading if size is zero. However we must still call bufferData to establish a
+        // backing storage of zero bytes.
+        if (data && size) {
+          GLctx.bufferData(target, HEAPU8, usage, data, size);
+        } else {
+          GLctx.bufferData(target, size, usage);
+        }
+      } else {
         // N.b. here first form specifies a heap subarray, second form an integer size, so the ?: code here is polymorphic. It is advised to avoid
         // randomly mixing both uses in calling code, to avoid any potential JS engine JIT issues.
         GLctx.bufferData(target, data ? HEAPU8.subarray(data, data+size) : size, usage);
+      }
     }
   Module["_emscripten_glBufferData"] = _emscripten_glBufferData;
 
   function _emscripten_glBufferSubData(target, offset, size, data) {
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        size && GLctx.bufferSubData(target, offset, HEAPU8, data, size);
+        return;
+      }
       GLctx.bufferSubData(target, offset, HEAPU8.subarray(data, data+size));
     }
   Module["_emscripten_glBufferSubData"] = _emscripten_glBufferSubData;
@@ -16377,6 +16517,27 @@ var ASM_CONSTS = {
 
   function _emscripten_glClear(x0) { GLctx['clear'](x0) }
   Module["_emscripten_glClear"] = _emscripten_glClear;
+
+  function _emscripten_glClearBufferfi(x0, x1, x2, x3) { GLctx['clearBufferfi'](x0, x1, x2, x3) }
+  Module["_emscripten_glClearBufferfi"] = _emscripten_glClearBufferfi;
+
+  function _emscripten_glClearBufferfv(buffer, drawbuffer, value) {
+  
+      GLctx['clearBufferfv'](buffer, drawbuffer, HEAPF32, value>>2);
+    }
+  Module["_emscripten_glClearBufferfv"] = _emscripten_glClearBufferfv;
+
+  function _emscripten_glClearBufferiv(buffer, drawbuffer, value) {
+  
+      GLctx['clearBufferiv'](buffer, drawbuffer, HEAP32, value>>2);
+    }
+  Module["_emscripten_glClearBufferiv"] = _emscripten_glClearBufferiv;
+
+  function _emscripten_glClearBufferuiv(buffer, drawbuffer, value) {
+  
+      GLctx['clearBufferuiv'](buffer, drawbuffer, HEAPU32, value>>2);
+    }
+  Module["_emscripten_glClearBufferuiv"] = _emscripten_glClearBufferuiv;
 
   function _emscripten_glClearColor(x0, x1, x2, x3) { GLctx['clearColor'](x0, x1, x2, x3) }
   Module["_emscripten_glClearColor"] = _emscripten_glClearColor;
@@ -16391,6 +16552,23 @@ var ASM_CONSTS = {
       GLImmediate.clientActiveTexture = texture - 0x84C0; // GL_TEXTURE0
     }
   Module["_emscripten_glClientActiveTexture"] = _emscripten_glClientActiveTexture;
+
+  function convertI32PairToI53(lo, hi) {
+      // This function should not be getting called with too large unsigned numbers
+      // in high part (if hi >= 0x7FFFFFFFF, one should have been calling
+      // convertU32PairToI53())
+      assert(hi === (hi|0));
+      return (lo >>> 0) + hi * 4294967296;
+    }
+  Module["convertI32PairToI53"] = convertI32PairToI53;
+  function _emscripten_glClientWaitSync(sync, flags, timeoutLo, timeoutHi) {
+      // WebGL2 vs GLES3 differences: in GLES3, the timeout parameter is a uint64, where 0xFFFFFFFFFFFFFFFFULL means GL_TIMEOUT_IGNORED.
+      // In JS, there's no 64-bit value types, so instead timeout is taken to be signed, and GL_TIMEOUT_IGNORED is given value -1.
+      // Inherently the value accepted in the timeout is lossy, and can't take in arbitrary u64 bit pattern (but most likely doesn't matter)
+      // See https://www.khronos.org/registry/webgl/specs/latest/2.0/#5.15
+      return GLctx.clientWaitSync(GL.syncs[sync], flags, convertI32PairToI53(timeoutLo, timeoutHi));
+    }
+  Module["_emscripten_glClientWaitSync"] = _emscripten_glClientWaitSync;
 
   function _emscripten_glClipPlane(pname, param) {
       if ((pname >= 0x3000) && (pname < 0x3006)  /* GL_CLIP_PLANE0 to GL_CLIP_PLANE5 */) {
@@ -16544,20 +16722,60 @@ var ASM_CONSTS = {
   Module["_emscripten_glCompileShader"] = _emscripten_glCompileShader;
 
   function _emscripten_glCompressedTexImage2D(target, level, internalFormat, width, height, border, imageSize, data) {
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
+          GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, imageSize, data);
+        } else {
+          GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, HEAPU8, data, imageSize);
+        }
+        return;
+      }
       GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
     }
   Module["_emscripten_glCompressedTexImage2D"] = _emscripten_glCompressedTexImage2D;
 
+  function _emscripten_glCompressedTexImage3D(target, level, internalFormat, width, height, depth, border, imageSize, data) {
+      if (GLctx.currentPixelUnpackBufferBinding) {
+        GLctx['compressedTexImage3D'](target, level, internalFormat, width, height, depth, border, imageSize, data);
+      } else {
+        GLctx['compressedTexImage3D'](target, level, internalFormat, width, height, depth, border, HEAPU8, data, imageSize);
+      }
+    }
+  Module["_emscripten_glCompressedTexImage3D"] = _emscripten_glCompressedTexImage3D;
+
   function _emscripten_glCompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data) {
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
+          GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, imageSize, data);
+        } else {
+          GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, HEAPU8, data, imageSize);
+        }
+        return;
+      }
       GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
     }
   Module["_emscripten_glCompressedTexSubImage2D"] = _emscripten_glCompressedTexSubImage2D;
+
+  function _emscripten_glCompressedTexSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data) {
+      if (GLctx.currentPixelUnpackBufferBinding) {
+        GLctx['compressedTexSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data);
+      } else {
+        GLctx['compressedTexSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, HEAPU8, data, imageSize);
+      }
+    }
+  Module["_emscripten_glCompressedTexSubImage3D"] = _emscripten_glCompressedTexSubImage3D;
+
+  function _emscripten_glCopyBufferSubData(x0, x1, x2, x3, x4) { GLctx['copyBufferSubData'](x0, x1, x2, x3, x4) }
+  Module["_emscripten_glCopyBufferSubData"] = _emscripten_glCopyBufferSubData;
 
   function _emscripten_glCopyTexImage2D(x0, x1, x2, x3, x4, x5, x6, x7) { GLctx['copyTexImage2D'](x0, x1, x2, x3, x4, x5, x6, x7) }
   Module["_emscripten_glCopyTexImage2D"] = _emscripten_glCopyTexImage2D;
 
   function _emscripten_glCopyTexSubImage2D(x0, x1, x2, x3, x4, x5, x6, x7) { GLctx['copyTexSubImage2D'](x0, x1, x2, x3, x4, x5, x6, x7) }
   Module["_emscripten_glCopyTexSubImage2D"] = _emscripten_glCopyTexSubImage2D;
+
+  function _emscripten_glCopyTexSubImage3D(x0, x1, x2, x3, x4, x5, x6, x7, x8) { GLctx['copyTexSubImage3D'](x0, x1, x2, x3, x4, x5, x6, x7, x8) }
+  Module["_emscripten_glCopyTexSubImage3D"] = _emscripten_glCopyTexSubImage3D;
 
   function _emscripten_glCreateProgram() {
       var id = GL.getNewId(GL.programs);
@@ -16598,6 +16816,8 @@ var ASM_CONSTS = {
   
         if (id == GLctx.currentArrayBufferBinding) GLctx.currentArrayBufferBinding = 0;
         if (id == GLctx.currentElementArrayBufferBinding) GLctx.currentElementArrayBufferBinding = 0;
+        if (id == GLctx.currentPixelPackBufferBinding) GLctx.currentPixelPackBufferBinding = 0;
+        if (id == GLctx.currentPixelUnpackBufferBinding) GLctx.currentPixelUnpackBufferBinding = 0;
       }
     }
   Module["_emscripten_glDeleteBuffers"] = _emscripten_glDeleteBuffers;
@@ -16649,6 +16869,17 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glDeleteProgram"] = _emscripten_glDeleteProgram;
 
+  function _emscripten_glDeleteQueries(n, ids) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((ids)+(i*4))>>2)];
+        var query = GL.queries[id];
+        if (!query) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
+        GLctx['deleteQuery'](query);
+        GL.queries[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteQueries"] = _emscripten_glDeleteQueries;
+
   function _emscripten_glDeleteQueriesEXT(n, ids) {
       for (var i = 0; i < n; i++) {
         var id = HEAP32[(((ids)+(i*4))>>2)];
@@ -16672,6 +16903,18 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glDeleteRenderbuffers"] = _emscripten_glDeleteRenderbuffers;
 
+  function _emscripten_glDeleteSamplers(n, samplers) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((samplers)+(i*4))>>2)];
+        var sampler = GL.samplers[id];
+        if (!sampler) continue;
+        GLctx['deleteSampler'](sampler);
+        sampler.name = 0;
+        GL.samplers[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteSamplers"] = _emscripten_glDeleteSamplers;
+
   function _emscripten_glDeleteShader(id) {
       if (!id) return;
       var shader = GL.shaders[id];
@@ -16683,6 +16926,19 @@ var ASM_CONSTS = {
       GL.shaders[id] = null;
     }
   Module["_emscripten_glDeleteShader"] = _emscripten_glDeleteShader;
+
+  function _emscripten_glDeleteSync(id) {
+      if (!id) return;
+      var sync = GL.syncs[id];
+      if (!sync) { // glDeleteSync signals an error when deleting a nonexisting object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteSync(sync);
+      sync.name = 0;
+      GL.syncs[id] = null;
+    }
+  Module["_emscripten_glDeleteSync"] = _emscripten_glDeleteSync;
 
   function _emscripten_glDeleteTextures(n, textures) {
       for (var i = 0; i < n; i++) {
@@ -16696,6 +16952,18 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glDeleteTextures"] = _emscripten_glDeleteTextures;
 
+  function _emscripten_glDeleteTransformFeedbacks(n, ids) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((ids)+(i*4))>>2)];
+        var transformFeedback = GL.transformFeedbacks[id];
+        if (!transformFeedback) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
+        GLctx['deleteTransformFeedback'](transformFeedback);
+        transformFeedback.name = 0;
+        GL.transformFeedbacks[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteTransformFeedbacks"] = _emscripten_glDeleteTransformFeedbacks;
+
   function _emulGlDeleteVertexArrays(n, vaos) {
       for (var i = 0; i < n; i++) {
         var id = HEAP32[(((vaos)+(i*4))>>2)];
@@ -16704,6 +16972,11 @@ var ASM_CONSTS = {
       }
     }
   Module["_emulGlDeleteVertexArrays"] = _emulGlDeleteVertexArrays;
+  function _emscripten_glDeleteVertexArrays(n, vaos) {
+      _emulGlDeleteVertexArrays(n, vaos);
+    }
+  Module["_emscripten_glDeleteVertexArrays"] = _emscripten_glDeleteVertexArrays;
+
   function _emscripten_glDeleteVertexArraysOES(n, vaos) {
       _emulGlDeleteVertexArrays(n, vaos);
     }
@@ -16766,16 +17039,58 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glDrawArrays"] = _emscripten_glDrawArrays;
 
+  function _emscripten_glDrawArraysInstanced(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstanced"] = _emscripten_glDrawArraysInstanced;
+
   function _emscripten_glDrawArraysInstancedANGLE(mode, first, count, primcount) {
       GLctx['drawArraysInstanced'](mode, first, count, primcount);
     }
   Module["_emscripten_glDrawArraysInstancedANGLE"] = _emscripten_glDrawArraysInstancedANGLE;
+
+  function _emscripten_glDrawArraysInstancedARB(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedARB"] = _emscripten_glDrawArraysInstancedARB;
+
+  function _emscripten_glDrawArraysInstancedEXT(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedEXT"] = _emscripten_glDrawArraysInstancedEXT;
+
+  function _emscripten_glDrawArraysInstancedNV(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedNV"] = _emscripten_glDrawArraysInstancedNV;
 
   function _emscripten_glDrawBuffer() { throw 'glDrawBuffer: TODO' }
   Module["_emscripten_glDrawBuffer"] = _emscripten_glDrawBuffer;
 
   var tempFixedLengthArray = [];
   Module["tempFixedLengthArray"] = tempFixedLengthArray;
+  function _emscripten_glDrawBuffers(n, bufs) {
+  
+      var bufArray = tempFixedLengthArray[n];
+      for (var i = 0; i < n; i++) {
+        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
+      }
+  
+      GLctx['drawBuffers'](bufArray);
+    }
+  Module["_emscripten_glDrawBuffers"] = _emscripten_glDrawBuffers;
+
+  function _emscripten_glDrawBuffersEXT(n, bufs) {
+  
+      var bufArray = tempFixedLengthArray[n];
+      for (var i = 0; i < n; i++) {
+        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
+      }
+  
+      GLctx['drawBuffers'](bufArray);
+    }
+  Module["_emscripten_glDrawBuffersEXT"] = _emscripten_glDrawBuffersEXT;
+
   function _emscripten_glDrawBuffersWEBGL(n, bufs) {
   
       var bufArray = tempFixedLengthArray[n];
@@ -16808,10 +17123,30 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glDrawElements"] = _emscripten_glDrawElements;
 
+  function _emscripten_glDrawElementsInstanced(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstanced"] = _emscripten_glDrawElementsInstanced;
+
   function _emscripten_glDrawElementsInstancedANGLE(mode, count, type, indices, primcount) {
       GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
     }
   Module["_emscripten_glDrawElementsInstancedANGLE"] = _emscripten_glDrawElementsInstancedANGLE;
+
+  function _emscripten_glDrawElementsInstancedARB(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedARB"] = _emscripten_glDrawElementsInstancedARB;
+
+  function _emscripten_glDrawElementsInstancedEXT(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedEXT"] = _emscripten_glDrawElementsInstancedEXT;
+
+  function _emscripten_glDrawElementsInstancedNV(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedNV"] = _emscripten_glDrawElementsInstancedNV;
 
   function _emscripten_glDrawRangeElements(mode, start, end, count, type, indices) {
       _emscripten_glDrawElements(mode, count, type, indices, start, end);
@@ -16858,10 +17193,28 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glEnd"] = _emscripten_glEnd;
 
+  function _emscripten_glEndQuery(x0) { GLctx['endQuery'](x0) }
+  Module["_emscripten_glEndQuery"] = _emscripten_glEndQuery;
+
   function _emscripten_glEndQueryEXT(target) {
       GLctx.disjointTimerQueryExt['endQueryEXT'](target);
     }
   Module["_emscripten_glEndQueryEXT"] = _emscripten_glEndQueryEXT;
+
+  function _emscripten_glEndTransformFeedback() { GLctx['endTransformFeedback']() }
+  Module["_emscripten_glEndTransformFeedback"] = _emscripten_glEndTransformFeedback;
+
+  function _emscripten_glFenceSync(condition, flags) {
+      var sync = GLctx.fenceSync(condition, flags);
+      if (sync) {
+        var id = GL.getNewId(GL.syncs);
+        sync.name = id;
+        GL.syncs[id] = sync;
+        return id;
+      }
+      return 0; // Failed to create a sync object
+    }
+  Module["_emscripten_glFenceSync"] = _emscripten_glFenceSync;
 
   function _emscripten_glFinish() { GLctx['finish']() }
   Module["_emscripten_glFinish"] = _emscripten_glFinish;
@@ -16880,6 +17233,11 @@ var ASM_CONSTS = {
                                       GL.textures[texture], level);
     }
   Module["_emscripten_glFramebufferTexture2D"] = _emscripten_glFramebufferTexture2D;
+
+  function _emscripten_glFramebufferTextureLayer(target, attachment, texture, level, layer) {
+      GLctx.framebufferTextureLayer(target, attachment, GL.textures[texture], level, layer);
+    }
+  Module["_emscripten_glFramebufferTextureLayer"] = _emscripten_glFramebufferTextureLayer;
 
   function _emscripten_glFrontFace(x0) { GLctx['frontFace'](x0) }
   Module["_emscripten_glFrontFace"] = _emscripten_glFrontFace;
@@ -16919,6 +17277,12 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGenFramebuffers"] = _emscripten_glGenFramebuffers;
 
+  function _emscripten_glGenQueries(n, ids) {
+      __glGenObject(n, ids, 'createQuery', GL.queries
+        );
+    }
+  Module["_emscripten_glGenQueries"] = _emscripten_glGenQueries;
+
   function _emscripten_glGenQueriesEXT(n, ids) {
       for (var i = 0; i < n; i++) {
         var query = GLctx.disjointTimerQueryExt['createQueryEXT']();
@@ -16941,11 +17305,23 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGenRenderbuffers"] = _emscripten_glGenRenderbuffers;
 
+  function _emscripten_glGenSamplers(n, samplers) {
+      __glGenObject(n, samplers, 'createSampler', GL.samplers
+        );
+    }
+  Module["_emscripten_glGenSamplers"] = _emscripten_glGenSamplers;
+
   function _emscripten_glGenTextures(n, textures) {
       __glGenObject(n, textures, 'createTexture', GL.textures
         );
     }
   Module["_emscripten_glGenTextures"] = _emscripten_glGenTextures;
+
+  function _emscripten_glGenTransformFeedbacks(n, ids) {
+      __glGenObject(n, ids, 'createTransformFeedback', GL.transformFeedbacks
+        );
+    }
+  Module["_emscripten_glGenTransformFeedbacks"] = _emscripten_glGenTransformFeedbacks;
 
   function _emulGlGenVertexArrays(n, vaos) {
       for (var i = 0; i < n; i++) {
@@ -16962,6 +17338,11 @@ var ASM_CONSTS = {
       }
     }
   Module["_emulGlGenVertexArrays"] = _emulGlGenVertexArrays;
+  function _emscripten_glGenVertexArrays(n, arrays) {
+      _emulGlGenVertexArrays(n, arrays);
+    }
+  Module["_emscripten_glGenVertexArrays"] = _emscripten_glGenVertexArrays;
+
   function _emscripten_glGenVertexArraysOES(n, arrays) {
       _emulGlGenVertexArrays(n, arrays);
     }
@@ -16991,6 +17372,74 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetActiveUniform"] = _emscripten_glGetActiveUniform;
 
+  function _emscripten_glGetActiveUniformBlockName(program, uniformBlockIndex, bufSize, length, uniformBlockName) {
+      program = GL.programs[program];
+  
+      var result = GLctx['getActiveUniformBlockName'](program, uniformBlockIndex);
+      if (!result) return; // If an error occurs, nothing will be written to uniformBlockName or length.
+      if (uniformBlockName && bufSize > 0) {
+        var numBytesWrittenExclNull = stringToUTF8(result, uniformBlockName, bufSize);
+        if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
+      } else {
+        if (length) HEAP32[((length)>>2)] = 0;
+      }
+    }
+  Module["_emscripten_glGetActiveUniformBlockName"] = _emscripten_glGetActiveUniformBlockName;
+
+  function _emscripten_glGetActiveUniformBlockiv(program, uniformBlockIndex, pname, params) {
+      if (!params) {
+        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if params == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      program = GL.programs[program];
+  
+      if (pname == 0x8A41 /* GL_UNIFORM_BLOCK_NAME_LENGTH */) {
+        var name = GLctx['getActiveUniformBlockName'](program, uniformBlockIndex);
+        HEAP32[((params)>>2)] = name.length+1;
+        return;
+      }
+  
+      var result = GLctx['getActiveUniformBlockParameter'](program, uniformBlockIndex, pname);
+      if (result === null) return; // If an error occurs, nothing should be written to params.
+      if (pname == 0x8A43 /*GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES*/) {
+        for (var i = 0; i < result.length; i++) {
+          HEAP32[(((params)+(i*4))>>2)] = result[i];
+        }
+      } else {
+        HEAP32[((params)>>2)] = result;
+      }
+    }
+  Module["_emscripten_glGetActiveUniformBlockiv"] = _emscripten_glGetActiveUniformBlockiv;
+
+  function _emscripten_glGetActiveUniformsiv(program, uniformCount, uniformIndices, pname, params) {
+      if (!params) {
+        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if params == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      if (uniformCount > 0 && uniformIndices == 0) {
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      program = GL.programs[program];
+      var ids = [];
+      for (var i = 0; i < uniformCount; i++) {
+        ids.push(HEAP32[(((uniformIndices)+(i*4))>>2)]);
+      }
+  
+      var result = GLctx['getActiveUniforms'](program, ids, pname);
+      if (!result) return; // GL spec: If an error is generated, nothing is written out to params.
+  
+      var len = result.length;
+      for (var i = 0; i < len; i++) {
+        HEAP32[(((params)+(i*4))>>2)] = result[i];
+      }
+    }
+  Module["_emscripten_glGetActiveUniformsiv"] = _emscripten_glGetActiveUniformsiv;
+
   function _emscripten_glGetAttachedShaders(program, maxCount, count, shaders) {
       var result = GLctx.getAttachedShaders(GL.programs[program]);
       var len = result.length;
@@ -17015,6 +17464,17 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetBooleanv"] = _emscripten_glGetBooleanv;
 
+  function _emscripten_glGetBufferParameteri64v(target, value, data) {
+      if (!data) {
+        // GLES2 specification does not specify how to behave if data is a null pointer. Since calling this function does not make sense
+        // if data == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      writeI53ToI64(data, GLctx.getBufferParameter(target, value));
+    }
+  Module["_emscripten_glGetBufferParameteri64v"] = _emscripten_glGetBufferParameteri64v;
+
   function _emscripten_glGetBufferParameteriv(target, value, data) {
       if (!data) {
         // GLES2 specification does not specify how to behave if data is a null pointer. Since calling this function does not make sense
@@ -17037,6 +17497,11 @@ var ASM_CONSTS = {
       emscriptenWebGLGet(name_, p, 2);
     }
   Module["_emscripten_glGetFloatv"] = _emscripten_glGetFloatv;
+
+  function _emscripten_glGetFragDataLocation(program, name) {
+      return GLctx['getFragDataLocation'](GL.programs[program], UTF8ToString(name));
+    }
+  Module["_emscripten_glGetFragDataLocation"] = _emscripten_glGetFragDataLocation;
 
   function _emscripten_glGetFramebufferAttachmentParameteriv(target, attachment, pname, params) {
       var result = GLctx.getFramebufferAttachmentParameter(target, attachment, pname);
@@ -17074,10 +17539,93 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetInfoLog"] = _emscripten_glGetInfoLog;
 
+  function emscriptenWebGLGetIndexed(target, index, data, type) {
+      if (!data) {
+        // GLES2 specification does not specify how to behave if data is a null pointer. Since calling this function does not make sense
+        // if data == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      var result = GLctx['getIndexedParameter'](target, index);
+      var ret;
+      switch (typeof result) {
+        case 'boolean':
+          ret = result ? 1 : 0;
+          break;
+        case 'number':
+          ret = result;
+          break;
+        case 'object':
+          if (result === null) {
+            switch (target) {
+              case 0x8C8F: // TRANSFORM_FEEDBACK_BUFFER_BINDING
+              case 0x8A28: // UNIFORM_BUFFER_BINDING
+                ret = 0;
+                break;
+              default: {
+                GL.recordError(0x500); // GL_INVALID_ENUM
+                return;
+              }
+            }
+          } else if (result instanceof WebGLBuffer) {
+            ret = result.name | 0;
+          } else {
+            GL.recordError(0x500); // GL_INVALID_ENUM
+            return;
+          }
+          break;
+        default:
+          GL.recordError(0x500); // GL_INVALID_ENUM
+          return;
+      }
+  
+      switch (type) {
+        case 1: writeI53ToI64(data, ret); break;
+        case 0: HEAP32[((data)>>2)] = ret; break;
+        case 2: HEAPF32[((data)>>2)] = ret; break;
+        case 4: HEAP8[((data)>>0)] = ret ? 1 : 0; break;
+        default: throw 'internal emscriptenWebGLGetIndexed() error, bad type: ' + type;
+      }
+    }
+  Module["emscriptenWebGLGetIndexed"] = emscriptenWebGLGetIndexed;
+  function _emscripten_glGetInteger64i_v(target, index, data) {
+      emscriptenWebGLGetIndexed(target, index, data, 1);
+    }
+  Module["_emscripten_glGetInteger64i_v"] = _emscripten_glGetInteger64i_v;
+
+  function _emscripten_glGetInteger64v(name_, p) {
+      emscriptenWebGLGet(name_, p, 1);
+    }
+  Module["_emscripten_glGetInteger64v"] = _emscripten_glGetInteger64v;
+
+  function _emscripten_glGetIntegeri_v(target, index, data) {
+      emscriptenWebGLGetIndexed(target, index, data, 0);
+    }
+  Module["_emscripten_glGetIntegeri_v"] = _emscripten_glGetIntegeri_v;
+
   function _emscripten_glGetIntegerv(name_, p) {
       emscriptenWebGLGet(name_, p, 0);
     }
   Module["_emscripten_glGetIntegerv"] = _emscripten_glGetIntegerv;
+
+  function _emscripten_glGetInternalformativ(target, internalformat, pname, bufSize, params) {
+      if (bufSize < 0) {
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      if (!params) {
+        // GLES3 specification does not specify how to behave if values is a null pointer. Since calling this function does not make sense
+        // if values == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      var ret = GLctx['getInternalformatParameter'](target, internalformat, pname);
+      if (ret === null) return;
+      for (var i = 0; i < ret.length && i < bufSize; ++i) {
+        HEAP32[(((params)+(i*4))>>2)] = ret[i];
+      }
+    }
+  Module["_emscripten_glGetInternalformativ"] = _emscripten_glGetInternalformativ;
 
   function _glGetProgramiv(program, pname, p) {
       if (!p) {
@@ -17197,6 +17745,11 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetPointerv"] = _emscripten_glGetPointerv;
 
+  function _emscripten_glGetProgramBinary(program, bufSize, length, binaryFormat, binary) {
+      GL.recordError(0x502/*GL_INVALID_OPERATION*/);
+    }
+  Module["_emscripten_glGetProgramBinary"] = _emscripten_glGetProgramBinary;
+
   function _emscripten_glGetProgramInfoLog(program, maxLength, length, infoLog) {
       var log = GLctx.getProgramInfoLog(GL.programs[program]);
       if (log === null) log = '(unknown error)';
@@ -17260,8 +17813,12 @@ var ASM_CONSTS = {
       }
       var query = GL.queries[id];
       var param;
+      if (GL.currentContext.version < 2)
       {
         param = GLctx.disjointTimerQueryExt['getQueryObjectEXT'](query, pname);
+      }
+      else {
+        param = GLctx['getQueryParameter'](query, pname);
       }
       var ret;
       if (typeof param == 'boolean') {
@@ -17301,8 +17858,12 @@ var ASM_CONSTS = {
       }
       var query = GL.queries[id];
       var param;
+      if (GL.currentContext.version < 2)
       {
         param = GLctx.disjointTimerQueryExt['getQueryObjectEXT'](query, pname);
+      }
+      else {
+        param = GLctx['getQueryParameter'](query, pname);
       }
       var ret;
       if (typeof param == 'boolean') {
@@ -17313,6 +17874,25 @@ var ASM_CONSTS = {
       writeI53ToI64(params, ret);
     }
   Module["_emscripten_glGetQueryObjectui64vEXT"] = _emscripten_glGetQueryObjectui64vEXT;
+
+  function _emscripten_glGetQueryObjectuiv(id, pname, params) {
+      if (!params) {
+        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if p == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      var query = GL.queries[id];
+      var param = GLctx['getQueryParameter'](query, pname);
+      var ret;
+      if (typeof param == 'boolean') {
+        ret = param ? 1 : 0;
+      } else {
+        ret = param;
+      }
+      HEAP32[((params)>>2)] = ret;
+    }
+  Module["_emscripten_glGetQueryObjectuiv"] = _emscripten_glGetQueryObjectuiv;
 
   function _emscripten_glGetQueryObjectuivEXT(id, pname, params) {
       if (!params) {
@@ -17332,6 +17912,17 @@ var ASM_CONSTS = {
       HEAP32[((params)>>2)] = ret;
     }
   Module["_emscripten_glGetQueryObjectuivEXT"] = _emscripten_glGetQueryObjectuivEXT;
+
+  function _emscripten_glGetQueryiv(target, pname, params) {
+      if (!params) {
+        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if p == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      HEAP32[((params)>>2)] = GLctx['getQuery'](target, pname);
+    }
+  Module["_emscripten_glGetQueryiv"] = _emscripten_glGetQueryiv;
 
   function _emscripten_glGetQueryivEXT(target, pname, params) {
       if (!params) {
@@ -17354,6 +17945,28 @@ var ASM_CONSTS = {
       HEAP32[((params)>>2)] = GLctx.getRenderbufferParameter(target, pname);
     }
   Module["_emscripten_glGetRenderbufferParameteriv"] = _emscripten_glGetRenderbufferParameteriv;
+
+  function _emscripten_glGetSamplerParameterfv(sampler, pname, params) {
+      if (!params) {
+        // GLES3 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if p == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      HEAPF32[((params)>>2)] = GLctx['getSamplerParameter'](GL.samplers[sampler], pname);
+    }
+  Module["_emscripten_glGetSamplerParameterfv"] = _emscripten_glGetSamplerParameterfv;
+
+  function _emscripten_glGetSamplerParameteriv(sampler, pname, params) {
+      if (!params) {
+        // GLES3 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if p == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      HEAP32[((params)>>2)] = GLctx['getSamplerParameter'](GL.samplers[sampler], pname);
+    }
+  Module["_emscripten_glGetSamplerParameteriv"] = _emscripten_glGetSamplerParameteriv;
 
   function _emscripten_glGetShaderInfoLog(shader, maxLength, length, infoLog) {
       var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
@@ -17430,6 +18043,8 @@ var ASM_CONSTS = {
           case 0x1F02 /* GL_VERSION */:
             var glVersion = GLctx.getParameter(0x1F02 /*GL_VERSION*/);
             // return GLES version string corresponding to the version of the WebGL context
+            if (GL.currentContext.version >= 2) glVersion = 'OpenGL ES 3.0 (' + glVersion + ')';
+            else
             {
               glVersion = 'OpenGL ES 2.0 (' + glVersion + ')';
             }
@@ -17455,6 +18070,59 @@ var ASM_CONSTS = {
       return ret;
     }
   Module["_emscripten_glGetString"] = _emscripten_glGetString;
+
+  function _emscripten_glGetStringi(name, index) {
+      if (GL.currentContext.version < 2) {
+        GL.recordError(0x502 /* GL_INVALID_OPERATION */); // Calling GLES3/WebGL2 function with a GLES2/WebGL1 context
+        return 0;
+      }
+      var stringiCache = GL.stringiCache[name];
+      if (stringiCache) {
+        if (index < 0 || index >= stringiCache.length) {
+          GL.recordError(0x501/*GL_INVALID_VALUE*/);
+          return 0;
+        }
+        return stringiCache[index];
+      }
+      switch (name) {
+        case 0x1F03 /* GL_EXTENSIONS */:
+          var exts = GLctx.getSupportedExtensions() || []; // .getSupportedExtensions() can return null if context is lost, so coerce to empty array.
+          exts = exts.concat(exts.map(function(e) { return "GL_" + e; }));
+          exts = exts.map(function(e) { return stringToNewUTF8(e); });
+  
+          stringiCache = GL.stringiCache[name] = exts;
+          if (index < 0 || index >= stringiCache.length) {
+            GL.recordError(0x501/*GL_INVALID_VALUE*/);
+            return 0;
+          }
+          return stringiCache[index];
+        default:
+          GL.recordError(0x500/*GL_INVALID_ENUM*/);
+          return 0;
+      }
+    }
+  Module["_emscripten_glGetStringi"] = _emscripten_glGetStringi;
+
+  function _emscripten_glGetSynciv(sync, pname, bufSize, length, values) {
+      if (bufSize < 0) {
+        // GLES3 specification does not specify how to behave if bufSize < 0, however in the spec wording for glGetInternalformativ, it does say that GL_INVALID_VALUE should be raised,
+        // so raise GL_INVALID_VALUE here as well.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      if (!values) {
+        // GLES3 specification does not specify how to behave if values is a null pointer. Since calling this function does not make sense
+        // if values == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      var ret = GLctx.getSyncParameter(GL.syncs[sync], pname);
+      if (ret !== null) {
+        HEAP32[((values)>>2)] = ret;
+        if (length) HEAP32[((length)>>2)] = 1; // Report a single value outputted.
+      }
+    }
+  Module["_emscripten_glGetSynciv"] = _emscripten_glGetSynciv;
 
   function _emscripten_glGetTexEnvfv(target, pname, param) { throw 'GL emulation not initialized!'; }
   Module["_emscripten_glGetTexEnvfv"] = _emscripten_glGetTexEnvfv;
@@ -17486,6 +18154,54 @@ var ASM_CONSTS = {
       HEAP32[((params)>>2)] = GLctx.getTexParameter(target, pname);
     }
   Module["_emscripten_glGetTexParameteriv"] = _emscripten_glGetTexParameteriv;
+
+  function _emscripten_glGetTransformFeedbackVarying(program, index, bufSize, length, size, type, name) {
+      program = GL.programs[program];
+      var info = GLctx['getTransformFeedbackVarying'](program, index);
+      if (!info) return; // If an error occurred, the return parameters length, size, type and name will be unmodified.
+  
+      if (name && bufSize > 0) {
+        var numBytesWrittenExclNull = stringToUTF8(info.name, name, bufSize);
+        if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
+      } else {
+        if (length) HEAP32[((length)>>2)] = 0;
+      }
+  
+      if (size) HEAP32[((size)>>2)] = info.size;
+      if (type) HEAP32[((type)>>2)] = info.type;
+    }
+  Module["_emscripten_glGetTransformFeedbackVarying"] = _emscripten_glGetTransformFeedbackVarying;
+
+  function _emscripten_glGetUniformBlockIndex(program, uniformBlockName) {
+      return GLctx['getUniformBlockIndex'](GL.programs[program], UTF8ToString(uniformBlockName));
+    }
+  Module["_emscripten_glGetUniformBlockIndex"] = _emscripten_glGetUniformBlockIndex;
+
+  function _emscripten_glGetUniformIndices(program, uniformCount, uniformNames, uniformIndices) {
+      if (!uniformIndices) {
+        // GLES2 specification does not specify how to behave if uniformIndices is a null pointer. Since calling this function does not make sense
+        // if uniformIndices == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      if (uniformCount > 0 && (uniformNames == 0 || uniformIndices == 0)) {
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      program = GL.programs[program];
+      var names = [];
+      for (var i = 0; i < uniformCount; i++)
+        names.push(UTF8ToString(HEAP32[(((uniformNames)+(i*4))>>2)]));
+  
+      var result = GLctx['getUniformIndices'](program, names);
+      if (!result) return; // GL spec: If an error is generated, nothing is written out to uniformIndices.
+  
+      var len = result.length;
+      for (var i = 0; i < len; i++) {
+        HEAP32[(((uniformIndices)+(i*4))>>2)] = result[i];
+      }
+    }
+  Module["_emscripten_glGetUniformIndices"] = _emscripten_glGetUniformIndices;
 
   /** @noinline */
   function webglGetLeftBracePos(name) {
@@ -17631,16 +18347,10 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetUniformiv"] = _emscripten_glGetUniformiv;
 
-  function _emscripten_glGetVertexAttribPointerv(index, pname, pointer) {
-      if (!pointer) {
-        // GLES2 specification does not specify how to behave if pointer is a null pointer. Since calling this function does not make sense
-        // if pointer == null, issue a GL error to notify user about it.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      HEAP32[((pointer)>>2)] = GLctx.getVertexAttribOffset(index, pname);
+  function _emscripten_glGetUniformuiv(program, location, params) {
+      emscriptenWebGLGetUniform(program, location, params, 0);
     }
-  Module["_emscripten_glGetVertexAttribPointerv"] = _emscripten_glGetVertexAttribPointerv;
+  Module["_emscripten_glGetUniformuiv"] = _emscripten_glGetUniformuiv;
 
   /** @suppress{checkTypes} */
   function emscriptenWebGLGetVertexAttrib(index, pname, params, type) {
@@ -17670,6 +18380,31 @@ var ASM_CONSTS = {
       }
     }
   Module["emscriptenWebGLGetVertexAttrib"] = emscriptenWebGLGetVertexAttrib;
+  function _emscripten_glGetVertexAttribIiv(index, pname, params) {
+      // N.B. This function may only be called if the vertex attribute was specified using the function glVertexAttribI4iv(),
+      // otherwise the results are undefined. (GLES3 spec 6.1.12)
+      emscriptenWebGLGetVertexAttrib(index, pname, params, 0);
+    }
+  Module["_emscripten_glGetVertexAttribIiv"] = _emscripten_glGetVertexAttribIiv;
+
+  function _emscripten_glGetVertexAttribIuiv(index, pname, params) {
+      // N.B. This function may only be called if the vertex attribute was specified using the function glVertexAttribI4iv(),
+      // otherwise the results are undefined. (GLES3 spec 6.1.12)
+      emscriptenWebGLGetVertexAttrib(index, pname, params, 0);
+    }
+  Module["_emscripten_glGetVertexAttribIuiv"] = _emscripten_glGetVertexAttribIuiv;
+
+  function _emscripten_glGetVertexAttribPointerv(index, pname, pointer) {
+      if (!pointer) {
+        // GLES2 specification does not specify how to behave if pointer is a null pointer. Since calling this function does not make sense
+        // if pointer == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      HEAP32[((pointer)>>2)] = GLctx.getVertexAttribOffset(index, pname);
+    }
+  Module["_emscripten_glGetVertexAttribPointerv"] = _emscripten_glGetVertexAttribPointerv;
+
   function _emscripten_glGetVertexAttribfv(index, pname, params) {
       // N.B. This function may only be called if the vertex attribute was specified using the function glVertexAttrib*f(),
       // otherwise the results are undefined. (GLES3 spec 6.1.12)
@@ -17686,6 +18421,26 @@ var ASM_CONSTS = {
 
   function _emscripten_glHint(x0, x1) { GLctx['hint'](x0, x1) }
   Module["_emscripten_glHint"] = _emscripten_glHint;
+
+  function _emscripten_glInvalidateFramebuffer(target, numAttachments, attachments) {
+      var list = tempFixedLengthArray[numAttachments];
+      for (var i = 0; i < numAttachments; i++) {
+        list[i] = HEAP32[(((attachments)+(i*4))>>2)];
+      }
+  
+      GLctx['invalidateFramebuffer'](target, list);
+    }
+  Module["_emscripten_glInvalidateFramebuffer"] = _emscripten_glInvalidateFramebuffer;
+
+  function _emscripten_glInvalidateSubFramebuffer(target, numAttachments, attachments, x, y, width, height) {
+      var list = tempFixedLengthArray[numAttachments];
+      for (var i = 0; i < numAttachments; i++) {
+        list[i] = HEAP32[(((attachments)+(i*4))>>2)];
+      }
+  
+      GLctx['invalidateSubFramebuffer'](target, list, x, y, width, height);
+    }
+  Module["_emscripten_glInvalidateSubFramebuffer"] = _emscripten_glInvalidateSubFramebuffer;
 
   function _emscripten_glIsBuffer(buffer) {
       var b = GL.buffers[buffer];
@@ -17711,6 +18466,13 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glIsProgram"] = _emscripten_glIsProgram;
 
+  function _emscripten_glIsQuery(id) {
+      var query = GL.queries[id];
+      if (!query) return 0;
+      return GLctx['isQuery'](query);
+    }
+  Module["_emscripten_glIsQuery"] = _emscripten_glIsQuery;
+
   function _emscripten_glIsQueryEXT(id) {
       var query = GL.queries[id];
       if (!query) return 0;
@@ -17725,12 +18487,24 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glIsRenderbuffer"] = _emscripten_glIsRenderbuffer;
 
+  function _emscripten_glIsSampler(id) {
+      var sampler = GL.samplers[id];
+      if (!sampler) return 0;
+      return GLctx['isSampler'](sampler);
+    }
+  Module["_emscripten_glIsSampler"] = _emscripten_glIsSampler;
+
   function _emscripten_glIsShader(shader) {
       var s = GL.shaders[shader];
       if (!s) return 0;
       return GLctx.isShader(s);
     }
   Module["_emscripten_glIsShader"] = _emscripten_glIsShader;
+
+  function _emscripten_glIsSync(sync) {
+      return GLctx.isSync(GL.syncs[sync]);
+    }
+  Module["_emscripten_glIsSync"] = _emscripten_glIsSync;
 
   function _emscripten_glIsTexture(id) {
       var texture = GL.textures[id];
@@ -17739,12 +18513,22 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glIsTexture"] = _emscripten_glIsTexture;
 
+  function _emscripten_glIsTransformFeedback(id) {
+      return GLctx['isTransformFeedback'](GL.transformFeedbacks[id]);
+    }
+  Module["_emscripten_glIsTransformFeedback"] = _emscripten_glIsTransformFeedback;
+
   function _emulGlIsVertexArray(array) {
       var vao = GLEmulation.vaos[array];
       if (!vao) return 0;
       return 1;
     }
   Module["_emulGlIsVertexArray"] = _emulGlIsVertexArray;
+  function _emscripten_glIsVertexArray(array) {
+      return _emulGlIsVertexArray(array);
+    }
+  Module["_emscripten_glIsVertexArray"] = _emscripten_glIsVertexArray;
+
   function _emscripten_glIsVertexArrayOES(array) {
       return _emulGlIsVertexArray(array);
     }
@@ -17954,6 +18738,9 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glOrtho"] = _emscripten_glOrtho;
 
+  function _emscripten_glPauseTransformFeedback() { GLctx['pauseTransformFeedback']() }
+  Module["_emscripten_glPauseTransformFeedback"] = _emscripten_glPauseTransformFeedback;
+
   function _emscripten_glPixelStorei(pname, param) {
       if (pname == 0xCF5 /* GL_UNPACK_ALIGNMENT */) {
         GL.unpackAlignment = param;
@@ -17979,6 +18766,16 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glPopMatrix"] = _emscripten_glPopMatrix;
 
+  function _emscripten_glProgramBinary(program, binaryFormat, binary, length) {
+      GL.recordError(0x500/*GL_INVALID_ENUM*/);
+    }
+  Module["_emscripten_glProgramBinary"] = _emscripten_glProgramBinary;
+
+  function _emscripten_glProgramParameteri(program, pname, value) {
+      GL.recordError(0x500/*GL_INVALID_ENUM*/);
+    }
+  Module["_emscripten_glProgramParameteri"] = _emscripten_glProgramParameteri;
+
   function _emscripten_glPushMatrix() {
       GLImmediate.matricesModified = true;
       GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
@@ -17992,7 +18789,7 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glQueryCounterEXT"] = _emscripten_glQueryCounterEXT;
 
-  function _emscripten_glReadBuffer() { throw 'glReadBuffer: TODO' }
+  function _emscripten_glReadBuffer(x0) { GLctx['readBuffer'](x0) }
   Module["_emscripten_glReadBuffer"] = _emscripten_glReadBuffer;
 
   function computeUnpackAlignedImageSize(width, height, sizePerPixel, alignment) {
@@ -18017,6 +18814,12 @@ var ASM_CONSTS = {
         8: 2,
         29502: 3,
         29504: 4,
+        // 0x1903 /* GL_RED */ - 0x1902: 1,
+        26917: 2,
+        26918: 2,
+        // 0x8D94 /* GL_RED_INTEGER */ - 0x1902: 1,
+        29846: 3,
+        29847: 4
       };
       return colorChannels[format - 0x1902]||1;
     }
@@ -18028,8 +18831,11 @@ var ASM_CONSTS = {
       // Also the type HEAPU16 is not tested for explicitly, but any unrecognized type will return out HEAPU16.
       // (since most types are HEAPU16)
       type -= 0x1400;
+      if (type == 0) return HEAP8;
   
       if (type == 1) return HEAPU8;
+  
+      if (type == 2) return HEAP16;
   
       if (type == 4) return HEAP32;
   
@@ -18037,6 +18843,9 @@ var ASM_CONSTS = {
   
       if (type == 5
         || type == 28922
+        || type == 28520
+        || type == 30779
+        || type == 30782
         )
         return HEAPU32;
   
@@ -18058,6 +18867,15 @@ var ASM_CONSTS = {
     }
   Module["emscriptenWebGLGetTexPixelData"] = emscriptenWebGLGetTexPixelData;
   function _emscripten_glReadPixels(x, y, width, height, format, type, pixels) {
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelPackBufferBinding) {
+          GLctx.readPixels(x, y, width, height, format, type, pixels);
+        } else {
+          var heap = heapObjectForWebGLType(type);
+          GLctx.readPixels(x, y, width, height, format, type, heap, pixels >> heapAccessShiftForWebGLHeap(heap));
+        }
+        return;
+      }
       var pixelData = emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, format);
       if (!pixelData) {
         GL.recordError(0x500/*GL_INVALID_ENUM*/);
@@ -18074,6 +18892,12 @@ var ASM_CONSTS = {
 
   function _emscripten_glRenderbufferStorage(x0, x1, x2, x3) { GLctx['renderbufferStorage'](x0, x1, x2, x3) }
   Module["_emscripten_glRenderbufferStorage"] = _emscripten_glRenderbufferStorage;
+
+  function _emscripten_glRenderbufferStorageMultisample(x0, x1, x2, x3, x4) { GLctx['renderbufferStorageMultisample'](x0, x1, x2, x3, x4) }
+  Module["_emscripten_glRenderbufferStorageMultisample"] = _emscripten_glRenderbufferStorageMultisample;
+
+  function _emscripten_glResumeTransformFeedback() { GLctx['resumeTransformFeedback']() }
+  Module["_emscripten_glResumeTransformFeedback"] = _emscripten_glResumeTransformFeedback;
 
   function _emscripten_glRotated(angle, x, y, z) {
       GLImmediate.matricesModified = true;
@@ -18093,6 +18917,28 @@ var ASM_CONSTS = {
       GLctx.sampleCoverage(value, !!invert);
     }
   Module["_emscripten_glSampleCoverage"] = _emscripten_glSampleCoverage;
+
+  function _emscripten_glSamplerParameterf(sampler, pname, param) {
+      GLctx['samplerParameterf'](GL.samplers[sampler], pname, param);
+    }
+  Module["_emscripten_glSamplerParameterf"] = _emscripten_glSamplerParameterf;
+
+  function _emscripten_glSamplerParameterfv(sampler, pname, params) {
+      var param = HEAPF32[((params)>>2)];
+      GLctx['samplerParameterf'](GL.samplers[sampler], pname, param);
+    }
+  Module["_emscripten_glSamplerParameterfv"] = _emscripten_glSamplerParameterfv;
+
+  function _emscripten_glSamplerParameteri(sampler, pname, param) {
+      GLctx['samplerParameteri'](GL.samplers[sampler], pname, param);
+    }
+  Module["_emscripten_glSamplerParameteri"] = _emscripten_glSamplerParameteri;
+
+  function _emscripten_glSamplerParameteriv(sampler, pname, params) {
+      var param = HEAP32[((params)>>2)];
+      GLctx['samplerParameteri'](GL.samplers[sampler], pname, param);
+    }
+  Module["_emscripten_glSamplerParameteriv"] = _emscripten_glSamplerParameteriv;
 
   function _emscripten_glScaled(x, y, z) {
       GLImmediate.matricesModified = true;
@@ -18186,9 +19032,33 @@ var ASM_CONSTS = {
   Module["_emscripten_glTexImage1D"] = _emscripten_glTexImage1D;
 
   function _emscripten_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels) {
+      if (GL.currentContext.version >= 2) {
+        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding) {
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
+        } else if (pixels) {
+          var heap = heapObjectForWebGLType(type);
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, heap, pixels >> heapAccessShiftForWebGLHeap(heap));
+        } else {
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, null);
+        }
+        return;
+      }
       GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels ? emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, internalFormat) : null);
     }
   Module["_emscripten_glTexImage2D"] = _emscripten_glTexImage2D;
+
+  function _emscripten_glTexImage3D(target, level, internalFormat, width, height, depth, border, format, type, pixels) {
+      if (GLctx.currentPixelUnpackBufferBinding) {
+        GLctx['texImage3D'](target, level, internalFormat, width, height, depth, border, format, type, pixels);
+      } else if (pixels) {
+        var heap = heapObjectForWebGLType(type);
+        GLctx['texImage3D'](target, level, internalFormat, width, height, depth, border, format, type, heap, pixels >> heapAccessShiftForWebGLHeap(heap));
+      } else {
+        GLctx['texImage3D'](target, level, internalFormat, width, height, depth, border, format, type, null);
+      }
+    }
+  Module["_emscripten_glTexImage3D"] = _emscripten_glTexImage3D;
 
   function _emscripten_glTexParameterf(x0, x1, x2) { GLctx['texParameterf'](x0, x1, x2) }
   Module["_emscripten_glTexParameterf"] = _emscripten_glTexParameterf;
@@ -18208,12 +19078,52 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glTexParameteriv"] = _emscripten_glTexParameteriv;
 
+  function _emscripten_glTexStorage2D(x0, x1, x2, x3, x4) { GLctx['texStorage2D'](x0, x1, x2, x3, x4) }
+  Module["_emscripten_glTexStorage2D"] = _emscripten_glTexStorage2D;
+
+  function _emscripten_glTexStorage3D(x0, x1, x2, x3, x4, x5) { GLctx['texStorage3D'](x0, x1, x2, x3, x4, x5) }
+  Module["_emscripten_glTexStorage3D"] = _emscripten_glTexStorage3D;
+
   function _emscripten_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels) {
+      if (GL.currentContext.version >= 2) {
+        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding) {
+          GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+        } else if (pixels) {
+          var heap = heapObjectForWebGLType(type);
+          GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, heap, pixels >> heapAccessShiftForWebGLHeap(heap));
+        } else {
+          GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, null);
+        }
+        return;
+      }
       var pixelData = null;
       if (pixels) pixelData = emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, 0);
       GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixelData);
     }
   Module["_emscripten_glTexSubImage2D"] = _emscripten_glTexSubImage2D;
+
+  function _emscripten_glTexSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, format, type, pixels) {
+      if (GLctx.currentPixelUnpackBufferBinding) {
+        GLctx['texSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, type, pixels);
+      } else if (pixels) {
+        var heap = heapObjectForWebGLType(type);
+        GLctx['texSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, type, heap, pixels >> heapAccessShiftForWebGLHeap(heap));
+      } else {
+        GLctx['texSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, type, null);
+      }
+    }
+  Module["_emscripten_glTexSubImage3D"] = _emscripten_glTexSubImage3D;
+
+  function _emscripten_glTransformFeedbackVaryings(program, count, varyings, bufferMode) {
+      program = GL.programs[program];
+      var vars = [];
+      for (var i = 0; i < count; i++)
+        vars.push(UTF8ToString(HEAP32[(((varyings)+(i*4))>>2)]));
+  
+      GLctx['transformFeedbackVaryings'](program, vars, bufferMode);
+    }
+  Module["_emscripten_glTransformFeedbackVaryings"] = _emscripten_glTransformFeedbackVaryings;
 
   function _emscripten_glTranslated(x, y, z) {
       GLImmediate.matricesModified = true;
@@ -18238,6 +19148,11 @@ var ASM_CONSTS = {
   Module["miniTempWebGLFloatBuffers"] = miniTempWebGLFloatBuffers;
   function _emscripten_glUniform1fv(location, count, value) {
   
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform1fv(webglGetUniformLocation(location), HEAPF32, value>>2, count);
+        return;
+      }
+  
       if (count <= 288) {
         // avoid allocation when uploading few enough uniforms
         var view = miniTempWebGLFloatBuffers[count-1];
@@ -18261,6 +19176,11 @@ var ASM_CONSTS = {
   Module["__miniTempWebGLIntBuffers"] = __miniTempWebGLIntBuffers;
   function _emscripten_glUniform1iv(location, count, value) {
   
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform1iv(webglGetUniformLocation(location), HEAP32, value>>2, count);
+        return;
+      }
+  
       if (count <= 288) {
         // avoid allocation when uploading few enough uniforms
         var view = __miniTempWebGLIntBuffers[count-1];
@@ -18275,12 +19195,27 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniform1iv"] = _emscripten_glUniform1iv;
 
+  function _emscripten_glUniform1ui(location, v0) {
+      GLctx.uniform1ui(webglGetUniformLocation(location), v0);
+    }
+  Module["_emscripten_glUniform1ui"] = _emscripten_glUniform1ui;
+
+  function _emscripten_glUniform1uiv(location, count, value) {
+      count && GLctx.uniform1uiv(webglGetUniformLocation(location), HEAPU32, value>>2, count);
+    }
+  Module["_emscripten_glUniform1uiv"] = _emscripten_glUniform1uiv;
+
   function _emscripten_glUniform2f(location, v0, v1) {
       GLctx.uniform2f(webglGetUniformLocation(location), v0, v1);
     }
   Module["_emscripten_glUniform2f"] = _emscripten_glUniform2f;
 
   function _emscripten_glUniform2fv(location, count, value) {
+  
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform2fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*2);
+        return;
+      }
   
       if (count <= 144) {
         // avoid allocation when uploading few enough uniforms
@@ -18304,6 +19239,11 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform2iv(location, count, value) {
   
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform2iv(webglGetUniformLocation(location), HEAP32, value>>2, count*2);
+        return;
+      }
+  
       if (count <= 144) {
         // avoid allocation when uploading few enough uniforms
         var view = __miniTempWebGLIntBuffers[2*count-1];
@@ -18319,12 +19259,27 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniform2iv"] = _emscripten_glUniform2iv;
 
+  function _emscripten_glUniform2ui(location, v0, v1) {
+      GLctx.uniform2ui(webglGetUniformLocation(location), v0, v1);
+    }
+  Module["_emscripten_glUniform2ui"] = _emscripten_glUniform2ui;
+
+  function _emscripten_glUniform2uiv(location, count, value) {
+      count && GLctx.uniform2uiv(webglGetUniformLocation(location), HEAPU32, value>>2, count*2);
+    }
+  Module["_emscripten_glUniform2uiv"] = _emscripten_glUniform2uiv;
+
   function _emscripten_glUniform3f(location, v0, v1, v2) {
       GLctx.uniform3f(webglGetUniformLocation(location), v0, v1, v2);
     }
   Module["_emscripten_glUniform3f"] = _emscripten_glUniform3f;
 
   function _emscripten_glUniform3fv(location, count, value) {
+  
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform3fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*3);
+        return;
+      }
   
       if (count <= 96) {
         // avoid allocation when uploading few enough uniforms
@@ -18349,6 +19304,11 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform3iv(location, count, value) {
   
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform3iv(webglGetUniformLocation(location), HEAP32, value>>2, count*3);
+        return;
+      }
+  
       if (count <= 96) {
         // avoid allocation when uploading few enough uniforms
         var view = __miniTempWebGLIntBuffers[3*count-1];
@@ -18365,12 +19325,27 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniform3iv"] = _emscripten_glUniform3iv;
 
+  function _emscripten_glUniform3ui(location, v0, v1, v2) {
+      GLctx.uniform3ui(webglGetUniformLocation(location), v0, v1, v2);
+    }
+  Module["_emscripten_glUniform3ui"] = _emscripten_glUniform3ui;
+
+  function _emscripten_glUniform3uiv(location, count, value) {
+      count && GLctx.uniform3uiv(webglGetUniformLocation(location), HEAPU32, value>>2, count*3);
+    }
+  Module["_emscripten_glUniform3uiv"] = _emscripten_glUniform3uiv;
+
   function _emscripten_glUniform4f(location, v0, v1, v2, v3) {
       GLctx.uniform4f(webglGetUniformLocation(location), v0, v1, v2, v3);
     }
   Module["_emscripten_glUniform4f"] = _emscripten_glUniform4f;
 
   function _emscripten_glUniform4fv(location, count, value) {
+  
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform4fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*4);
+        return;
+      }
   
       if (count <= 72) {
         // avoid allocation when uploading few enough uniforms
@@ -18400,6 +19375,11 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform4iv(location, count, value) {
   
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniform4iv(webglGetUniformLocation(location), HEAP32, value>>2, count*4);
+        return;
+      }
+  
       if (count <= 72) {
         // avoid allocation when uploading few enough uniforms
         var view = __miniTempWebGLIntBuffers[4*count-1];
@@ -18417,7 +19397,29 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniform4iv"] = _emscripten_glUniform4iv;
 
+  function _emscripten_glUniform4ui(location, v0, v1, v2, v3) {
+      GLctx.uniform4ui(webglGetUniformLocation(location), v0, v1, v2, v3);
+    }
+  Module["_emscripten_glUniform4ui"] = _emscripten_glUniform4ui;
+
+  function _emscripten_glUniform4uiv(location, count, value) {
+      count && GLctx.uniform4uiv(webglGetUniformLocation(location), HEAPU32, value>>2, count*4);
+    }
+  Module["_emscripten_glUniform4uiv"] = _emscripten_glUniform4uiv;
+
+  function _emscripten_glUniformBlockBinding(program, uniformBlockIndex, uniformBlockBinding) {
+      program = GL.programs[program];
+  
+      GLctx['uniformBlockBinding'](program, uniformBlockIndex, uniformBlockBinding);
+    }
+  Module["_emscripten_glUniformBlockBinding"] = _emscripten_glUniformBlockBinding;
+
   function _emscripten_glUniformMatrix2fv(location, count, transpose, value) {
+  
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniformMatrix2fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*4);
+        return;
+      }
   
       if (count <= 72) {
         // avoid allocation when uploading few enough uniforms
@@ -18436,7 +19438,22 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniformMatrix2fv"] = _emscripten_glUniformMatrix2fv;
 
+  function _emscripten_glUniformMatrix2x3fv(location, count, transpose, value) {
+      count && GLctx.uniformMatrix2x3fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*6);
+    }
+  Module["_emscripten_glUniformMatrix2x3fv"] = _emscripten_glUniformMatrix2x3fv;
+
+  function _emscripten_glUniformMatrix2x4fv(location, count, transpose, value) {
+      count && GLctx.uniformMatrix2x4fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*8);
+    }
+  Module["_emscripten_glUniformMatrix2x4fv"] = _emscripten_glUniformMatrix2x4fv;
+
   function _emscripten_glUniformMatrix3fv(location, count, transpose, value) {
+  
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniformMatrix3fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*9);
+        return;
+      }
   
       if (count <= 32) {
         // avoid allocation when uploading few enough uniforms
@@ -18460,7 +19477,22 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniformMatrix3fv"] = _emscripten_glUniformMatrix3fv;
 
+  function _emscripten_glUniformMatrix3x2fv(location, count, transpose, value) {
+      count && GLctx.uniformMatrix3x2fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*6);
+    }
+  Module["_emscripten_glUniformMatrix3x2fv"] = _emscripten_glUniformMatrix3x2fv;
+
+  function _emscripten_glUniformMatrix3x4fv(location, count, transpose, value) {
+      count && GLctx.uniformMatrix3x4fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*12);
+    }
+  Module["_emscripten_glUniformMatrix3x4fv"] = _emscripten_glUniformMatrix3x4fv;
+
   function _emscripten_glUniformMatrix4fv(location, count, transpose, value) {
+  
+      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        count && GLctx.uniformMatrix4fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*16);
+        return;
+      }
   
       if (count <= 18) {
         // avoid allocation when uploading few enough uniforms
@@ -18494,6 +19526,16 @@ var ASM_CONSTS = {
       GLctx.uniformMatrix4fv(webglGetUniformLocation(location), !!transpose, view);
     }
   Module["_emscripten_glUniformMatrix4fv"] = _emscripten_glUniformMatrix4fv;
+
+  function _emscripten_glUniformMatrix4x2fv(location, count, transpose, value) {
+      count && GLctx.uniformMatrix4x2fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*8);
+    }
+  Module["_emscripten_glUniformMatrix4x2fv"] = _emscripten_glUniformMatrix4x2fv;
+
+  function _emscripten_glUniformMatrix4x3fv(location, count, transpose, value) {
+      count && GLctx.uniformMatrix4x3fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*12);
+    }
+  Module["_emscripten_glUniformMatrix4x3fv"] = _emscripten_glUniformMatrix4x3fv;
 
   function _emscripten_glUseProgram(program) {
       program = GL.programs[program];
@@ -18626,10 +19668,51 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glVertexAttrib4fv"] = _emscripten_glVertexAttrib4fv;
 
+  function _emscripten_glVertexAttribDivisor(index, divisor) {
+      GLctx['vertexAttribDivisor'](index, divisor);
+    }
+  Module["_emscripten_glVertexAttribDivisor"] = _emscripten_glVertexAttribDivisor;
+
   function _emscripten_glVertexAttribDivisorANGLE(index, divisor) {
       GLctx['vertexAttribDivisor'](index, divisor);
     }
   Module["_emscripten_glVertexAttribDivisorANGLE"] = _emscripten_glVertexAttribDivisorANGLE;
+
+  function _emscripten_glVertexAttribDivisorARB(index, divisor) {
+      GLctx['vertexAttribDivisor'](index, divisor);
+    }
+  Module["_emscripten_glVertexAttribDivisorARB"] = _emscripten_glVertexAttribDivisorARB;
+
+  function _emscripten_glVertexAttribDivisorEXT(index, divisor) {
+      GLctx['vertexAttribDivisor'](index, divisor);
+    }
+  Module["_emscripten_glVertexAttribDivisorEXT"] = _emscripten_glVertexAttribDivisorEXT;
+
+  function _emscripten_glVertexAttribDivisorNV(index, divisor) {
+      GLctx['vertexAttribDivisor'](index, divisor);
+    }
+  Module["_emscripten_glVertexAttribDivisorNV"] = _emscripten_glVertexAttribDivisorNV;
+
+  function _emscripten_glVertexAttribI4i(x0, x1, x2, x3, x4) { GLctx['vertexAttribI4i'](x0, x1, x2, x3, x4) }
+  Module["_emscripten_glVertexAttribI4i"] = _emscripten_glVertexAttribI4i;
+
+  function _emscripten_glVertexAttribI4iv(index, v) {
+      GLctx.vertexAttribI4i(index, HEAP32[v>>2], HEAP32[v+4>>2], HEAP32[v+8>>2], HEAP32[v+12>>2]);
+    }
+  Module["_emscripten_glVertexAttribI4iv"] = _emscripten_glVertexAttribI4iv;
+
+  function _emscripten_glVertexAttribI4ui(x0, x1, x2, x3, x4) { GLctx['vertexAttribI4ui'](x0, x1, x2, x3, x4) }
+  Module["_emscripten_glVertexAttribI4ui"] = _emscripten_glVertexAttribI4ui;
+
+  function _emscripten_glVertexAttribI4uiv(index, v) {
+      GLctx.vertexAttribI4ui(index, HEAPU32[v>>2], HEAPU32[v+4>>2], HEAPU32[v+8>>2], HEAPU32[v+12>>2]);
+    }
+  Module["_emscripten_glVertexAttribI4uiv"] = _emscripten_glVertexAttribI4uiv;
+
+  function _emscripten_glVertexAttribIPointer(index, size, type, stride, ptr) {
+      GLctx['vertexAttribIPointer'](index, size, type, stride, ptr);
+    }
+  Module["_emscripten_glVertexAttribIPointer"] = _emscripten_glVertexAttribIPointer;
 
   function _emscripten_glVertexAttribPointer(index, size, type, normalized, stride, ptr) {
       GLctx.vertexAttribPointer(index, size, type, !!normalized, stride, ptr);
@@ -18643,6 +19726,12 @@ var ASM_CONSTS = {
 
   function _emscripten_glViewport(x0, x1, x2, x3) { GLctx['viewport'](x0, x1, x2, x3) }
   Module["_emscripten_glViewport"] = _emscripten_glViewport;
+
+  function _emscripten_glWaitSync(sync, flags, timeoutLo, timeoutHi) {
+      // See WebGL2 vs GLES3 difference on GL_TIMEOUT_IGNORED above (https://www.khronos.org/registry/webgl/specs/latest/2.0/#5.15)
+      GLctx.waitSync(GL.syncs[sync], flags, convertI32PairToI53(timeoutLo, timeoutHi));
+    }
+  Module["_emscripten_glWaitSync"] = _emscripten_glWaitSync;
 
   function _emscripten_memcpy_big(dest, src, num) {
       HEAPU8.copyWithin(dest, src, src + num);
@@ -18659,6 +19748,12 @@ var ASM_CONSTS = {
       abortOnCannotGrowMemory(requestedSize);
     }
   Module["_emscripten_resize_heap"] = _emscripten_resize_heap;
+
+  function _emscripten_set_main_loop(func, fps, simulateInfiniteLoop) {
+      var browserIterationFunc = getWasmTableEntry(func);
+      setMainLoop(browserIterationFunc, fps, simulateInfiniteLoop);
+    }
+  Module["_emscripten_set_main_loop"] = _emscripten_set_main_loop;
 
   var ENV = {};
   Module["ENV"] = ENV;
@@ -18964,6 +20059,13 @@ var ASM_CONSTS = {
     }
   Module["_glBegin"] = _glBegin;
 
+  function _glBindVertexArray(vao) {
+      _emulGlBindVertexArray(vao);
+      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
+      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
+    }
+  Module["_glBindVertexArray"] = _glBindVertexArray;
+
   function _glClear(x0) { GLctx['clear'](x0) }
   Module["_glClear"] = _glClear;
 
@@ -18974,6 +20076,32 @@ var ASM_CONSTS = {
       _emscripten_glColor4f(r, g, b, 1);
     }
   Module["_glColor3f"] = _glColor3f;
+
+  function _glDeleteVertexArrays(n, vaos) {
+      _emulGlDeleteVertexArrays(n, vaos);
+    }
+  Module["_glDeleteVertexArrays"] = _glDeleteVertexArrays;
+
+  function _glDrawArraysInstanced(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_glDrawArraysInstanced"] = _glDrawArraysInstanced;
+
+  function _glDrawBuffers(n, bufs) {
+  
+      var bufArray = tempFixedLengthArray[n];
+      for (var i = 0; i < n; i++) {
+        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
+      }
+  
+      GLctx['drawBuffers'](bufArray);
+    }
+  Module["_glDrawBuffers"] = _glDrawBuffers;
+
+  function _glDrawElementsInstanced(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_glDrawElementsInstanced"] = _glDrawElementsInstanced;
 
 
   function _glEnd() {
@@ -18992,12 +20120,29 @@ var ASM_CONSTS = {
     }
   Module["_glEnd"] = _glEnd;
 
+  function _glGenVertexArrays(n, arrays) {
+      _emulGlGenVertexArrays(n, arrays);
+    }
+  Module["_glGenVertexArrays"] = _glGenVertexArrays;
+
+  function _glIsVertexArray(array) {
+      return _emulGlIsVertexArray(array);
+    }
+  Module["_glIsVertexArray"] = _glIsVertexArray;
+
   function _glLoadIdentity() {
       GLImmediate.matricesModified = true;
       GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
       GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[GLImmediate.currentMatrix]);
     }
   Module["_glLoadIdentity"] = _glLoadIdentity;
+
+  function _glLoadMatrixf(matrix) {
+      GLImmediate.matricesModified = true;
+      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
+      GLImmediate.matrixLib.mat4.set(HEAPF32.subarray((matrix)>>2, (matrix+64)>>2), GLImmediate.matrix[GLImmediate.currentMatrix]);
+    }
+  Module["_glLoadMatrixf"] = _glLoadMatrixf;
 
   function _glMatrixMode(mode) {
       if (mode == 0x1700 /* GL_MODELVIEW */) {
@@ -19042,6 +20187,11 @@ var ASM_CONSTS = {
       GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
     }
   Module["_glVertex3f"] = _glVertex3f;
+
+  function _glVertexAttribDivisor(index, divisor) {
+      GLctx['vertexAttribDivisor'](index, divisor);
+    }
+  Module["_glVertexAttribDivisor"] = _glVertexAttribDivisor;
 
   function _glViewport(x0, x1, x2, x3) { GLctx['viewport'](x0, x1, x2, x3) }
   Module["_glViewport"] = _glViewport;
@@ -19929,13 +21079,6 @@ var ASM_CONSTS = {
     }
   Module["_glfwTerminate"] = _glfwTerminate;
 
-  function _glfwWindowShouldClose(winid) {
-      var win = GLFW.WindowFromId(winid);
-      if (!win) return 0;
-      return win.shouldClose;
-    }
-  Module["_glfwWindowShouldClose"] = _glfwWindowShouldClose;
-
   function _gluLookAt(ex, ey, ez, cx, cy, cz, ux, uy, uz) {
       GLImmediate.matricesModified = true;
       GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
@@ -19943,15 +21086,6 @@ var ASM_CONSTS = {
           [cx, cy, cz], [ux, uy, uz]);
     }
   Module["_gluLookAt"] = _gluLookAt;
-
-  function _gluPerspective(fov, aspect, near, far) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrix[GLImmediate.currentMatrix] =
-        GLImmediate.matrixLib.mat4.perspective(fov, aspect, near, far,
-                                                 GLImmediate.matrix[GLImmediate.currentMatrix]);
-    }
-  Module["_gluPerspective"] = _gluPerspective;
 
 
   function __isLeapYear(year) {
@@ -21163,27 +22297,40 @@ var asmLibraryArg = {
   "emscripten_glAlphaFunc": _emscripten_glAlphaFunc,
   "emscripten_glAttachShader": _emscripten_glAttachShader,
   "emscripten_glBegin": _emscripten_glBegin,
+  "emscripten_glBeginQuery": _emscripten_glBeginQuery,
   "emscripten_glBeginQueryEXT": _emscripten_glBeginQueryEXT,
+  "emscripten_glBeginTransformFeedback": _emscripten_glBeginTransformFeedback,
   "emscripten_glBindAttribLocation": _emscripten_glBindAttribLocation,
   "emscripten_glBindBuffer": _emscripten_glBindBuffer,
+  "emscripten_glBindBufferBase": _emscripten_glBindBufferBase,
+  "emscripten_glBindBufferRange": _emscripten_glBindBufferRange,
   "emscripten_glBindFramebuffer": _emscripten_glBindFramebuffer,
   "emscripten_glBindProgram": _emscripten_glBindProgram,
   "emscripten_glBindRenderbuffer": _emscripten_glBindRenderbuffer,
+  "emscripten_glBindSampler": _emscripten_glBindSampler,
   "emscripten_glBindTexture": _emscripten_glBindTexture,
+  "emscripten_glBindTransformFeedback": _emscripten_glBindTransformFeedback,
+  "emscripten_glBindVertexArray": _emscripten_glBindVertexArray,
   "emscripten_glBindVertexArrayOES": _emscripten_glBindVertexArrayOES,
   "emscripten_glBlendColor": _emscripten_glBlendColor,
   "emscripten_glBlendEquation": _emscripten_glBlendEquation,
   "emscripten_glBlendEquationSeparate": _emscripten_glBlendEquationSeparate,
   "emscripten_glBlendFunc": _emscripten_glBlendFunc,
   "emscripten_glBlendFuncSeparate": _emscripten_glBlendFuncSeparate,
+  "emscripten_glBlitFramebuffer": _emscripten_glBlitFramebuffer,
   "emscripten_glBufferData": _emscripten_glBufferData,
   "emscripten_glBufferSubData": _emscripten_glBufferSubData,
   "emscripten_glCheckFramebufferStatus": _emscripten_glCheckFramebufferStatus,
   "emscripten_glClear": _emscripten_glClear,
+  "emscripten_glClearBufferfi": _emscripten_glClearBufferfi,
+  "emscripten_glClearBufferfv": _emscripten_glClearBufferfv,
+  "emscripten_glClearBufferiv": _emscripten_glClearBufferiv,
+  "emscripten_glClearBufferuiv": _emscripten_glClearBufferuiv,
   "emscripten_glClearColor": _emscripten_glClearColor,
   "emscripten_glClearDepthf": _emscripten_glClearDepthf,
   "emscripten_glClearStencil": _emscripten_glClearStencil,
   "emscripten_glClientActiveTexture": _emscripten_glClientActiveTexture,
+  "emscripten_glClientWaitSync": _emscripten_glClientWaitSync,
   "emscripten_glClipPlane": _emscripten_glClipPlane,
   "emscripten_glColor3d": _emscripten_glColor3d,
   "emscripten_glColor3f": _emscripten_glColor3f,
@@ -21205,9 +22352,13 @@ var asmLibraryArg = {
   "emscripten_glColorPointer": _emscripten_glColorPointer,
   "emscripten_glCompileShader": _emscripten_glCompileShader,
   "emscripten_glCompressedTexImage2D": _emscripten_glCompressedTexImage2D,
+  "emscripten_glCompressedTexImage3D": _emscripten_glCompressedTexImage3D,
   "emscripten_glCompressedTexSubImage2D": _emscripten_glCompressedTexSubImage2D,
+  "emscripten_glCompressedTexSubImage3D": _emscripten_glCompressedTexSubImage3D,
+  "emscripten_glCopyBufferSubData": _emscripten_glCopyBufferSubData,
   "emscripten_glCopyTexImage2D": _emscripten_glCopyTexImage2D,
   "emscripten_glCopyTexSubImage2D": _emscripten_glCopyTexSubImage2D,
+  "emscripten_glCopyTexSubImage3D": _emscripten_glCopyTexSubImage3D,
   "emscripten_glCreateProgram": _emscripten_glCreateProgram,
   "emscripten_glCreateShader": _emscripten_glCreateShader,
   "emscripten_glCullFace": _emscripten_glCullFace,
@@ -21215,10 +22366,15 @@ var asmLibraryArg = {
   "emscripten_glDeleteFramebuffers": _emscripten_glDeleteFramebuffers,
   "emscripten_glDeleteObject": _emscripten_glDeleteObject,
   "emscripten_glDeleteProgram": _emscripten_glDeleteProgram,
+  "emscripten_glDeleteQueries": _emscripten_glDeleteQueries,
   "emscripten_glDeleteQueriesEXT": _emscripten_glDeleteQueriesEXT,
   "emscripten_glDeleteRenderbuffers": _emscripten_glDeleteRenderbuffers,
+  "emscripten_glDeleteSamplers": _emscripten_glDeleteSamplers,
   "emscripten_glDeleteShader": _emscripten_glDeleteShader,
+  "emscripten_glDeleteSync": _emscripten_glDeleteSync,
   "emscripten_glDeleteTextures": _emscripten_glDeleteTextures,
+  "emscripten_glDeleteTransformFeedbacks": _emscripten_glDeleteTransformFeedbacks,
+  "emscripten_glDeleteVertexArrays": _emscripten_glDeleteVertexArrays,
   "emscripten_glDeleteVertexArraysOES": _emscripten_glDeleteVertexArraysOES,
   "emscripten_glDepthFunc": _emscripten_glDepthFunc,
   "emscripten_glDepthMask": _emscripten_glDepthMask,
@@ -21228,76 +22384,123 @@ var asmLibraryArg = {
   "emscripten_glDisableClientState": _emscripten_glDisableClientState,
   "emscripten_glDisableVertexAttribArray": _emscripten_glDisableVertexAttribArray,
   "emscripten_glDrawArrays": _emscripten_glDrawArrays,
+  "emscripten_glDrawArraysInstanced": _emscripten_glDrawArraysInstanced,
   "emscripten_glDrawArraysInstancedANGLE": _emscripten_glDrawArraysInstancedANGLE,
+  "emscripten_glDrawArraysInstancedARB": _emscripten_glDrawArraysInstancedARB,
+  "emscripten_glDrawArraysInstancedEXT": _emscripten_glDrawArraysInstancedEXT,
+  "emscripten_glDrawArraysInstancedNV": _emscripten_glDrawArraysInstancedNV,
   "emscripten_glDrawBuffer": _emscripten_glDrawBuffer,
+  "emscripten_glDrawBuffers": _emscripten_glDrawBuffers,
+  "emscripten_glDrawBuffersEXT": _emscripten_glDrawBuffersEXT,
   "emscripten_glDrawBuffersWEBGL": _emscripten_glDrawBuffersWEBGL,
   "emscripten_glDrawElements": _emscripten_glDrawElements,
+  "emscripten_glDrawElementsInstanced": _emscripten_glDrawElementsInstanced,
   "emscripten_glDrawElementsInstancedANGLE": _emscripten_glDrawElementsInstancedANGLE,
+  "emscripten_glDrawElementsInstancedARB": _emscripten_glDrawElementsInstancedARB,
+  "emscripten_glDrawElementsInstancedEXT": _emscripten_glDrawElementsInstancedEXT,
+  "emscripten_glDrawElementsInstancedNV": _emscripten_glDrawElementsInstancedNV,
   "emscripten_glDrawRangeElements": _emscripten_glDrawRangeElements,
   "emscripten_glEnable": _emscripten_glEnable,
   "emscripten_glEnableClientState": _emscripten_glEnableClientState,
   "emscripten_glEnableVertexAttribArray": _emscripten_glEnableVertexAttribArray,
   "emscripten_glEnd": _emscripten_glEnd,
+  "emscripten_glEndQuery": _emscripten_glEndQuery,
   "emscripten_glEndQueryEXT": _emscripten_glEndQueryEXT,
+  "emscripten_glEndTransformFeedback": _emscripten_glEndTransformFeedback,
+  "emscripten_glFenceSync": _emscripten_glFenceSync,
   "emscripten_glFinish": _emscripten_glFinish,
   "emscripten_glFlush": _emscripten_glFlush,
   "emscripten_glFramebufferRenderbuffer": _emscripten_glFramebufferRenderbuffer,
   "emscripten_glFramebufferTexture2D": _emscripten_glFramebufferTexture2D,
+  "emscripten_glFramebufferTextureLayer": _emscripten_glFramebufferTextureLayer,
   "emscripten_glFrontFace": _emscripten_glFrontFace,
   "emscripten_glFrustum": _emscripten_glFrustum,
   "emscripten_glGenBuffers": _emscripten_glGenBuffers,
   "emscripten_glGenFramebuffers": _emscripten_glGenFramebuffers,
+  "emscripten_glGenQueries": _emscripten_glGenQueries,
   "emscripten_glGenQueriesEXT": _emscripten_glGenQueriesEXT,
   "emscripten_glGenRenderbuffers": _emscripten_glGenRenderbuffers,
+  "emscripten_glGenSamplers": _emscripten_glGenSamplers,
   "emscripten_glGenTextures": _emscripten_glGenTextures,
+  "emscripten_glGenTransformFeedbacks": _emscripten_glGenTransformFeedbacks,
+  "emscripten_glGenVertexArrays": _emscripten_glGenVertexArrays,
   "emscripten_glGenVertexArraysOES": _emscripten_glGenVertexArraysOES,
   "emscripten_glGenerateMipmap": _emscripten_glGenerateMipmap,
   "emscripten_glGetActiveAttrib": _emscripten_glGetActiveAttrib,
   "emscripten_glGetActiveUniform": _emscripten_glGetActiveUniform,
+  "emscripten_glGetActiveUniformBlockName": _emscripten_glGetActiveUniformBlockName,
+  "emscripten_glGetActiveUniformBlockiv": _emscripten_glGetActiveUniformBlockiv,
+  "emscripten_glGetActiveUniformsiv": _emscripten_glGetActiveUniformsiv,
   "emscripten_glGetAttachedShaders": _emscripten_glGetAttachedShaders,
   "emscripten_glGetAttribLocation": _emscripten_glGetAttribLocation,
   "emscripten_glGetBooleanv": _emscripten_glGetBooleanv,
+  "emscripten_glGetBufferParameteri64v": _emscripten_glGetBufferParameteri64v,
   "emscripten_glGetBufferParameteriv": _emscripten_glGetBufferParameteriv,
   "emscripten_glGetError": _emscripten_glGetError,
   "emscripten_glGetFloatv": _emscripten_glGetFloatv,
+  "emscripten_glGetFragDataLocation": _emscripten_glGetFragDataLocation,
   "emscripten_glGetFramebufferAttachmentParameteriv": _emscripten_glGetFramebufferAttachmentParameteriv,
   "emscripten_glGetInfoLog": _emscripten_glGetInfoLog,
+  "emscripten_glGetInteger64i_v": _emscripten_glGetInteger64i_v,
+  "emscripten_glGetInteger64v": _emscripten_glGetInteger64v,
+  "emscripten_glGetIntegeri_v": _emscripten_glGetIntegeri_v,
   "emscripten_glGetIntegerv": _emscripten_glGetIntegerv,
+  "emscripten_glGetInternalformativ": _emscripten_glGetInternalformativ,
   "emscripten_glGetObjectParameteriv": _emscripten_glGetObjectParameteriv,
   "emscripten_glGetPointerv": _emscripten_glGetPointerv,
+  "emscripten_glGetProgramBinary": _emscripten_glGetProgramBinary,
   "emscripten_glGetProgramInfoLog": _emscripten_glGetProgramInfoLog,
   "emscripten_glGetProgramiv": _emscripten_glGetProgramiv,
   "emscripten_glGetQueryObjecti64vEXT": _emscripten_glGetQueryObjecti64vEXT,
   "emscripten_glGetQueryObjectivEXT": _emscripten_glGetQueryObjectivEXT,
   "emscripten_glGetQueryObjectui64vEXT": _emscripten_glGetQueryObjectui64vEXT,
+  "emscripten_glGetQueryObjectuiv": _emscripten_glGetQueryObjectuiv,
   "emscripten_glGetQueryObjectuivEXT": _emscripten_glGetQueryObjectuivEXT,
+  "emscripten_glGetQueryiv": _emscripten_glGetQueryiv,
   "emscripten_glGetQueryivEXT": _emscripten_glGetQueryivEXT,
   "emscripten_glGetRenderbufferParameteriv": _emscripten_glGetRenderbufferParameteriv,
+  "emscripten_glGetSamplerParameterfv": _emscripten_glGetSamplerParameterfv,
+  "emscripten_glGetSamplerParameteriv": _emscripten_glGetSamplerParameteriv,
   "emscripten_glGetShaderInfoLog": _emscripten_glGetShaderInfoLog,
   "emscripten_glGetShaderPrecisionFormat": _emscripten_glGetShaderPrecisionFormat,
   "emscripten_glGetShaderSource": _emscripten_glGetShaderSource,
   "emscripten_glGetShaderiv": _emscripten_glGetShaderiv,
   "emscripten_glGetString": _emscripten_glGetString,
+  "emscripten_glGetStringi": _emscripten_glGetStringi,
+  "emscripten_glGetSynciv": _emscripten_glGetSynciv,
   "emscripten_glGetTexEnvfv": _emscripten_glGetTexEnvfv,
   "emscripten_glGetTexEnviv": _emscripten_glGetTexEnviv,
   "emscripten_glGetTexLevelParameteriv": _emscripten_glGetTexLevelParameteriv,
   "emscripten_glGetTexParameterfv": _emscripten_glGetTexParameterfv,
   "emscripten_glGetTexParameteriv": _emscripten_glGetTexParameteriv,
+  "emscripten_glGetTransformFeedbackVarying": _emscripten_glGetTransformFeedbackVarying,
+  "emscripten_glGetUniformBlockIndex": _emscripten_glGetUniformBlockIndex,
+  "emscripten_glGetUniformIndices": _emscripten_glGetUniformIndices,
   "emscripten_glGetUniformLocation": _emscripten_glGetUniformLocation,
   "emscripten_glGetUniformfv": _emscripten_glGetUniformfv,
   "emscripten_glGetUniformiv": _emscripten_glGetUniformiv,
+  "emscripten_glGetUniformuiv": _emscripten_glGetUniformuiv,
+  "emscripten_glGetVertexAttribIiv": _emscripten_glGetVertexAttribIiv,
+  "emscripten_glGetVertexAttribIuiv": _emscripten_glGetVertexAttribIuiv,
   "emscripten_glGetVertexAttribPointerv": _emscripten_glGetVertexAttribPointerv,
   "emscripten_glGetVertexAttribfv": _emscripten_glGetVertexAttribfv,
   "emscripten_glGetVertexAttribiv": _emscripten_glGetVertexAttribiv,
   "emscripten_glHint": _emscripten_glHint,
+  "emscripten_glInvalidateFramebuffer": _emscripten_glInvalidateFramebuffer,
+  "emscripten_glInvalidateSubFramebuffer": _emscripten_glInvalidateSubFramebuffer,
   "emscripten_glIsBuffer": _emscripten_glIsBuffer,
   "emscripten_glIsEnabled": _emscripten_glIsEnabled,
   "emscripten_glIsFramebuffer": _emscripten_glIsFramebuffer,
   "emscripten_glIsProgram": _emscripten_glIsProgram,
+  "emscripten_glIsQuery": _emscripten_glIsQuery,
   "emscripten_glIsQueryEXT": _emscripten_glIsQueryEXT,
   "emscripten_glIsRenderbuffer": _emscripten_glIsRenderbuffer,
+  "emscripten_glIsSampler": _emscripten_glIsSampler,
   "emscripten_glIsShader": _emscripten_glIsShader,
+  "emscripten_glIsSync": _emscripten_glIsSync,
   "emscripten_glIsTexture": _emscripten_glIsTexture,
+  "emscripten_glIsTransformFeedback": _emscripten_glIsTransformFeedback,
+  "emscripten_glIsVertexArray": _emscripten_glIsVertexArray,
   "emscripten_glIsVertexArrayOES": _emscripten_glIsVertexArrayOES,
   "emscripten_glLightModelf": _emscripten_glLightModelf,
   "emscripten_glLightModelfv": _emscripten_glLightModelfv,
@@ -21318,19 +22521,28 @@ var asmLibraryArg = {
   "emscripten_glNormal3f": _emscripten_glNormal3f,
   "emscripten_glNormalPointer": _emscripten_glNormalPointer,
   "emscripten_glOrtho": _emscripten_glOrtho,
+  "emscripten_glPauseTransformFeedback": _emscripten_glPauseTransformFeedback,
   "emscripten_glPixelStorei": _emscripten_glPixelStorei,
   "emscripten_glPolygonMode": _emscripten_glPolygonMode,
   "emscripten_glPolygonOffset": _emscripten_glPolygonOffset,
   "emscripten_glPopMatrix": _emscripten_glPopMatrix,
+  "emscripten_glProgramBinary": _emscripten_glProgramBinary,
+  "emscripten_glProgramParameteri": _emscripten_glProgramParameteri,
   "emscripten_glPushMatrix": _emscripten_glPushMatrix,
   "emscripten_glQueryCounterEXT": _emscripten_glQueryCounterEXT,
   "emscripten_glReadBuffer": _emscripten_glReadBuffer,
   "emscripten_glReadPixels": _emscripten_glReadPixels,
   "emscripten_glReleaseShaderCompiler": _emscripten_glReleaseShaderCompiler,
   "emscripten_glRenderbufferStorage": _emscripten_glRenderbufferStorage,
+  "emscripten_glRenderbufferStorageMultisample": _emscripten_glRenderbufferStorageMultisample,
+  "emscripten_glResumeTransformFeedback": _emscripten_glResumeTransformFeedback,
   "emscripten_glRotated": _emscripten_glRotated,
   "emscripten_glRotatef": _emscripten_glRotatef,
   "emscripten_glSampleCoverage": _emscripten_glSampleCoverage,
+  "emscripten_glSamplerParameterf": _emscripten_glSamplerParameterf,
+  "emscripten_glSamplerParameterfv": _emscripten_glSamplerParameterfv,
+  "emscripten_glSamplerParameteri": _emscripten_glSamplerParameteri,
+  "emscripten_glSamplerParameteriv": _emscripten_glSamplerParameteriv,
   "emscripten_glScaled": _emscripten_glScaled,
   "emscripten_glScalef": _emscripten_glScalef,
   "emscripten_glScissor": _emscripten_glScissor,
@@ -21353,32 +22565,52 @@ var asmLibraryArg = {
   "emscripten_glTexGeni": _emscripten_glTexGeni,
   "emscripten_glTexImage1D": _emscripten_glTexImage1D,
   "emscripten_glTexImage2D": _emscripten_glTexImage2D,
+  "emscripten_glTexImage3D": _emscripten_glTexImage3D,
   "emscripten_glTexParameterf": _emscripten_glTexParameterf,
   "emscripten_glTexParameterfv": _emscripten_glTexParameterfv,
   "emscripten_glTexParameteri": _emscripten_glTexParameteri,
   "emscripten_glTexParameteriv": _emscripten_glTexParameteriv,
+  "emscripten_glTexStorage2D": _emscripten_glTexStorage2D,
+  "emscripten_glTexStorage3D": _emscripten_glTexStorage3D,
   "emscripten_glTexSubImage2D": _emscripten_glTexSubImage2D,
+  "emscripten_glTexSubImage3D": _emscripten_glTexSubImage3D,
+  "emscripten_glTransformFeedbackVaryings": _emscripten_glTransformFeedbackVaryings,
   "emscripten_glTranslated": _emscripten_glTranslated,
   "emscripten_glTranslatef": _emscripten_glTranslatef,
   "emscripten_glUniform1f": _emscripten_glUniform1f,
   "emscripten_glUniform1fv": _emscripten_glUniform1fv,
   "emscripten_glUniform1i": _emscripten_glUniform1i,
   "emscripten_glUniform1iv": _emscripten_glUniform1iv,
+  "emscripten_glUniform1ui": _emscripten_glUniform1ui,
+  "emscripten_glUniform1uiv": _emscripten_glUniform1uiv,
   "emscripten_glUniform2f": _emscripten_glUniform2f,
   "emscripten_glUniform2fv": _emscripten_glUniform2fv,
   "emscripten_glUniform2i": _emscripten_glUniform2i,
   "emscripten_glUniform2iv": _emscripten_glUniform2iv,
+  "emscripten_glUniform2ui": _emscripten_glUniform2ui,
+  "emscripten_glUniform2uiv": _emscripten_glUniform2uiv,
   "emscripten_glUniform3f": _emscripten_glUniform3f,
   "emscripten_glUniform3fv": _emscripten_glUniform3fv,
   "emscripten_glUniform3i": _emscripten_glUniform3i,
   "emscripten_glUniform3iv": _emscripten_glUniform3iv,
+  "emscripten_glUniform3ui": _emscripten_glUniform3ui,
+  "emscripten_glUniform3uiv": _emscripten_glUniform3uiv,
   "emscripten_glUniform4f": _emscripten_glUniform4f,
   "emscripten_glUniform4fv": _emscripten_glUniform4fv,
   "emscripten_glUniform4i": _emscripten_glUniform4i,
   "emscripten_glUniform4iv": _emscripten_glUniform4iv,
+  "emscripten_glUniform4ui": _emscripten_glUniform4ui,
+  "emscripten_glUniform4uiv": _emscripten_glUniform4uiv,
+  "emscripten_glUniformBlockBinding": _emscripten_glUniformBlockBinding,
   "emscripten_glUniformMatrix2fv": _emscripten_glUniformMatrix2fv,
+  "emscripten_glUniformMatrix2x3fv": _emscripten_glUniformMatrix2x3fv,
+  "emscripten_glUniformMatrix2x4fv": _emscripten_glUniformMatrix2x4fv,
   "emscripten_glUniformMatrix3fv": _emscripten_glUniformMatrix3fv,
+  "emscripten_glUniformMatrix3x2fv": _emscripten_glUniformMatrix3x2fv,
+  "emscripten_glUniformMatrix3x4fv": _emscripten_glUniformMatrix3x4fv,
   "emscripten_glUniformMatrix4fv": _emscripten_glUniformMatrix4fv,
+  "emscripten_glUniformMatrix4x2fv": _emscripten_glUniformMatrix4x2fv,
+  "emscripten_glUniformMatrix4x3fv": _emscripten_glUniformMatrix4x3fv,
   "emscripten_glUseProgram": _emscripten_glUseProgram,
   "emscripten_glValidateProgram": _emscripten_glValidateProgram,
   "emscripten_glVertex2f": _emscripten_glVertex2f,
@@ -21398,12 +22630,23 @@ var asmLibraryArg = {
   "emscripten_glVertexAttrib3fv": _emscripten_glVertexAttrib3fv,
   "emscripten_glVertexAttrib4f": _emscripten_glVertexAttrib4f,
   "emscripten_glVertexAttrib4fv": _emscripten_glVertexAttrib4fv,
+  "emscripten_glVertexAttribDivisor": _emscripten_glVertexAttribDivisor,
   "emscripten_glVertexAttribDivisorANGLE": _emscripten_glVertexAttribDivisorANGLE,
+  "emscripten_glVertexAttribDivisorARB": _emscripten_glVertexAttribDivisorARB,
+  "emscripten_glVertexAttribDivisorEXT": _emscripten_glVertexAttribDivisorEXT,
+  "emscripten_glVertexAttribDivisorNV": _emscripten_glVertexAttribDivisorNV,
+  "emscripten_glVertexAttribI4i": _emscripten_glVertexAttribI4i,
+  "emscripten_glVertexAttribI4iv": _emscripten_glVertexAttribI4iv,
+  "emscripten_glVertexAttribI4ui": _emscripten_glVertexAttribI4ui,
+  "emscripten_glVertexAttribI4uiv": _emscripten_glVertexAttribI4uiv,
+  "emscripten_glVertexAttribIPointer": _emscripten_glVertexAttribIPointer,
   "emscripten_glVertexAttribPointer": _emscripten_glVertexAttribPointer,
   "emscripten_glVertexPointer": _emscripten_glVertexPointer,
   "emscripten_glViewport": _emscripten_glViewport,
+  "emscripten_glWaitSync": _emscripten_glWaitSync,
   "emscripten_memcpy_big": _emscripten_memcpy_big,
   "emscripten_resize_heap": _emscripten_resize_heap,
+  "emscripten_set_main_loop": _emscripten_set_main_loop,
   "environ_get": _environ_get,
   "environ_sizes_get": _environ_sizes_get,
   "exit": _exit,
@@ -21418,17 +22661,26 @@ var asmLibraryArg = {
   "getentropy": _getentropy,
   "getnameinfo": _getnameinfo,
   "glBegin": _glBegin,
+  "glBindVertexArray": _glBindVertexArray,
   "glClear": _glClear,
   "glClearColor": _glClearColor,
   "glColor3f": _glColor3f,
+  "glDeleteVertexArrays": _glDeleteVertexArrays,
+  "glDrawArraysInstanced": _glDrawArraysInstanced,
+  "glDrawBuffers": _glDrawBuffers,
+  "glDrawElementsInstanced": _glDrawElementsInstanced,
   "glEnable": _glEnable,
   "glEnd": _glEnd,
+  "glGenVertexArrays": _glGenVertexArrays,
+  "glIsVertexArray": _glIsVertexArray,
   "glLoadIdentity": _glLoadIdentity,
+  "glLoadMatrixf": _glLoadMatrixf,
   "glMatrixMode": _glMatrixMode,
   "glPointSize": _glPointSize,
   "glRotatef": _glRotatef,
   "glTranslatef": _glTranslatef,
   "glVertex3f": _glVertex3f,
+  "glVertexAttribDivisor": _glVertexAttribDivisor,
   "glViewport": _glViewport,
   "glfwCreateWindow": _glfwCreateWindow,
   "glfwDestroyWindow": _glfwDestroyWindow,
@@ -21445,9 +22697,7 @@ var asmLibraryArg = {
   "glfwSwapBuffers": _glfwSwapBuffers,
   "glfwSwapInterval": _glfwSwapInterval,
   "glfwTerminate": _glfwTerminate,
-  "glfwWindowShouldClose": _glfwWindowShouldClose,
   "gluLookAt": _gluLookAt,
-  "gluPerspective": _gluPerspective,
   "proc_exit": _proc_exit,
   "strftime": _strftime,
   "strftime_l": _strftime_l
@@ -21559,28 +22809,10 @@ var __Z6renderv = Module["__Z6renderv"] = createExportWrapper("_Z6renderv");
 var __Z15scroll_callbackP10GLFWwindowdd = Module["__Z15scroll_callbackP10GLFWwindowdd"] = createExportWrapper("_Z15scroll_callbackP10GLFWwindowdd");
 
 /** @type {function(...*):?} */
-var __Z21mouse_button_callbackP10GLFWwindowiii = Module["__Z21mouse_button_callbackP10GLFWwindowiii"] = createExportWrapper("_Z21mouse_button_callbackP10GLFWwindowiii");
-
-/** @type {function(...*):?} */
-var _main = Module["_main"] = createExportWrapper("__main_argc_argv");
-
-/** @type {function(...*):?} */
-var __ZN8Universe6updateEd = Module["__ZN8Universe6updateEd"] = createExportWrapper("_ZN8Universe6updateEd");
-
-/** @type {function(...*):?} */
 var __ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc = Module["__ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc"] = createExportWrapper("_ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEj = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEj"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEj");
-
-/** @type {function(...*):?} */
 var __ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_ = Module["__ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_"] = createExportWrapper("_ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_");
-
-/** @type {function(...*):?} */
-var _printf = Module["_printf"] = createExportWrapper("printf");
-
-/** @type {function(...*):?} */
-var _fprintf = Module["_fprintf"] = createExportWrapper("fprintf");
 
 /** @type {function(...*):?} */
 var __ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m = Module["__ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m"] = createExportWrapper("_ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m");
@@ -21590,6 +22822,48 @@ var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE3putEc = Module["__ZNSt3__21
 
 /** @type {function(...*):?} */
 var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv");
+
+/** @type {function(...*):?} */
+var __Z21mouse_button_callbackP10GLFWwindowiii = Module["__Z21mouse_button_callbackP10GLFWwindowiii"] = createExportWrapper("_Z21mouse_button_callbackP10GLFWwindowiii");
+
+/** @type {function(...*):?} */
+var __ZNSt3__28functionIFvvEED2Ev = Module["__ZNSt3__28functionIFvvEED2Ev"] = createExportWrapper("_ZNSt3__28functionIFvvEED2Ev");
+
+/** @type {function(...*):?} */
+var __Z9main_loopv = Module["__Z9main_loopv"] = createExportWrapper("_Z9main_loopv");
+
+/** @type {function(...*):?} */
+var __ZNKSt3__28functionIFvvEEclEv = Module["__ZNKSt3__28functionIFvvEEclEv"] = createExportWrapper("_ZNKSt3__28functionIFvvEEclEv");
+
+/** @type {function(...*):?} */
+var _main = Module["_main"] = createExportWrapper("__main_argc_argv");
+
+/** @type {function(...*):?} */
+var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEm = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEm"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEm");
+
+/** @type {function(...*):?} */
+var __ZN3glm7radiansIfEET_S1_ = Module["__ZN3glm7radiansIfEET_S1_"] = createExportWrapper("_ZN3glm7radiansIfEET_S1_");
+
+/** @type {function(...*):?} */
+var __ZN3glm11perspectiveIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_ = Module["__ZN3glm11perspectiveIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_"] = createExportWrapper("_ZN3glm11perspectiveIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_");
+
+/** @type {function(...*):?} */
+var __ZN3glm9value_ptrIfLNS_9qualifierE0EEEPT_RNS_3matILi4ELi4ES2_XT0_EEE = Module["__ZN3glm9value_ptrIfLNS_9qualifierE0EEEPT_RNS_3matILi4ELi4ES2_XT0_EEE"] = createExportWrapper("_ZN3glm9value_ptrIfLNS_9qualifierE0EEEPT_RNS_3matILi4ELi4ES2_XT0_EEE");
+
+/** @type {function(...*):?} */
+var _printf = Module["_printf"] = createExportWrapper("printf");
+
+/** @type {function(...*):?} */
+var _fprintf = Module["_fprintf"] = createExportWrapper("fprintf");
+
+/** @type {function(...*):?} */
+var __ZN3glm16perspectiveRH_NOIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_ = Module["__ZN3glm16perspectiveRH_NOIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_"] = createExportWrapper("_ZN3glm16perspectiveRH_NOIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZNSt3__28functionIFvvEE4swapERS2_ = Module["__ZNSt3__28functionIFvvEE4swapERS2_"] = createExportWrapper("_ZNSt3__28functionIFvvEE4swapERS2_");
 
 /** @type {function(...*):?} */
 var __ZNSt3__216allocator_traitsINS_9allocatorI4NodeEEE7destroyIS2_vEEvRS3_PT_ = Module["__ZNSt3__216allocator_traitsINS_9allocatorI4NodeEEE7destroyIS2_vEEvRS3_PT_"] = createExportWrapper("_ZNSt3__216allocator_traitsINS_9allocatorI4NodeEEE7destroyIS2_vEEvRS3_PT_");
@@ -21824,6 +23098,39 @@ var __ZNKSt3__26locale9use_facetERNS0_2idE = Module["__ZNKSt3__26locale9use_face
 
 /** @type {function(...*):?} */
 var __ZNSt3__28ios_base5clearEj = Module["__ZNSt3__28ios_base5clearEj"] = createExportWrapper("_ZNSt3__28ios_base5clearEj");
+
+/** @type {function(...*):?} */
+var __ZNSt3__217bad_function_callC2Ev = Module["__ZNSt3__217bad_function_callC2Ev"] = createExportWrapper("_ZNSt3__217bad_function_callC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNSt3__217bad_function_callD1Ev = Module["__ZNSt3__217bad_function_callD1Ev"] = createExportWrapper("_ZNSt3__217bad_function_callD1Ev");
+
+/** @type {function(...*):?} */
+var __ZN3glm3absIfEET_S1_ = Module["__ZN3glm3absIfEET_S1_"] = createExportWrapper("_ZN3glm3absIfEET_S1_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZN3glm6detail11compute_absIfLb1EE4callEf = Module["__ZN3glm6detail11compute_absIfLb1EE4callEf"] = createExportWrapper("_ZN3glm6detail11compute_absIfLb1EE4callEf");
+
+/** @type {function(...*):?} */
+var _tanf = Module["_tanf"] = createExportWrapper("tanf");
+
+/** @type {function(...*):?} */
+var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv");
+
+/** @type {function(...*):?} */
+var __ZN8Universe6updateEd = Module["__ZN8Universe6updateEd"] = createExportWrapper("_ZN8Universe6updateEd");
+
+/** @type {function(...*):?} */
+var __ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv = Module["__ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv"] = createExportWrapper("_ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv");
+
+/** @type {function(...*):?} */
+var ___cxa_pure_virtual = Module["___cxa_pure_virtual"] = createExportWrapper("__cxa_pure_virtual");
 
 /** @type {function(...*):?} */
 var __ZN5GraphC2Ev = Module["__ZN5GraphC2Ev"] = createExportWrapper("_ZN5GraphC2Ev");
@@ -22138,6 +23445,12 @@ var _emscripten_webgl1_get_proc_address = Module["_emscripten_webgl1_get_proc_ad
 var __webgl1_match_ext_proc_address_without_suffix = Module["__webgl1_match_ext_proc_address_without_suffix"] = createExportWrapper("_webgl1_match_ext_proc_address_without_suffix");
 
 /** @type {function(...*):?} */
+var _emscripten_webgl2_get_proc_address = Module["_emscripten_webgl2_get_proc_address"] = createExportWrapper("emscripten_webgl2_get_proc_address");
+
+/** @type {function(...*):?} */
+var __webgl2_match_ext_proc_address_without_suffix = Module["__webgl2_match_ext_proc_address_without_suffix"] = createExportWrapper("_webgl2_match_ext_proc_address_without_suffix");
+
+/** @type {function(...*):?} */
 var _free = Module["_free"] = createExportWrapper("free");
 
 /** @type {function(...*):?} */
@@ -22151,6 +23464,60 @@ var _eglGetProcAddress = Module["_eglGetProcAddress"] = createExportWrapper("egl
 
 /** @type {function(...*):?} */
 var _glfwGetProcAddress = Module["_glfwGetProcAddress"] = createExportWrapper("glfwGetProcAddress");
+
+/** @type {function(...*):?} */
+var _glVertexAttribDivisorNV = Module["_glVertexAttribDivisorNV"] = createExportWrapper("glVertexAttribDivisorNV");
+
+/** @type {function(...*):?} */
+var _glVertexAttribDivisorEXT = Module["_glVertexAttribDivisorEXT"] = createExportWrapper("glVertexAttribDivisorEXT");
+
+/** @type {function(...*):?} */
+var _glVertexAttribDivisorARB = Module["_glVertexAttribDivisorARB"] = createExportWrapper("glVertexAttribDivisorARB");
+
+/** @type {function(...*):?} */
+var _glVertexAttribDivisorANGLE = Module["_glVertexAttribDivisorANGLE"] = createExportWrapper("glVertexAttribDivisorANGLE");
+
+/** @type {function(...*):?} */
+var _glDrawArraysInstancedNV = Module["_glDrawArraysInstancedNV"] = createExportWrapper("glDrawArraysInstancedNV");
+
+/** @type {function(...*):?} */
+var _glDrawArraysInstancedEXT = Module["_glDrawArraysInstancedEXT"] = createExportWrapper("glDrawArraysInstancedEXT");
+
+/** @type {function(...*):?} */
+var _glDrawArraysInstancedARB = Module["_glDrawArraysInstancedARB"] = createExportWrapper("glDrawArraysInstancedARB");
+
+/** @type {function(...*):?} */
+var _glDrawArraysInstancedANGLE = Module["_glDrawArraysInstancedANGLE"] = createExportWrapper("glDrawArraysInstancedANGLE");
+
+/** @type {function(...*):?} */
+var _glDrawElementsInstancedNV = Module["_glDrawElementsInstancedNV"] = createExportWrapper("glDrawElementsInstancedNV");
+
+/** @type {function(...*):?} */
+var _glDrawElementsInstancedEXT = Module["_glDrawElementsInstancedEXT"] = createExportWrapper("glDrawElementsInstancedEXT");
+
+/** @type {function(...*):?} */
+var _glDrawElementsInstancedARB = Module["_glDrawElementsInstancedARB"] = createExportWrapper("glDrawElementsInstancedARB");
+
+/** @type {function(...*):?} */
+var _glDrawElementsInstancedANGLE = Module["_glDrawElementsInstancedANGLE"] = createExportWrapper("glDrawElementsInstancedANGLE");
+
+/** @type {function(...*):?} */
+var _glBindVertexArrayOES = Module["_glBindVertexArrayOES"] = createExportWrapper("glBindVertexArrayOES");
+
+/** @type {function(...*):?} */
+var _glDeleteVertexArraysOES = Module["_glDeleteVertexArraysOES"] = createExportWrapper("glDeleteVertexArraysOES");
+
+/** @type {function(...*):?} */
+var _glGenVertexArraysOES = Module["_glGenVertexArraysOES"] = createExportWrapper("glGenVertexArraysOES");
+
+/** @type {function(...*):?} */
+var _glIsVertexArrayOES = Module["_glIsVertexArrayOES"] = createExportWrapper("glIsVertexArrayOES");
+
+/** @type {function(...*):?} */
+var _glDrawBuffersEXT = Module["_glDrawBuffersEXT"] = createExportWrapper("glDrawBuffersEXT");
+
+/** @type {function(...*):?} */
+var _glDrawBuffersWEBGL = Module["_glDrawBuffersWEBGL"] = createExportWrapper("glDrawBuffersWEBGL");
 
 /** @type {function(...*):?} */
 var _alcGetProcAddress = Module["_alcGetProcAddress"] = createExportWrapper("alcGetProcAddress");
@@ -23225,9 +24592,6 @@ var _ctanhf = Module["_ctanhf"] = createExportWrapper("ctanhf");
 
 /** @type {function(...*):?} */
 var _tan = Module["_tan"] = createExportWrapper("tan");
-
-/** @type {function(...*):?} */
-var _tanf = Module["_tanf"] = createExportWrapper("tanf");
 
 /** @type {function(...*):?} */
 var _ctanhl = Module["_ctanhl"] = createExportWrapper("ctanhl");
@@ -29121,9 +30485,6 @@ var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6appendEPKcm
 var __ZNSt3__28__c_nodeD1Ev = Module["__ZNSt3__28__c_nodeD1Ev"] = createExportWrapper("_ZNSt3__28__c_nodeD1Ev");
 
 /** @type {function(...*):?} */
-var ___cxa_pure_virtual = Module["___cxa_pure_virtual"] = createExportWrapper("__cxa_pure_virtual");
-
-/** @type {function(...*):?} */
 var __ZNSt3__211__libcpp_dbD1Ev = Module["__ZNSt3__211__libcpp_dbD1Ev"] = createExportWrapper("_ZNSt3__211__libcpp_dbD1Ev");
 
 /** @type {function(...*):?} */
@@ -30420,9 +31781,6 @@ var __ZNSt9exceptionD2Ev = Module["__ZNSt9exceptionD2Ev"] = createExportWrapper(
 var __ZNSt3__217bad_function_callD0Ev = Module["__ZNSt3__217bad_function_callD0Ev"] = createExportWrapper("_ZNSt3__217bad_function_callD0Ev");
 
 /** @type {function(...*):?} */
-var __ZNSt3__217bad_function_callD1Ev = Module["__ZNSt3__217bad_function_callD1Ev"] = createExportWrapper("_ZNSt3__217bad_function_callD1Ev");
-
-/** @type {function(...*):?} */
 var __ZNKSt3__217bad_function_call4whatEv = Module["__ZNKSt3__217bad_function_call4whatEv"] = createExportWrapper("_ZNKSt3__217bad_function_call4whatEv");
 
 /** @type {function(...*):?} */
@@ -31122,10 +32480,10 @@ var __ZNKSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE3putES
 var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEi = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEi"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEi");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEl = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEl"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEl");
+var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEj = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEj"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEj");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEm = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEm"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEm");
+var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEl = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEl"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEl");
 
 /** @type {function(...*):?} */
 var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEx = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEx"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEx");
@@ -38385,9 +39743,6 @@ var __ZNSt3__218shared_timed_mutex13unlock_sharedEv = Module["__ZNSt3__218shared
 var __ZNSt3__218shared_timed_mutexC1Ev = Module["__ZNSt3__218shared_timed_mutexC1Ev"] = createExportWrapper("_ZNSt3__218shared_timed_mutexC1Ev");
 
 /** @type {function(...*):?} */
-var __ZNSt9exceptionC2Ev = Module["__ZNSt9exceptionC2Ev"] = createExportWrapper("_ZNSt9exceptionC2Ev");
-
-/** @type {function(...*):?} */
 var __ZNSt3__218__libcpp_refstringC2EPKc = Module["__ZNSt3__218__libcpp_refstringC2EPKc"] = createExportWrapper("_ZNSt3__218__libcpp_refstringC2EPKc");
 
 /** @type {function(...*):?} */
@@ -39977,871 +41332,875 @@ var dynCall_iiiiijj = Module["dynCall_iiiiijj"] = createExportWrapper("dynCall_i
 /** @type {function(...*):?} */
 var dynCall_iiiiiijj = Module["dynCall_iiiiiijj"] = createExportWrapper("dynCall_iiiiiijj");
 
-var _graph = Module['_graph'] = 380936;
-var _camera = Module['_camera'] = 380960;
-var _universe = Module['_universe'] = 381040;
-var _yLocation = Module['_yLocation'] = 380932;
-var _mouseDown = Module['_mouseDown'] = 381032;
-var _mouseDownFirst = Module['_mouseDownFirst'] = 381033;
-var _n_iterations = Module['_n_iterations'] = 379936;
-var __ZNSt3__24coutE = Module['__ZNSt3__24coutE'] = 420660;
-var _autoRotateX = Module['_autoRotateX'] = 381034;
-var _stderr = Module['_stderr'] = 214688;
-var _mouseX = Module['_mouseX'] = 381008;
-var _mouseY = Module['_mouseY'] = 381016;
-var __ZTISt12length_error = Module['__ZTISt12length_error'] = 379512;
-var __ZTVSt12length_error = Module['__ZTVSt12length_error'] = 379472;
-var __ZTISt20bad_array_new_length = Module['__ZTISt20bad_array_new_length'] = 379284;
-var __ZNSt3__25ctypeIcE2idE = Module['__ZNSt3__25ctypeIcE2idE'] = 421728;
-var _movingUp = Module['_movingUp'] = 380928;
-var _mouseScroll = Module['_mouseScroll'] = 381024;
-var ___environ = Module['___environ'] = 381104;
-var ____environ = Module['____environ'] = 381104;
-var __environ = Module['__environ'] = 381104;
-var _environ = Module['_environ'] = 381104;
-var _timezone = Module['_timezone'] = 381640;
-var _daylight = Module['_daylight'] = 381644;
-var _tzname = Module['_tzname'] = 381648;
-var ___progname = Module['___progname'] = 382864;
-var _optind = Module['_optind'] = 379960;
-var ___optreset = Module['___optreset'] = 381828;
-var ___optpos = Module['___optpos'] = 381832;
-var _optarg = Module['_optarg'] = 381836;
-var _optopt = Module['_optopt'] = 381840;
-var _opterr = Module['_opterr'] = 379964;
-var _optreset = Module['_optreset'] = 381828;
-var _h_errno = Module['_h_errno'] = 381964;
-var ___signgam = Module['___signgam'] = 397164;
-var __ns_flagdata = Module['__ns_flagdata'] = 209312;
-var ___progname_full = Module['___progname_full'] = 382868;
-var _program_invocation_short_name = Module['_program_invocation_short_name'] = 382864;
-var _program_invocation_name = Module['_program_invocation_name'] = 382868;
-var ___sig_pending = Module['___sig_pending'] = 387216;
-var ___sig_actions = Module['___sig_actions'] = 388064;
-var _signgam = Module['_signgam'] = 397164;
-var _stdin = Module['_stdin'] = 214692;
-var _stdout = Module['_stdout'] = 214696;
-var ___THREW__ = Module['___THREW__'] = 403968;
-var ___threwValue = Module['___threwValue'] = 403972;
-var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 228624;
-var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 228664;
-var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 228644;
-var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 378824;
-var __ZTISt8bad_cast = Module['__ZTISt8bad_cast'] = 379852;
-var __ZTVNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTVNSt12experimental15fundamentals_v112bad_any_castE'] = 228676;
-var __ZTINSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTINSt12experimental15fundamentals_v112bad_any_castE'] = 228748;
-var __ZTSNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTSNSt12experimental15fundamentals_v112bad_any_castE'] = 228696;
-var __ZNSt3__212placeholders2_1E = Module['__ZNSt3__212placeholders2_1E'] = 228760;
-var __ZNSt3__212placeholders2_2E = Module['__ZNSt3__212placeholders2_2E'] = 228761;
-var __ZNSt3__212placeholders2_3E = Module['__ZNSt3__212placeholders2_3E'] = 228762;
-var __ZNSt3__212placeholders2_4E = Module['__ZNSt3__212placeholders2_4E'] = 228763;
-var __ZNSt3__212placeholders2_5E = Module['__ZNSt3__212placeholders2_5E'] = 228764;
-var __ZNSt3__212placeholders2_6E = Module['__ZNSt3__212placeholders2_6E'] = 228765;
-var __ZNSt3__212placeholders2_7E = Module['__ZNSt3__212placeholders2_7E'] = 228766;
-var __ZNSt3__212placeholders2_8E = Module['__ZNSt3__212placeholders2_8E'] = 228767;
-var __ZNSt3__212placeholders2_9E = Module['__ZNSt3__212placeholders2_9E'] = 228768;
-var __ZNSt3__212placeholders3_10E = Module['__ZNSt3__212placeholders3_10E'] = 228769;
-var __ZNSt3__213__DIGIT_TABLEE = Module['__ZNSt3__213__DIGIT_TABLEE'] = 228784;
-var __ZNSt3__26__itoa16_Charconv_digitsE = Module['__ZNSt3__26__itoa16_Charconv_digitsE'] = 228992;
-var __ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE'] = 229088;
-var __ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE'] = 229344;
-var __ZNSt3__225_General_precision_tablesIfE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIfE6_Max_PE'] = 229520;
-var __ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE'] = 229536;
-var __ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE'] = 231104;
-var __ZNSt3__225_General_precision_tablesIdE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIdE6_Max_PE'] = 233616;
-var __ZNSt3__26chrono12system_clock9is_steadyE = Module['__ZNSt3__26chrono12system_clock9is_steadyE'] = 233620;
-var __ZNSt3__26chrono12steady_clock9is_steadyE = Module['__ZNSt3__26chrono12steady_clock9is_steadyE'] = 233621;
-var __ZNSt3__214__POW10_OFFSETE = Module['__ZNSt3__214__POW10_OFFSETE'] = 263008;
-var __ZNSt3__213__POW10_SPLITE = Module['__ZNSt3__213__POW10_SPLITE'] = 233632;
-var __ZNSt3__213__MIN_BLOCK_2E = Module['__ZNSt3__213__MIN_BLOCK_2E'] = 263136;
-var __ZNSt3__216__POW10_OFFSET_2E = Module['__ZNSt3__216__POW10_OFFSET_2E'] = 263216;
-var __ZNSt3__215__POW10_SPLIT_2E = Module['__ZNSt3__215__POW10_SPLIT_2E'] = 263360;
-var __ZNSt3__223__DOUBLE_POW5_INV_SPLITE = Module['__ZNSt3__223__DOUBLE_POW5_INV_SPLITE'] = 338560;
-var __ZNSt3__219__DOUBLE_POW5_SPLITE = Module['__ZNSt3__219__DOUBLE_POW5_SPLITE'] = 343232;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment'] = 348448;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa'] = 348768;
-var __ZNSt3__223__libcpp_debug_functionE = Module['__ZNSt3__223__libcpp_debug_functionE'] = 380572;
-var __ZTVNSt3__28__c_nodeE = Module['__ZTVNSt3__28__c_nodeE'] = 348952;
-var __ZTINSt3__28__c_nodeE = Module['__ZTINSt3__28__c_nodeE'] = 349004;
-var __ZTSNSt3__28__c_nodeE = Module['__ZTSNSt3__28__c_nodeE'] = 348984;
-var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 378784;
-var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 349012;
-var __ZTVNSt3__219__shared_weak_countE = Module['__ZTVNSt3__219__shared_weak_countE'] = 365164;
-var __ZTVNSt3__214__shared_countE = Module['__ZTVNSt3__214__shared_countE'] = 365108;
-var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 349140;
-var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 349128;
-var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 349040;
-var __ZTINSt3__219__shared_weak_countE = Module['__ZTINSt3__219__shared_weak_countE'] = 365224;
-var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 349288;
-var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 349168;
-var __ZTVSt16nested_exception = Module['__ZTVSt16nested_exception'] = 349312;
-var __ZTISt16nested_exception = Module['__ZTISt16nested_exception'] = 349352;
-var __ZTSSt16nested_exception = Module['__ZTSSt16nested_exception'] = 349328;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment'] = 350000;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa'] = 350048;
-var __ZNSt3__222__FLOAT_POW5_INV_SPLITE = Module['__ZNSt3__222__FLOAT_POW5_INV_SPLITE'] = 349360;
-var __ZNSt3__218__FLOAT_POW5_SPLITE = Module['__ZNSt3__218__FLOAT_POW5_SPLITE'] = 349616;
-var __ZTVNSt3__212format_errorE = Module['__ZTVNSt3__212format_errorE'] = 350092;
-var __ZTINSt3__212format_errorE = Module['__ZTINSt3__212format_errorE'] = 350136;
-var __ZTSNSt3__212format_errorE = Module['__ZTSNSt3__212format_errorE'] = 350112;
-var __ZTISt13runtime_error = Module['__ZTISt13runtime_error'] = 379632;
-var __ZTVNSt3__217bad_function_callE = Module['__ZTVNSt3__217bad_function_callE'] = 350148;
-var __ZTINSt3__217bad_function_callE = Module['__ZTINSt3__217bad_function_callE'] = 350196;
-var __ZTSNSt3__217bad_function_callE = Module['__ZTSNSt3__217bad_function_callE'] = 350168;
-var __ZTISt9exception = Module['__ZTISt9exception'] = 379168;
-var __ZTVNSt3__212future_errorE = Module['__ZTVNSt3__212future_errorE'] = 350244;
-var __ZTVNSt3__217__assoc_sub_stateE = Module['__ZTVNSt3__217__assoc_sub_stateE'] = 350264;
-var __ZTVNSt3__223__future_error_categoryE = Module['__ZTVNSt3__223__future_error_categoryE'] = 350208;
-var __ZTINSt3__223__future_error_categoryE = Module['__ZTINSt3__223__future_error_categoryE'] = 350364;
-var __ZTINSt3__212future_errorE = Module['__ZTINSt3__212future_errorE'] = 350400;
-var __ZTINSt3__217__assoc_sub_stateE = Module['__ZTINSt3__217__assoc_sub_stateE'] = 350316;
-var __ZTSNSt3__217__assoc_sub_stateE = Module['__ZTSNSt3__217__assoc_sub_stateE'] = 350288;
-var __ZTINSt3__214__shared_countE = Module['__ZTINSt3__214__shared_countE'] = 365156;
-var __ZTSNSt3__223__future_error_categoryE = Module['__ZTSNSt3__223__future_error_categoryE'] = 350328;
-var __ZTINSt3__212__do_messageE = Module['__ZTINSt3__212__do_messageE'] = 368124;
-var __ZTSNSt3__212future_errorE = Module['__ZTSNSt3__212future_errorE'] = 350376;
-var __ZTISt11logic_error = Module['__ZTISt11logic_error'] = 379392;
-var __ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 350816;
-var __ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 350920;
-var __ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 350968;
-var __ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 421556;
-var __ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 351036;
-var __ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 351064;
-var __ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 351168;
-var __ZNSt3__25ctypeIwE2idE = Module['__ZNSt3__25ctypeIwE2idE'] = 421720;
-var __ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 351216;
-var __ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 421564;
-var __ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 351224;
-var __ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 351288;
-var __ZNSt3__27codecvtIcc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIcc11__mbstate_tE2idE'] = 421736;
-var __ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352204;
-var __ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352508;
-var __ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352688;
-var __ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 352868;
-var __ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 353024;
-var __ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 421540;
-var __ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 421548;
-var __ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 351476;
-var __ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 350880;
-var __ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 351532;
-var __ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 350928;
-var __ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 351604;
-var __ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 350976;
-var __ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 351756;
-var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 351628;
-var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 351668;
-var __ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 351912;
-var __ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 351128;
-var __ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 351968;
-var __ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 351176;
-var __ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 352040;
-var __ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352132;
-var __ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 353188;
-var __ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 351352;
-var __ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 351412;
-var __ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 351368;
-var __ZTINSt3__28ios_baseE = Module['__ZTINSt3__28ios_baseE'] = 353404;
-var __ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 351424;
-var __ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 351484;
-var __ZTVN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTVN10__cxxabiv121__vmi_class_type_infoE'] = 378916;
-var __ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 351556;
-var __ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 351708;
-var __ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 351788;
-var __ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 351848;
-var __ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 351804;
-var __ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 351860;
-var __ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 351920;
-var __ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 351992;
-var __ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352064;
-var __ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352144;
-var __ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352456;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE'] = 352244;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 352304;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 352344;
-var __ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352384;
-var __ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352468;
-var __ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352636;
-var __ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 352524;
-var __ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352564;
-var __ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352648;
-var __ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352816;
-var __ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 352704;
-var __ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352744;
-var __ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 352828;
-var __ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 352972;
-var __ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 352884;
-var __ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 352924;
-var __ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 352984;
-var __ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 353128;
-var __ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 353040;
-var __ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 353080;
-var __ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 353140;
-var __ZTVNSt3__28ios_base7failureE = Module['__ZTVNSt3__28ios_base7failureE'] = 353236;
-var __ZNSt3__28ios_base9__xindex_E = Module['__ZNSt3__28ios_base9__xindex_E'] = 420472;
-var __ZTVNSt3__28ios_baseE = Module['__ZTVNSt3__28ios_baseE'] = 353368;
-var __ZTVNSt3__219__iostream_categoryE = Module['__ZTVNSt3__219__iostream_categoryE'] = 353200;
-var __ZTINSt3__219__iostream_categoryE = Module['__ZTINSt3__219__iostream_categoryE'] = 353444;
-var __ZTINSt3__28ios_base7failureE = Module['__ZTINSt3__28ios_base7failureE'] = 353484;
-var __ZNSt3__28ios_base9boolalphaE = Module['__ZNSt3__28ios_base9boolalphaE'] = 353256;
-var __ZNSt3__28ios_base3decE = Module['__ZNSt3__28ios_base3decE'] = 353260;
-var __ZNSt3__28ios_base5fixedE = Module['__ZNSt3__28ios_base5fixedE'] = 353264;
-var __ZNSt3__28ios_base3hexE = Module['__ZNSt3__28ios_base3hexE'] = 353268;
-var __ZNSt3__28ios_base8internalE = Module['__ZNSt3__28ios_base8internalE'] = 353272;
-var __ZNSt3__28ios_base4leftE = Module['__ZNSt3__28ios_base4leftE'] = 353276;
-var __ZNSt3__28ios_base3octE = Module['__ZNSt3__28ios_base3octE'] = 353280;
-var __ZNSt3__28ios_base5rightE = Module['__ZNSt3__28ios_base5rightE'] = 353284;
-var __ZNSt3__28ios_base10scientificE = Module['__ZNSt3__28ios_base10scientificE'] = 353288;
-var __ZNSt3__28ios_base8showbaseE = Module['__ZNSt3__28ios_base8showbaseE'] = 353292;
-var __ZNSt3__28ios_base9showpointE = Module['__ZNSt3__28ios_base9showpointE'] = 353296;
-var __ZNSt3__28ios_base7showposE = Module['__ZNSt3__28ios_base7showposE'] = 353300;
-var __ZNSt3__28ios_base6skipwsE = Module['__ZNSt3__28ios_base6skipwsE'] = 353304;
-var __ZNSt3__28ios_base7unitbufE = Module['__ZNSt3__28ios_base7unitbufE'] = 353308;
-var __ZNSt3__28ios_base9uppercaseE = Module['__ZNSt3__28ios_base9uppercaseE'] = 353312;
-var __ZNSt3__28ios_base11adjustfieldE = Module['__ZNSt3__28ios_base11adjustfieldE'] = 353316;
-var __ZNSt3__28ios_base9basefieldE = Module['__ZNSt3__28ios_base9basefieldE'] = 353320;
-var __ZNSt3__28ios_base10floatfieldE = Module['__ZNSt3__28ios_base10floatfieldE'] = 353324;
-var __ZNSt3__28ios_base6badbitE = Module['__ZNSt3__28ios_base6badbitE'] = 353328;
-var __ZNSt3__28ios_base6eofbitE = Module['__ZNSt3__28ios_base6eofbitE'] = 353332;
-var __ZNSt3__28ios_base7failbitE = Module['__ZNSt3__28ios_base7failbitE'] = 353336;
-var __ZNSt3__28ios_base7goodbitE = Module['__ZNSt3__28ios_base7goodbitE'] = 353340;
-var __ZNSt3__28ios_base3appE = Module['__ZNSt3__28ios_base3appE'] = 353344;
-var __ZNSt3__28ios_base3ateE = Module['__ZNSt3__28ios_base3ateE'] = 353348;
-var __ZNSt3__28ios_base6binaryE = Module['__ZNSt3__28ios_base6binaryE'] = 353352;
-var __ZNSt3__28ios_base2inE = Module['__ZNSt3__28ios_base2inE'] = 353356;
-var __ZNSt3__28ios_base3outE = Module['__ZNSt3__28ios_base3outE'] = 353360;
-var __ZNSt3__28ios_base5truncE = Module['__ZNSt3__28ios_base5truncE'] = 353364;
-var __ZTSNSt3__28ios_baseE = Module['__ZTSNSt3__28ios_baseE'] = 353384;
-var __ZTSNSt3__219__iostream_categoryE = Module['__ZTSNSt3__219__iostream_categoryE'] = 353412;
-var __ZTSNSt3__28ios_base7failureE = Module['__ZTSNSt3__28ios_base7failureE'] = 353456;
-var __ZTINSt3__212system_errorE = Module['__ZTINSt3__212system_errorE'] = 368256;
-var __ZNSt3__219__start_std_streamsE = Module['__ZNSt3__219__start_std_streamsE'] = 421164;
-var __ZNSt3__23cinE = Module['__ZNSt3__23cinE'] = 420484;
-var __ZNSt3__24cerrE = Module['__ZNSt3__24cerrE'] = 420828;
-var __ZNSt3__24clogE = Module['__ZNSt3__24clogE'] = 420996;
-var __ZNSt3__24wcinE = Module['__ZNSt3__24wcinE'] = 420572;
-var __ZNSt3__25wcoutE = Module['__ZNSt3__25wcoutE'] = 420744;
-var __ZNSt3__25wcerrE = Module['__ZNSt3__25wcerrE'] = 420912;
-var __ZNSt3__25wclogE = Module['__ZNSt3__25wclogE'] = 421080;
-var __ZTVNSt3__210__stdinbufIcEE = Module['__ZTVNSt3__210__stdinbufIcEE'] = 353496;
-var __ZTVNSt3__211__stdoutbufIcEE = Module['__ZTVNSt3__211__stdoutbufIcEE'] = 353596;
-var __ZTVNSt3__210__stdinbufIwEE = Module['__ZTVNSt3__210__stdinbufIwEE'] = 353700;
-var __ZTVNSt3__211__stdoutbufIwEE = Module['__ZTVNSt3__211__stdoutbufIwEE'] = 353800;
-var __ZNSt3__27codecvtIwc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIwc11__mbstate_tE2idE'] = 421744;
-var __ZTINSt3__210__stdinbufIcEE = Module['__ZTINSt3__210__stdinbufIcEE'] = 353584;
-var __ZTSNSt3__210__stdinbufIcEE = Module['__ZTSNSt3__210__stdinbufIcEE'] = 353560;
-var __ZTINSt3__211__stdoutbufIcEE = Module['__ZTINSt3__211__stdoutbufIcEE'] = 353688;
-var __ZTSNSt3__211__stdoutbufIcEE = Module['__ZTSNSt3__211__stdoutbufIcEE'] = 353660;
-var __ZTINSt3__210__stdinbufIwEE = Module['__ZTINSt3__210__stdinbufIwEE'] = 353788;
-var __ZTSNSt3__210__stdinbufIwEE = Module['__ZTSNSt3__210__stdinbufIwEE'] = 353764;
-var __ZTINSt3__211__stdoutbufIwEE = Module['__ZTINSt3__211__stdoutbufIwEE'] = 353892;
-var __ZTSNSt3__211__stdoutbufIwEE = Module['__ZTSNSt3__211__stdoutbufIwEE'] = 353864;
-var __ZNSt3__28numpunctIcE2idE = Module['__ZNSt3__28numpunctIcE2idE'] = 421784;
-var __ZNSt3__214__num_get_base5__srcE = Module['__ZNSt3__214__num_get_base5__srcE'] = 353904;
-var __ZNSt3__28numpunctIwE2idE = Module['__ZNSt3__28numpunctIwE2idE'] = 421792;
-var __ZNSt3__210moneypunctIcLb1EE2idE = Module['__ZNSt3__210moneypunctIcLb1EE2idE'] = 421612;
-var __ZNSt3__210moneypunctIcLb0EE2idE = Module['__ZNSt3__210moneypunctIcLb0EE2idE'] = 421604;
-var __ZNSt3__210moneypunctIwLb1EE2idE = Module['__ZNSt3__210moneypunctIwLb1EE2idE'] = 421628;
-var __ZNSt3__210moneypunctIwLb0EE2idE = Module['__ZNSt3__210moneypunctIwLb0EE2idE'] = 421620;
-var __ZTVNSt3__26locale5__impE = Module['__ZTVNSt3__26locale5__impE'] = 354180;
-var __ZTVNSt3__26locale5facetE = Module['__ZTVNSt3__26locale5facetE'] = 355980;
-var __ZNSt3__27collateIcE2idE = Module['__ZNSt3__27collateIcE2idE'] = 421524;
-var __ZNSt3__27collateIwE2idE = Module['__ZNSt3__27collateIwE2idE'] = 421532;
-var __ZNSt3__27codecvtIDsc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsc11__mbstate_tE2idE'] = 421752;
-var __ZNSt3__27codecvtIDic11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDic11__mbstate_tE2idE'] = 421768;
-var __ZNSt3__27codecvtIDsDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsDu11__mbstate_tE2idE'] = 421760;
-var __ZNSt3__27codecvtIDiDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDiDu11__mbstate_tE2idE'] = 421776;
-var __ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 421636;
-var __ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 421644;
-var __ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 421652;
-var __ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 421660;
-var __ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 421572;
-var __ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 421580;
-var __ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 421588;
-var __ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 421596;
-var __ZNSt3__28messagesIcE2idE = Module['__ZNSt3__28messagesIcE2idE'] = 421668;
-var __ZNSt3__28messagesIwE2idE = Module['__ZNSt3__28messagesIwE2idE'] = 421676;
-var __ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 363316;
-var __ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 363420;
-var __ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 363524;
-var __ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 363628;
-var __ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 363732;
-var __ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 363836;
-var __ZTVNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb0EEE'] = 361884;
-var __ZTVNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb1EEE'] = 361988;
-var __ZTVNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb0EEE'] = 362092;
-var __ZTVNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb1EEE'] = 362196;
-var __ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360308;
-var __ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360604;
-var __ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361156;
-var __ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361272;
-var __ZTVNSt3__215messages_bynameIcEE = Module['__ZTVNSt3__215messages_bynameIcEE'] = 363164;
-var __ZTVNSt3__215messages_bynameIwEE = Module['__ZTVNSt3__215messages_bynameIwEE'] = 363240;
-var __ZNSt3__26locale2id9__next_idE = Module['__ZNSt3__26locale2id9__next_idE'] = 421716;
-var __ZTVNSt3__214collate_bynameIcEE = Module['__ZTVNSt3__214collate_bynameIcEE'] = 354200;
-var __ZTVNSt3__214collate_bynameIwEE = Module['__ZTVNSt3__214collate_bynameIwEE'] = 354232;
-var __ZTVNSt3__25ctypeIcEE = Module['__ZTVNSt3__25ctypeIcEE'] = 354316;
-var __ZTVNSt3__212ctype_bynameIcEE = Module['__ZTVNSt3__212ctype_bynameIcEE'] = 355392;
-var __ZTVNSt3__212ctype_bynameIwEE = Module['__ZTVNSt3__212ctype_bynameIwEE'] = 355444;
-var __ZTVNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIwc11__mbstate_tEE'] = 355512;
-var __ZTVNSt3__28numpunctIcEE = Module['__ZTVNSt3__28numpunctIcEE'] = 355560;
-var __ZTVNSt3__28numpunctIwEE = Module['__ZTVNSt3__28numpunctIwEE'] = 355600;
-var __ZTVNSt3__215numpunct_bynameIcEE = Module['__ZTVNSt3__215numpunct_bynameIcEE'] = 355684;
-var __ZTVNSt3__215numpunct_bynameIwEE = Module['__ZTVNSt3__215numpunct_bynameIwEE'] = 355724;
-var __ZTVNSt3__215__time_get_tempIcEE = Module['__ZTVNSt3__215__time_get_tempIcEE'] = 364896;
-var __ZTVNSt3__215__time_get_tempIwEE = Module['__ZTVNSt3__215__time_get_tempIwEE'] = 364992;
-var __ZTVNSt3__27collateIcEE = Module['__ZTVNSt3__27collateIcEE'] = 358856;
-var __ZTVNSt3__27collateIwEE = Module['__ZTVNSt3__27collateIwEE'] = 358888;
-var __ZTVNSt3__25ctypeIwEE = Module['__ZTVNSt3__25ctypeIwEE'] = 356036;
-var __ZTVNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIcc11__mbstate_tEE'] = 356184;
-var __ZTVNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsc11__mbstate_tEE'] = 356332;
-var __ZTVNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDic11__mbstate_tEE'] = 356564;
-var __ZTVNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsDu11__mbstate_tEE'] = 356448;
-var __ZTVNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDiDu11__mbstate_tEE'] = 356680;
-var __ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 358920;
-var __ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 359164;
-var __ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 359376;
-var __ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 359608;
-var __ZTVNSt3__210moneypunctIcLb0EEE = Module['__ZTVNSt3__210moneypunctIcLb0EEE'] = 361388;
-var __ZTVNSt3__210moneypunctIcLb1EEE = Module['__ZTVNSt3__210moneypunctIcLb1EEE'] = 361536;
-var __ZTVNSt3__210moneypunctIwLb0EEE = Module['__ZTVNSt3__210moneypunctIwLb0EEE'] = 361652;
-var __ZTVNSt3__210moneypunctIwLb1EEE = Module['__ZTVNSt3__210moneypunctIwLb1EEE'] = 361768;
-var __ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362300;
-var __ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362464;
-var __ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362628;
-var __ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362792;
-var __ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 359808;
-var __ZTVNSt3__220__time_get_c_storageIcEE = Module['__ZTVNSt3__220__time_get_c_storageIcEE'] = 364824;
-var __ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360072;
-var __ZTVNSt3__220__time_get_c_storageIwEE = Module['__ZTVNSt3__220__time_get_c_storageIwEE'] = 364860;
-var __ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360872;
-var __ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361028;
-var __ZTVNSt3__28messagesIcEE = Module['__ZTVNSt3__28messagesIcEE'] = 362956;
-var __ZTVNSt3__28messagesIwEE = Module['__ZTVNSt3__28messagesIwEE'] = 363076;
-var __ZNSt3__210moneypunctIcLb0EE4intlE = Module['__ZNSt3__210moneypunctIcLb0EE4intlE'] = 354144;
-var __ZNSt3__210moneypunctIcLb1EE4intlE = Module['__ZNSt3__210moneypunctIcLb1EE4intlE'] = 354145;
-var __ZNSt3__210moneypunctIwLb0EE4intlE = Module['__ZNSt3__210moneypunctIwLb0EE4intlE'] = 354146;
-var __ZNSt3__210moneypunctIwLb1EE4intlE = Module['__ZNSt3__210moneypunctIwLb1EE4intlE'] = 354147;
-var __ZNSt3__26locale4noneE = Module['__ZNSt3__26locale4noneE'] = 354148;
-var __ZNSt3__26locale7collateE = Module['__ZNSt3__26locale7collateE'] = 354152;
-var __ZNSt3__26locale5ctypeE = Module['__ZNSt3__26locale5ctypeE'] = 354156;
-var __ZNSt3__26locale8monetaryE = Module['__ZNSt3__26locale8monetaryE'] = 354160;
-var __ZNSt3__26locale7numericE = Module['__ZNSt3__26locale7numericE'] = 354164;
-var __ZNSt3__26locale4timeE = Module['__ZNSt3__26locale4timeE'] = 354168;
-var __ZNSt3__26locale8messagesE = Module['__ZNSt3__26locale8messagesE'] = 354172;
-var __ZNSt3__26locale3allE = Module['__ZNSt3__26locale3allE'] = 354176;
-var __ZTINSt3__26locale5__impE = Module['__ZTINSt3__26locale5__impE'] = 358408;
-var __ZTINSt3__214collate_bynameIcEE = Module['__ZTINSt3__214collate_bynameIcEE'] = 358480;
-var __ZTINSt3__214collate_bynameIwEE = Module['__ZTINSt3__214collate_bynameIwEE'] = 358552;
-var __ZNSt3__210ctype_base5spaceE = Module['__ZNSt3__210ctype_base5spaceE'] = 354264;
-var __ZNSt3__210ctype_base5printE = Module['__ZNSt3__210ctype_base5printE'] = 354268;
-var __ZNSt3__210ctype_base5cntrlE = Module['__ZNSt3__210ctype_base5cntrlE'] = 354272;
-var __ZNSt3__210ctype_base5upperE = Module['__ZNSt3__210ctype_base5upperE'] = 354276;
-var __ZNSt3__210ctype_base5lowerE = Module['__ZNSt3__210ctype_base5lowerE'] = 354280;
-var __ZNSt3__210ctype_base5alphaE = Module['__ZNSt3__210ctype_base5alphaE'] = 354284;
-var __ZNSt3__210ctype_base5digitE = Module['__ZNSt3__210ctype_base5digitE'] = 354288;
-var __ZNSt3__210ctype_base5punctE = Module['__ZNSt3__210ctype_base5punctE'] = 354292;
-var __ZNSt3__210ctype_base6xdigitE = Module['__ZNSt3__210ctype_base6xdigitE'] = 354296;
-var __ZNSt3__210ctype_base5blankE = Module['__ZNSt3__210ctype_base5blankE'] = 354300;
-var __ZNSt3__210ctype_base5alnumE = Module['__ZNSt3__210ctype_base5alnumE'] = 354304;
-var __ZNSt3__210ctype_base5graphE = Module['__ZNSt3__210ctype_base5graphE'] = 354308;
-var __ZNSt3__25ctypeIcE10table_sizeE = Module['__ZNSt3__25ctypeIcE10table_sizeE'] = 354312;
-var __ZTINSt3__25ctypeIcEE = Module['__ZTINSt3__25ctypeIcEE'] = 358584;
-var __ZTINSt3__212ctype_bynameIcEE = Module['__ZTINSt3__212ctype_bynameIcEE'] = 358644;
-var __ZTINSt3__212ctype_bynameIwEE = Module['__ZTINSt3__212ctype_bynameIwEE'] = 358684;
-var __ZTINSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIwc11__mbstate_tEE'] = 357292;
-var __ZTINSt3__28numpunctIcEE = Module['__ZTINSt3__28numpunctIcEE'] = 358720;
-var __ZTINSt3__28numpunctIwEE = Module['__ZTINSt3__28numpunctIwEE'] = 358756;
-var __ZTINSt3__215numpunct_bynameIcEE = Module['__ZTINSt3__215numpunct_bynameIcEE'] = 358800;
-var __ZTINSt3__215numpunct_bynameIwEE = Module['__ZTINSt3__215numpunct_bynameIwEE'] = 358844;
-var __ZTINSt3__26locale5facetE = Module['__ZTINSt3__26locale5facetE'] = 356024;
-var __ZTSNSt3__26locale5facetE = Module['__ZTSNSt3__26locale5facetE'] = 356000;
-var __ZTINSt3__25ctypeIwEE = Module['__ZTINSt3__25ctypeIwEE'] = 356152;
-var __ZTSNSt3__25ctypeIwEE = Module['__ZTSNSt3__25ctypeIwEE'] = 356104;
-var __ZTSNSt3__210ctype_baseE = Module['__ZTSNSt3__210ctype_baseE'] = 356122;
-var __ZTINSt3__210ctype_baseE = Module['__ZTINSt3__210ctype_baseE'] = 356144;
-var __ZTINSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIcc11__mbstate_tEE'] = 356300;
-var __ZTSNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIcc11__mbstate_tEE'] = 356232;
-var __ZTSNSt3__212codecvt_baseE = Module['__ZTSNSt3__212codecvt_baseE'] = 356266;
-var __ZTINSt3__212codecvt_baseE = Module['__ZTINSt3__212codecvt_baseE'] = 356292;
-var __ZTINSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsc11__mbstate_tEE'] = 356416;
-var __ZTSNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsc11__mbstate_tEE'] = 356380;
-var __ZTINSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsDu11__mbstate_tEE'] = 356532;
-var __ZTSNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsDu11__mbstate_tEE'] = 356496;
-var __ZTINSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDic11__mbstate_tEE'] = 356648;
-var __ZTSNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDic11__mbstate_tEE'] = 356612;
-var __ZTINSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDiDu11__mbstate_tEE'] = 356764;
-var __ZTSNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDiDu11__mbstate_tEE'] = 356728;
-var __ZTVNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm16EEE'] = 356796;
-var __ZTINSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm16EEE'] = 356880;
-var __ZTSNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm16EEE'] = 356844;
-var __ZTVNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm32EEE'] = 356892;
-var __ZTINSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm32EEE'] = 356976;
-var __ZTSNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm32EEE'] = 356940;
-var __ZTVNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm16EEE'] = 356988;
-var __ZTINSt3__217__widen_from_utf8ILm16EEE = Module['__ZTINSt3__217__widen_from_utf8ILm16EEE'] = 357072;
-var __ZTSNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm16EEE'] = 357036;
-var __ZTVNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm32EEE'] = 357084;
-var __ZTINSt3__217__widen_from_utf8ILm32EEE = Module['__ZTINSt3__217__widen_from_utf8ILm32EEE'] = 357168;
-var __ZTSNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm32EEE'] = 357132;
-var __ZTVNSt3__214__codecvt_utf8IwEE = Module['__ZTVNSt3__214__codecvt_utf8IwEE'] = 357180;
-var __ZTINSt3__214__codecvt_utf8IwEE = Module['__ZTINSt3__214__codecvt_utf8IwEE'] = 357324;
-var __ZTSNSt3__214__codecvt_utf8IwEE = Module['__ZTSNSt3__214__codecvt_utf8IwEE'] = 357228;
-var __ZTSNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIwc11__mbstate_tEE'] = 357256;
-var __ZTVNSt3__214__codecvt_utf8IDsEE = Module['__ZTVNSt3__214__codecvt_utf8IDsEE'] = 357336;
-var __ZTINSt3__214__codecvt_utf8IDsEE = Module['__ZTINSt3__214__codecvt_utf8IDsEE'] = 357416;
-var __ZTSNSt3__214__codecvt_utf8IDsEE = Module['__ZTSNSt3__214__codecvt_utf8IDsEE'] = 357384;
-var __ZTVNSt3__214__codecvt_utf8IDiEE = Module['__ZTVNSt3__214__codecvt_utf8IDiEE'] = 357428;
-var __ZTINSt3__214__codecvt_utf8IDiEE = Module['__ZTINSt3__214__codecvt_utf8IDiEE'] = 357508;
-var __ZTSNSt3__214__codecvt_utf8IDiEE = Module['__ZTSNSt3__214__codecvt_utf8IDiEE'] = 357476;
-var __ZTVNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb0EEE'] = 357520;
-var __ZTINSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb0EEE'] = 357604;
-var __ZTSNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb0EEE'] = 357568;
-var __ZTVNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb1EEE'] = 357616;
-var __ZTINSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb1EEE'] = 357700;
-var __ZTSNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb1EEE'] = 357664;
-var __ZTVNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb0EEE'] = 357712;
-var __ZTINSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb0EEE'] = 357796;
-var __ZTSNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb0EEE'] = 357760;
-var __ZTVNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb1EEE'] = 357808;
-var __ZTINSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb1EEE'] = 357892;
-var __ZTSNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb1EEE'] = 357856;
-var __ZTVNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb0EEE'] = 357904;
-var __ZTINSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb0EEE'] = 357988;
-var __ZTSNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb0EEE'] = 357952;
-var __ZTVNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb1EEE'] = 358000;
-var __ZTINSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb1EEE'] = 358084;
-var __ZTSNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb1EEE'] = 358048;
-var __ZTVNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IwEE'] = 358096;
-var __ZTINSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IwEE'] = 358180;
-var __ZTSNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IwEE'] = 358144;
-var __ZTVNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDiEE'] = 358192;
-var __ZTINSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDiEE'] = 358276;
-var __ZTSNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDiEE'] = 358240;
-var __ZTVNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDsEE'] = 358288;
-var __ZTINSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDsEE'] = 358372;
-var __ZTSNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDsEE'] = 358336;
-var __ZTSNSt3__26locale5__impE = Module['__ZTSNSt3__26locale5__impE'] = 358384;
-var __ZTSNSt3__214collate_bynameIcEE = Module['__ZTSNSt3__214collate_bynameIcEE'] = 358420;
-var __ZTSNSt3__27collateIcEE = Module['__ZTSNSt3__27collateIcEE'] = 358448;
-var __ZTINSt3__27collateIcEE = Module['__ZTINSt3__27collateIcEE'] = 358468;
-var __ZTSNSt3__214collate_bynameIwEE = Module['__ZTSNSt3__214collate_bynameIwEE'] = 358492;
-var __ZTSNSt3__27collateIwEE = Module['__ZTSNSt3__27collateIwEE'] = 358520;
-var __ZTINSt3__27collateIwEE = Module['__ZTINSt3__27collateIwEE'] = 358540;
-var __ZTSNSt3__25ctypeIcEE = Module['__ZTSNSt3__25ctypeIcEE'] = 358564;
-var __ZTSNSt3__212ctype_bynameIcEE = Module['__ZTSNSt3__212ctype_bynameIcEE'] = 358616;
-var __ZTSNSt3__212ctype_bynameIwEE = Module['__ZTSNSt3__212ctype_bynameIwEE'] = 358656;
-var __ZTSNSt3__28numpunctIcEE = Module['__ZTSNSt3__28numpunctIcEE'] = 358696;
-var __ZTSNSt3__28numpunctIwEE = Module['__ZTSNSt3__28numpunctIwEE'] = 358732;
-var __ZTSNSt3__215numpunct_bynameIcEE = Module['__ZTSNSt3__215numpunct_bynameIcEE'] = 358768;
-var __ZTSNSt3__215numpunct_bynameIwEE = Module['__ZTSNSt3__215numpunct_bynameIwEE'] = 358812;
-var __ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 359132;
-var __ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 358984;
-var __ZTSNSt3__29__num_getIcEE = Module['__ZTSNSt3__29__num_getIcEE'] = 359052;
-var __ZTSNSt3__214__num_get_baseE = Module['__ZTSNSt3__214__num_get_baseE'] = 359074;
-var __ZTINSt3__214__num_get_baseE = Module['__ZTINSt3__214__num_get_baseE'] = 359100;
-var __ZTINSt3__29__num_getIcEE = Module['__ZTINSt3__29__num_getIcEE'] = 359108;
-var __ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 359344;
-var __ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 359228;
-var __ZTSNSt3__29__num_getIwEE = Module['__ZTSNSt3__29__num_getIwEE'] = 359296;
-var __ZTINSt3__29__num_getIwEE = Module['__ZTINSt3__29__num_getIwEE'] = 359320;
-var __ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 359576;
-var __ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 359428;
-var __ZTSNSt3__29__num_putIcEE = Module['__ZTSNSt3__29__num_putIcEE'] = 359496;
-var __ZTSNSt3__214__num_put_baseE = Module['__ZTSNSt3__214__num_put_baseE'] = 359518;
-var __ZTINSt3__214__num_put_baseE = Module['__ZTINSt3__214__num_put_baseE'] = 359544;
-var __ZTINSt3__29__num_putIcEE = Module['__ZTINSt3__29__num_putIcEE'] = 359552;
-var __ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 359776;
-var __ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 359660;
-var __ZTSNSt3__29__num_putIwEE = Module['__ZTSNSt3__29__num_putIwEE'] = 359728;
-var __ZTINSt3__29__num_putIwEE = Module['__ZTINSt3__29__num_putIwEE'] = 359752;
-var __ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360032;
-var __ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 359892;
-var __ZTSNSt3__29time_baseE = Module['__ZTSNSt3__29time_baseE'] = 359961;
-var __ZTINSt3__29time_baseE = Module['__ZTINSt3__29time_baseE'] = 359980;
-var __ZTSNSt3__220__time_get_c_storageIcEE = Module['__ZTSNSt3__220__time_get_c_storageIcEE'] = 359988;
-var __ZTINSt3__220__time_get_c_storageIcEE = Module['__ZTINSt3__220__time_get_c_storageIcEE'] = 360024;
-var __ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360268;
-var __ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360156;
-var __ZTSNSt3__220__time_get_c_storageIwEE = Module['__ZTSNSt3__220__time_get_c_storageIwEE'] = 360225;
-var __ZTINSt3__220__time_get_c_storageIwEE = Module['__ZTINSt3__220__time_get_c_storageIwEE'] = 360260;
-var __ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360572;
-var __ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360420;
-var __ZTSNSt3__218__time_get_storageIcEE = Module['__ZTSNSt3__218__time_get_storageIcEE'] = 360497;
-var __ZTSNSt3__210__time_getE = Module['__ZTSNSt3__210__time_getE'] = 360529;
-var __ZTINSt3__210__time_getE = Module['__ZTINSt3__210__time_getE'] = 360552;
-var __ZTINSt3__218__time_get_storageIcEE = Module['__ZTINSt3__218__time_get_storageIcEE'] = 360560;
-var __ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360840;
-var __ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360716;
-var __ZTSNSt3__218__time_get_storageIwEE = Module['__ZTSNSt3__218__time_get_storageIwEE'] = 360793;
-var __ZTINSt3__218__time_get_storageIwEE = Module['__ZTINSt3__218__time_get_storageIwEE'] = 360828;
-var __ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360996;
-var __ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360896;
-var __ZTSNSt3__210__time_putE = Module['__ZTSNSt3__210__time_putE'] = 360965;
-var __ZTINSt3__210__time_putE = Module['__ZTINSt3__210__time_putE'] = 360988;
-var __ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361124;
-var __ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361052;
-var __ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361260;
-var __ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361180;
-var __ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361376;
-var __ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361296;
-var __ZTINSt3__210moneypunctIcLb0EEE = Module['__ZTINSt3__210moneypunctIcLb0EEE'] = 361504;
-var __ZTSNSt3__210moneypunctIcLb0EEE = Module['__ZTSNSt3__210moneypunctIcLb0EEE'] = 361444;
-var __ZTSNSt3__210money_baseE = Module['__ZTSNSt3__210money_baseE'] = 361472;
-var __ZTINSt3__210money_baseE = Module['__ZTINSt3__210money_baseE'] = 361496;
-var __ZTINSt3__210moneypunctIcLb1EEE = Module['__ZTINSt3__210moneypunctIcLb1EEE'] = 361620;
-var __ZTSNSt3__210moneypunctIcLb1EEE = Module['__ZTSNSt3__210moneypunctIcLb1EEE'] = 361592;
-var __ZTINSt3__210moneypunctIwLb0EEE = Module['__ZTINSt3__210moneypunctIwLb0EEE'] = 361736;
-var __ZTSNSt3__210moneypunctIwLb0EEE = Module['__ZTSNSt3__210moneypunctIwLb0EEE'] = 361708;
-var __ZTINSt3__210moneypunctIwLb1EEE = Module['__ZTINSt3__210moneypunctIwLb1EEE'] = 361852;
-var __ZTSNSt3__210moneypunctIwLb1EEE = Module['__ZTSNSt3__210moneypunctIwLb1EEE'] = 361824;
-var __ZTINSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb0EEE'] = 361976;
-var __ZTSNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb0EEE'] = 361940;
-var __ZTINSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb1EEE'] = 362080;
-var __ZTSNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb1EEE'] = 362044;
-var __ZTINSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb0EEE'] = 362184;
-var __ZTSNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb0EEE'] = 362148;
-var __ZTINSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb1EEE'] = 362288;
-var __ZTSNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb1EEE'] = 362252;
-var __ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362432;
-var __ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362328;
-var __ZTSNSt3__211__money_getIcEE = Module['__ZTSNSt3__211__money_getIcEE'] = 362398;
-var __ZTINSt3__211__money_getIcEE = Module['__ZTINSt3__211__money_getIcEE'] = 362424;
-var __ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362596;
-var __ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362492;
-var __ZTSNSt3__211__money_getIwEE = Module['__ZTSNSt3__211__money_getIwEE'] = 362562;
-var __ZTINSt3__211__money_getIwEE = Module['__ZTINSt3__211__money_getIwEE'] = 362588;
-var __ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362760;
-var __ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362656;
-var __ZTSNSt3__211__money_putIcEE = Module['__ZTSNSt3__211__money_putIcEE'] = 362726;
-var __ZTINSt3__211__money_putIcEE = Module['__ZTINSt3__211__money_putIcEE'] = 362752;
-var __ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362924;
-var __ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362820;
-var __ZTSNSt3__211__money_putIwEE = Module['__ZTSNSt3__211__money_putIwEE'] = 362890;
-var __ZTINSt3__211__money_putIwEE = Module['__ZTINSt3__211__money_putIwEE'] = 362916;
-var __ZTINSt3__28messagesIcEE = Module['__ZTINSt3__28messagesIcEE'] = 363044;
-var __ZTSNSt3__28messagesIcEE = Module['__ZTSNSt3__28messagesIcEE'] = 362988;
-var __ZTSNSt3__213messages_baseE = Module['__ZTSNSt3__213messages_baseE'] = 363009;
-var __ZTINSt3__213messages_baseE = Module['__ZTINSt3__213messages_baseE'] = 363036;
-var __ZTINSt3__28messagesIwEE = Module['__ZTINSt3__28messagesIwEE'] = 363132;
-var __ZTSNSt3__28messagesIwEE = Module['__ZTSNSt3__28messagesIwEE'] = 363108;
-var __ZTINSt3__215messages_bynameIcEE = Module['__ZTINSt3__215messages_bynameIcEE'] = 363228;
-var __ZTSNSt3__215messages_bynameIcEE = Module['__ZTSNSt3__215messages_bynameIcEE'] = 363196;
-var __ZTINSt3__215messages_bynameIwEE = Module['__ZTINSt3__215messages_bynameIwEE'] = 363304;
-var __ZTSNSt3__215messages_bynameIwEE = Module['__ZTSNSt3__215messages_bynameIwEE'] = 363272;
-var __ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 363408;
-var __ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 363364;
-var __ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 363512;
-var __ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 363468;
-var __ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 363616;
-var __ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 363572;
-var __ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 363720;
-var __ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 363676;
-var __ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 363824;
-var __ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 363780;
-var __ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 363928;
-var __ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 363884;
-var __ZTINSt3__215__time_get_tempIcEE = Module['__ZTINSt3__215__time_get_tempIcEE'] = 364980;
-var __ZTSNSt3__215__time_get_tempIcEE = Module['__ZTSNSt3__215__time_get_tempIcEE'] = 364948;
-var __ZTINSt3__215__time_get_tempIwEE = Module['__ZTINSt3__215__time_get_tempIwEE'] = 365092;
-var __ZTSNSt3__215__time_get_tempIwEE = Module['__ZTSNSt3__215__time_get_tempIwEE'] = 365060;
-var __ZNSt3__213allocator_argE = Module['__ZNSt3__213allocator_argE'] = 365104;
-var __ZTSNSt3__214__shared_countE = Module['__ZTSNSt3__214__shared_countE'] = 365128;
-var __ZTSNSt3__219__shared_weak_countE = Module['__ZTSNSt3__219__shared_weak_countE'] = 365192;
-var __ZTVNSt3__212bad_weak_ptrE = Module['__ZTVNSt3__212bad_weak_ptrE'] = 365248;
-var __ZTINSt3__212bad_weak_ptrE = Module['__ZTINSt3__212bad_weak_ptrE'] = 365292;
-var __ZTSNSt3__212bad_weak_ptrE = Module['__ZTSNSt3__212bad_weak_ptrE'] = 365268;
-var __ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 365304;
-var __ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 365500;
-var __ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 365332;
-var __ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 365580;
-var __ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 365360;
-var __ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 365434;
-var __ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 365492;
-var __ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 365512;
-var __ZNSt3__210defer_lockE = Module['__ZNSt3__210defer_lockE'] = 365592;
-var __ZNSt3__211try_to_lockE = Module['__ZNSt3__211try_to_lockE'] = 365593;
-var __ZNSt3__210adopt_lockE = Module['__ZNSt3__210adopt_lockE'] = 365594;
-var __ZSt7nothrow = Module['__ZSt7nothrow'] = 365595;
-var __ZTVNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTVNSt3__24__fs10filesystem16filesystem_errorE'] = 365600;
-var __ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE = Module['__ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE'] = 365596;
-var __ZTINSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTINSt3__24__fs10filesystem16filesystem_errorE'] = 365696;
-var __ZNSt3__24__fs10filesystem4path19preferred_separatorE = Module['__ZNSt3__24__fs10filesystem4path19preferred_separatorE'] = 365648;
-var __ZTSNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTSNSt3__24__fs10filesystem16filesystem_errorE'] = 365649;
-var __ZTVSt19bad_optional_access = Module['__ZTVSt19bad_optional_access'] = 365732;
-var __ZTISt19bad_optional_access = Module['__ZTISt19bad_optional_access'] = 365776;
-var __ZTSSt19bad_optional_access = Module['__ZTSSt19bad_optional_access'] = 365752;
-var __ZTVNSt12experimental19bad_optional_accessE = Module['__ZTVNSt12experimental19bad_optional_accessE'] = 365788;
-var __ZTINSt12experimental19bad_optional_accessE = Module['__ZTINSt12experimental19bad_optional_accessE'] = 365848;
-var __ZTSNSt12experimental19bad_optional_accessE = Module['__ZTSNSt12experimental19bad_optional_accessE'] = 365808;
-var __ZNSt3__212__rs_default4__c_E = Module['__ZNSt3__212__rs_default4__c_E'] = 423960;
-var __ZTVNSt3__211regex_errorE = Module['__ZTVNSt3__211regex_errorE'] = 365860;
-var __ZTINSt3__211regex_errorE = Module['__ZTINSt3__211regex_errorE'] = 366928;
-var __ZTSNSt3__211regex_errorE = Module['__ZTSNSt3__211regex_errorE'] = 366904;
-var __ZTVSt11logic_error = Module['__ZTVSt11logic_error'] = 379296;
-var __ZTVSt9exception = Module['__ZTVSt9exception'] = 379132;
-var __ZTVSt13runtime_error = Module['__ZTVSt13runtime_error'] = 379316;
-var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE = Module['__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE'] = 367008;
-var __ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE = Module['__ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE'] = 367012;
-var __ZTVNSt3__212strstreambufE = Module['__ZTVNSt3__212strstreambufE'] = 367264;
-var __ZTTNSt3__210istrstreamE = Module['__ZTTNSt3__210istrstreamE'] = 367368;
-var __ZTTNSt3__210ostrstreamE = Module['__ZTTNSt3__210ostrstreamE'] = 367424;
-var __ZTTNSt3__29strstreamE = Module['__ZTTNSt3__29strstreamE'] = 367500;
-var __ZTINSt3__212strstreambufE = Module['__ZTINSt3__212strstreambufE'] = 367564;
-var __ZTVNSt3__210istrstreamE = Module['__ZTVNSt3__210istrstreamE'] = 367328;
-var __ZTINSt3__210istrstreamE = Module['__ZTINSt3__210istrstreamE'] = 367640;
-var __ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 367576;
-var __ZTVNSt3__210ostrstreamE = Module['__ZTVNSt3__210ostrstreamE'] = 367384;
-var __ZTINSt3__210ostrstreamE = Module['__ZTINSt3__210ostrstreamE'] = 367716;
-var __ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 367652;
-var __ZTVNSt3__29strstreamE = Module['__ZTVNSt3__29strstreamE'] = 367440;
-var __ZTINSt3__29strstreamE = Module['__ZTINSt3__29strstreamE'] = 367888;
-var __ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE'] = 367728;
-var __ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 367788;
-var __ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 367828;
-var __ZTSNSt3__212strstreambufE = Module['__ZTSNSt3__212strstreambufE'] = 367540;
-var __ZTSNSt3__210istrstreamE = Module['__ZTSNSt3__210istrstreamE'] = 367616;
-var __ZTSNSt3__210ostrstreamE = Module['__ZTSNSt3__210ostrstreamE'] = 367692;
-var __ZTSNSt3__29strstreamE = Module['__ZTSNSt3__29strstreamE'] = 367868;
-var __ZTVNSt3__212system_errorE = Module['__ZTVNSt3__212system_errorE'] = 367972;
-var __ZTVNSt3__224__generic_error_categoryE = Module['__ZTVNSt3__224__generic_error_categoryE'] = 367900;
-var __ZTINSt3__224__generic_error_categoryE = Module['__ZTINSt3__224__generic_error_categoryE'] = 368172;
-var __ZTVNSt3__223__system_error_categoryE = Module['__ZTVNSt3__223__system_error_categoryE'] = 367936;
-var __ZTINSt3__223__system_error_categoryE = Module['__ZTINSt3__223__system_error_categoryE'] = 368220;
-var __ZTVNSt3__214error_categoryE = Module['__ZTVNSt3__214error_categoryE'] = 367992;
-var __ZTINSt3__214error_categoryE = Module['__ZTINSt3__214error_categoryE'] = 368056;
-var __ZTSNSt3__214error_categoryE = Module['__ZTSNSt3__214error_categoryE'] = 368028;
-var __ZTVNSt3__212__do_messageE = Module['__ZTVNSt3__212__do_messageE'] = 368064;
-var __ZTSNSt3__212__do_messageE = Module['__ZTSNSt3__212__do_messageE'] = 368100;
-var __ZTSNSt3__224__generic_error_categoryE = Module['__ZTSNSt3__224__generic_error_categoryE'] = 368136;
-var __ZTSNSt3__223__system_error_categoryE = Module['__ZTSNSt3__223__system_error_categoryE'] = 368184;
-var __ZTSNSt3__212system_errorE = Module['__ZTSNSt3__212system_errorE'] = 368232;
-var __ZNSt3__219piecewise_constructE = Module['__ZNSt3__219piecewise_constructE'] = 368268;
-var __ZTVSt18bad_variant_access = Module['__ZTVSt18bad_variant_access'] = 368272;
-var __ZTISt18bad_variant_access = Module['__ZTISt18bad_variant_access'] = 368316;
-var __ZTSSt18bad_variant_access = Module['__ZTSSt18bad_variant_access'] = 368292;
-var ___cxa_unexpected_handler = Module['___cxa_unexpected_handler'] = 380680;
-var ___cxa_terminate_handler = Module['___cxa_terminate_handler'] = 380676;
-var ___cxa_new_handler = Module['___cxa_new_handler'] = 426500;
-var __ZTIN10__cxxabiv116__shim_type_infoE = Module['__ZTIN10__cxxabiv116__shim_type_infoE'] = 376896;
-var __ZTIN10__cxxabiv117__class_type_infoE = Module['__ZTIN10__cxxabiv117__class_type_infoE'] = 376944;
-var __ZTIN10__cxxabiv117__pbase_type_infoE = Module['__ZTIN10__cxxabiv117__pbase_type_infoE'] = 376992;
-var __ZTIDn = Module['__ZTIDn'] = 377340;
-var __ZTIN10__cxxabiv119__pointer_type_infoE = Module['__ZTIN10__cxxabiv119__pointer_type_infoE'] = 377040;
-var __ZTIv = Module['__ZTIv'] = 377288;
-var __ZTIN10__cxxabiv120__function_type_infoE = Module['__ZTIN10__cxxabiv120__function_type_infoE'] = 377092;
-var __ZTIN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTIN10__cxxabiv129__pointer_to_member_type_infoE'] = 377152;
-var __ZTSN10__cxxabiv116__shim_type_infoE = Module['__ZTSN10__cxxabiv116__shim_type_infoE'] = 376860;
-var __ZTISt9type_info = Module['__ZTISt9type_info'] = 379832;
-var __ZTSN10__cxxabiv117__class_type_infoE = Module['__ZTSN10__cxxabiv117__class_type_infoE'] = 376908;
-var __ZTSN10__cxxabiv117__pbase_type_infoE = Module['__ZTSN10__cxxabiv117__pbase_type_infoE'] = 376956;
-var __ZTSN10__cxxabiv119__pointer_type_infoE = Module['__ZTSN10__cxxabiv119__pointer_type_infoE'] = 377004;
-var __ZTSN10__cxxabiv120__function_type_infoE = Module['__ZTSN10__cxxabiv120__function_type_infoE'] = 377052;
-var __ZTSN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTSN10__cxxabiv129__pointer_to_member_type_infoE'] = 377104;
-var __ZTVN10__cxxabiv116__shim_type_infoE = Module['__ZTVN10__cxxabiv116__shim_type_infoE'] = 377176;
-var __ZTVN10__cxxabiv123__fundamental_type_infoE = Module['__ZTVN10__cxxabiv123__fundamental_type_infoE'] = 377204;
-var __ZTIN10__cxxabiv123__fundamental_type_infoE = Module['__ZTIN10__cxxabiv123__fundamental_type_infoE'] = 377272;
-var __ZTSN10__cxxabiv123__fundamental_type_infoE = Module['__ZTSN10__cxxabiv123__fundamental_type_infoE'] = 377232;
-var __ZTSv = Module['__ZTSv'] = 377284;
-var __ZTSPv = Module['__ZTSPv'] = 377296;
-var __ZTIPv = Module['__ZTIPv'] = 377300;
-var __ZTVN10__cxxabiv119__pointer_type_infoE = Module['__ZTVN10__cxxabiv119__pointer_type_infoE'] = 379036;
-var __ZTSPKv = Module['__ZTSPKv'] = 377316;
-var __ZTIPKv = Module['__ZTIPKv'] = 377320;
-var __ZTSDn = Module['__ZTSDn'] = 377336;
-var __ZTSPDn = Module['__ZTSPDn'] = 377348;
-var __ZTIPDn = Module['__ZTIPDn'] = 377352;
-var __ZTSPKDn = Module['__ZTSPKDn'] = 377368;
-var __ZTIPKDn = Module['__ZTIPKDn'] = 377376;
-var __ZTSb = Module['__ZTSb'] = 377392;
-var __ZTIb = Module['__ZTIb'] = 377396;
-var __ZTSPb = Module['__ZTSPb'] = 377404;
-var __ZTIPb = Module['__ZTIPb'] = 377408;
-var __ZTSPKb = Module['__ZTSPKb'] = 377424;
-var __ZTIPKb = Module['__ZTIPKb'] = 377428;
-var __ZTSw = Module['__ZTSw'] = 377444;
-var __ZTIw = Module['__ZTIw'] = 377448;
-var __ZTSPw = Module['__ZTSPw'] = 377456;
-var __ZTIPw = Module['__ZTIPw'] = 377460;
-var __ZTSPKw = Module['__ZTSPKw'] = 377476;
-var __ZTIPKw = Module['__ZTIPKw'] = 377480;
-var __ZTSc = Module['__ZTSc'] = 377496;
-var __ZTIc = Module['__ZTIc'] = 377500;
-var __ZTSPc = Module['__ZTSPc'] = 377508;
-var __ZTIPc = Module['__ZTIPc'] = 377512;
-var __ZTSPKc = Module['__ZTSPKc'] = 377528;
-var __ZTIPKc = Module['__ZTIPKc'] = 377532;
-var __ZTSh = Module['__ZTSh'] = 377548;
-var __ZTIh = Module['__ZTIh'] = 377552;
-var __ZTSPh = Module['__ZTSPh'] = 377560;
-var __ZTIPh = Module['__ZTIPh'] = 377564;
-var __ZTSPKh = Module['__ZTSPKh'] = 377580;
-var __ZTIPKh = Module['__ZTIPKh'] = 377584;
-var __ZTSa = Module['__ZTSa'] = 377600;
-var __ZTIa = Module['__ZTIa'] = 377604;
-var __ZTSPa = Module['__ZTSPa'] = 377612;
-var __ZTIPa = Module['__ZTIPa'] = 377616;
-var __ZTSPKa = Module['__ZTSPKa'] = 377632;
-var __ZTIPKa = Module['__ZTIPKa'] = 377636;
-var __ZTSs = Module['__ZTSs'] = 377652;
-var __ZTIs = Module['__ZTIs'] = 377656;
-var __ZTSPs = Module['__ZTSPs'] = 377664;
-var __ZTIPs = Module['__ZTIPs'] = 377668;
-var __ZTSPKs = Module['__ZTSPKs'] = 377684;
-var __ZTIPKs = Module['__ZTIPKs'] = 377688;
-var __ZTSt = Module['__ZTSt'] = 377704;
-var __ZTIt = Module['__ZTIt'] = 377708;
-var __ZTSPt = Module['__ZTSPt'] = 377716;
-var __ZTIPt = Module['__ZTIPt'] = 377720;
-var __ZTSPKt = Module['__ZTSPKt'] = 377736;
-var __ZTIPKt = Module['__ZTIPKt'] = 377740;
-var __ZTSi = Module['__ZTSi'] = 377756;
-var __ZTIi = Module['__ZTIi'] = 377760;
-var __ZTSPi = Module['__ZTSPi'] = 377768;
-var __ZTIPi = Module['__ZTIPi'] = 377772;
-var __ZTSPKi = Module['__ZTSPKi'] = 377788;
-var __ZTIPKi = Module['__ZTIPKi'] = 377792;
-var __ZTSj = Module['__ZTSj'] = 377808;
-var __ZTIj = Module['__ZTIj'] = 377812;
-var __ZTSPj = Module['__ZTSPj'] = 377820;
-var __ZTIPj = Module['__ZTIPj'] = 377824;
-var __ZTSPKj = Module['__ZTSPKj'] = 377840;
-var __ZTIPKj = Module['__ZTIPKj'] = 377844;
-var __ZTSl = Module['__ZTSl'] = 377860;
-var __ZTIl = Module['__ZTIl'] = 377864;
-var __ZTSPl = Module['__ZTSPl'] = 377872;
-var __ZTIPl = Module['__ZTIPl'] = 377876;
-var __ZTSPKl = Module['__ZTSPKl'] = 377892;
-var __ZTIPKl = Module['__ZTIPKl'] = 377896;
-var __ZTSm = Module['__ZTSm'] = 377912;
-var __ZTIm = Module['__ZTIm'] = 377916;
-var __ZTSPm = Module['__ZTSPm'] = 377924;
-var __ZTIPm = Module['__ZTIPm'] = 377928;
-var __ZTSPKm = Module['__ZTSPKm'] = 377944;
-var __ZTIPKm = Module['__ZTIPKm'] = 377948;
-var __ZTSx = Module['__ZTSx'] = 377964;
-var __ZTIx = Module['__ZTIx'] = 377968;
-var __ZTSPx = Module['__ZTSPx'] = 377976;
-var __ZTIPx = Module['__ZTIPx'] = 377980;
-var __ZTSPKx = Module['__ZTSPKx'] = 377996;
-var __ZTIPKx = Module['__ZTIPKx'] = 378000;
-var __ZTSy = Module['__ZTSy'] = 378016;
-var __ZTIy = Module['__ZTIy'] = 378020;
-var __ZTSPy = Module['__ZTSPy'] = 378028;
-var __ZTIPy = Module['__ZTIPy'] = 378032;
-var __ZTSPKy = Module['__ZTSPKy'] = 378048;
-var __ZTIPKy = Module['__ZTIPKy'] = 378052;
-var __ZTSn = Module['__ZTSn'] = 378068;
-var __ZTIn = Module['__ZTIn'] = 378072;
-var __ZTSPn = Module['__ZTSPn'] = 378080;
-var __ZTIPn = Module['__ZTIPn'] = 378084;
-var __ZTSPKn = Module['__ZTSPKn'] = 378100;
-var __ZTIPKn = Module['__ZTIPKn'] = 378104;
-var __ZTSo = Module['__ZTSo'] = 378120;
-var __ZTIo = Module['__ZTIo'] = 378124;
-var __ZTSPo = Module['__ZTSPo'] = 378132;
-var __ZTIPo = Module['__ZTIPo'] = 378136;
-var __ZTSPKo = Module['__ZTSPKo'] = 378152;
-var __ZTIPKo = Module['__ZTIPKo'] = 378156;
-var __ZTSDh = Module['__ZTSDh'] = 378172;
-var __ZTIDh = Module['__ZTIDh'] = 378176;
-var __ZTSPDh = Module['__ZTSPDh'] = 378184;
-var __ZTIPDh = Module['__ZTIPDh'] = 378188;
-var __ZTSPKDh = Module['__ZTSPKDh'] = 378204;
-var __ZTIPKDh = Module['__ZTIPKDh'] = 378212;
-var __ZTSf = Module['__ZTSf'] = 378228;
-var __ZTIf = Module['__ZTIf'] = 378232;
-var __ZTSPf = Module['__ZTSPf'] = 378240;
-var __ZTIPf = Module['__ZTIPf'] = 378244;
-var __ZTSPKf = Module['__ZTSPKf'] = 378260;
-var __ZTIPKf = Module['__ZTIPKf'] = 378264;
-var __ZTSd = Module['__ZTSd'] = 378280;
-var __ZTId = Module['__ZTId'] = 378284;
-var __ZTSPd = Module['__ZTSPd'] = 378292;
-var __ZTIPd = Module['__ZTIPd'] = 378296;
-var __ZTSPKd = Module['__ZTSPKd'] = 378312;
-var __ZTIPKd = Module['__ZTIPKd'] = 378316;
-var __ZTSe = Module['__ZTSe'] = 378332;
-var __ZTIe = Module['__ZTIe'] = 378336;
-var __ZTSPe = Module['__ZTSPe'] = 378344;
-var __ZTIPe = Module['__ZTIPe'] = 378348;
-var __ZTSPKe = Module['__ZTSPKe'] = 378364;
-var __ZTIPKe = Module['__ZTIPKe'] = 378368;
-var __ZTSg = Module['__ZTSg'] = 378384;
-var __ZTIg = Module['__ZTIg'] = 378388;
-var __ZTSPg = Module['__ZTSPg'] = 378396;
-var __ZTIPg = Module['__ZTIPg'] = 378400;
-var __ZTSPKg = Module['__ZTSPKg'] = 378416;
-var __ZTIPKg = Module['__ZTIPKg'] = 378420;
-var __ZTSDu = Module['__ZTSDu'] = 378436;
-var __ZTIDu = Module['__ZTIDu'] = 378440;
-var __ZTSPDu = Module['__ZTSPDu'] = 378448;
-var __ZTIPDu = Module['__ZTIPDu'] = 378452;
-var __ZTSPKDu = Module['__ZTSPKDu'] = 378468;
-var __ZTIPKDu = Module['__ZTIPKDu'] = 378476;
-var __ZTSDs = Module['__ZTSDs'] = 378492;
-var __ZTIDs = Module['__ZTIDs'] = 378496;
-var __ZTSPDs = Module['__ZTSPDs'] = 378504;
-var __ZTIPDs = Module['__ZTIPDs'] = 378508;
-var __ZTSPKDs = Module['__ZTSPKDs'] = 378524;
-var __ZTIPKDs = Module['__ZTIPKDs'] = 378532;
-var __ZTSDi = Module['__ZTSDi'] = 378548;
-var __ZTIDi = Module['__ZTIDi'] = 378552;
-var __ZTSPDi = Module['__ZTSPDi'] = 378560;
-var __ZTIPDi = Module['__ZTIPDi'] = 378564;
-var __ZTSPKDi = Module['__ZTSPKDi'] = 378580;
-var __ZTIPKDi = Module['__ZTIPKDi'] = 378588;
-var __ZTVN10__cxxabiv117__array_type_infoE = Module['__ZTVN10__cxxabiv117__array_type_infoE'] = 378604;
-var __ZTIN10__cxxabiv117__array_type_infoE = Module['__ZTIN10__cxxabiv117__array_type_infoE'] = 378668;
-var __ZTSN10__cxxabiv117__array_type_infoE = Module['__ZTSN10__cxxabiv117__array_type_infoE'] = 378632;
-var __ZTVN10__cxxabiv120__function_type_infoE = Module['__ZTVN10__cxxabiv120__function_type_infoE'] = 378680;
-var __ZTVN10__cxxabiv116__enum_type_infoE = Module['__ZTVN10__cxxabiv116__enum_type_infoE'] = 378708;
-var __ZTIN10__cxxabiv116__enum_type_infoE = Module['__ZTIN10__cxxabiv116__enum_type_infoE'] = 378772;
-var __ZTSN10__cxxabiv116__enum_type_infoE = Module['__ZTSN10__cxxabiv116__enum_type_infoE'] = 378736;
-var __ZTIN10__cxxabiv120__si_class_type_infoE = Module['__ZTIN10__cxxabiv120__si_class_type_infoE'] = 378904;
-var __ZTSN10__cxxabiv120__si_class_type_infoE = Module['__ZTSN10__cxxabiv120__si_class_type_infoE'] = 378864;
-var __ZTIN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTIN10__cxxabiv121__vmi_class_type_infoE'] = 378996;
-var __ZTSN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTSN10__cxxabiv121__vmi_class_type_infoE'] = 378956;
-var __ZTVN10__cxxabiv117__pbase_type_infoE = Module['__ZTVN10__cxxabiv117__pbase_type_infoE'] = 379008;
-var __ZTVN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTVN10__cxxabiv129__pointer_to_member_type_infoE'] = 379064;
-var __ZTVSt9bad_alloc = Module['__ZTVSt9bad_alloc'] = 379092;
-var __ZTVSt20bad_array_new_length = Module['__ZTVSt20bad_array_new_length'] = 379112;
-var __ZTISt9bad_alloc = Module['__ZTISt9bad_alloc'] = 379244;
-var __ZTSSt9exception = Module['__ZTSSt9exception'] = 379152;
-var __ZTVSt13bad_exception = Module['__ZTVSt13bad_exception'] = 379176;
-var __ZTISt13bad_exception = Module['__ZTISt13bad_exception'] = 379216;
-var __ZTSSt13bad_exception = Module['__ZTSSt13bad_exception'] = 379196;
-var __ZTSSt9bad_alloc = Module['__ZTSSt9bad_alloc'] = 379228;
-var __ZTSSt20bad_array_new_length = Module['__ZTSSt20bad_array_new_length'] = 379256;
-var __ZTVSt12domain_error = Module['__ZTVSt12domain_error'] = 379336;
-var __ZTISt12domain_error = Module['__ZTISt12domain_error'] = 379404;
-var __ZTSSt12domain_error = Module['__ZTSSt12domain_error'] = 379356;
-var __ZTSSt11logic_error = Module['__ZTSSt11logic_error'] = 379373;
-var __ZTVSt16invalid_argument = Module['__ZTVSt16invalid_argument'] = 379416;
-var __ZTISt16invalid_argument = Module['__ZTISt16invalid_argument'] = 379460;
-var __ZTSSt16invalid_argument = Module['__ZTSSt16invalid_argument'] = 379436;
-var __ZTSSt12length_error = Module['__ZTSSt12length_error'] = 379492;
-var __ZTVSt12out_of_range = Module['__ZTVSt12out_of_range'] = 379524;
-var __ZTISt12out_of_range = Module['__ZTISt12out_of_range'] = 379564;
-var __ZTSSt12out_of_range = Module['__ZTSSt12out_of_range'] = 379544;
-var __ZTVSt11range_error = Module['__ZTVSt11range_error'] = 379576;
-var __ZTISt11range_error = Module['__ZTISt11range_error'] = 379644;
-var __ZTSSt11range_error = Module['__ZTSSt11range_error'] = 379596;
-var __ZTSSt13runtime_error = Module['__ZTSSt13runtime_error'] = 379612;
-var __ZTVSt14overflow_error = Module['__ZTVSt14overflow_error'] = 379656;
-var __ZTISt14overflow_error = Module['__ZTISt14overflow_error'] = 379696;
-var __ZTSSt14overflow_error = Module['__ZTSSt14overflow_error'] = 379676;
-var __ZTVSt15underflow_error = Module['__ZTVSt15underflow_error'] = 379708;
-var __ZTISt15underflow_error = Module['__ZTISt15underflow_error'] = 379748;
-var __ZTSSt15underflow_error = Module['__ZTSSt15underflow_error'] = 379728;
-var __ZTVSt8bad_cast = Module['__ZTVSt8bad_cast'] = 379760;
-var __ZTVSt10bad_typeid = Module['__ZTVSt10bad_typeid'] = 379780;
-var __ZTISt10bad_typeid = Module['__ZTISt10bad_typeid'] = 379880;
-var __ZTVSt9type_info = Module['__ZTVSt9type_info'] = 379800;
-var __ZTSSt9type_info = Module['__ZTSSt9type_info'] = 379816;
-var __ZTSSt8bad_cast = Module['__ZTSSt8bad_cast'] = 379840;
-var __ZTSSt10bad_typeid = Module['__ZTSSt10bad_typeid'] = 379864;
-var _in6addr_any = Module['_in6addr_any'] = 379892;
-var _in6addr_loopback = Module['_in6addr_loopback'] = 379908;
+var _graph = Module['_graph'] = 383304;
+var _camera = Module['_camera'] = 383328;
+var _universe = Module['_universe'] = 383408;
+var _yLocation = Module['_yLocation'] = 383300;
+var __ZNSt3__24coutE = Module['__ZNSt3__24coutE'] = 423092;
+var _mouseDown = Module['_mouseDown'] = 383400;
+var _mouseDownFirst = Module['_mouseDownFirst'] = 383401;
+var _loop = Module['_loop'] = 383472;
+var _stderr = Module['_stderr'] = 217056;
+var _autoRotateX = Module['_autoRotateX'] = 383402;
+var _mouseX = Module['_mouseX'] = 383376;
+var _mouseY = Module['_mouseY'] = 383384;
+var __ZTISt12length_error = Module['__ZTISt12length_error'] = 381880;
+var __ZTVSt12length_error = Module['__ZTVSt12length_error'] = 381840;
+var __ZTISt20bad_array_new_length = Module['__ZTISt20bad_array_new_length'] = 381652;
+var __ZNSt3__25ctypeIcE2idE = Module['__ZNSt3__25ctypeIcE2idE'] = 424160;
+var __ZTINSt3__217bad_function_callE = Module['__ZTINSt3__217bad_function_callE'] = 352564;
+var __ZTVNSt3__217bad_function_callE = Module['__ZTVNSt3__217bad_function_callE'] = 352516;
+var __ZTVSt9exception = Module['__ZTVSt9exception'] = 381500;
+var __ZTVNSt3__210__function6__baseIFvvEEE = Module['__ZTVNSt3__210__function6__baseIFvvEEE'] = 25608;
+var _n_iterations = Module['_n_iterations'] = 382304;
+var _movingUp = Module['_movingUp'] = 383296;
+var _mouseScroll = Module['_mouseScroll'] = 383392;
+var __ZTSNSt3__210__function6__baseIFvvEEE = Module['__ZTSNSt3__210__function6__baseIFvvEEE'] = 25552;
+var __ZTINSt3__210__function6__baseIFvvEEE = Module['__ZTINSt3__210__function6__baseIFvvEEE'] = 25588;
+var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 381152;
+var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 381192;
+var ___environ = Module['___environ'] = 383496;
+var ____environ = Module['____environ'] = 383496;
+var __environ = Module['__environ'] = 383496;
+var _environ = Module['_environ'] = 383496;
+var _timezone = Module['_timezone'] = 384040;
+var _daylight = Module['_daylight'] = 384044;
+var _tzname = Module['_tzname'] = 384048;
+var ___progname = Module['___progname'] = 385264;
+var _optind = Module['_optind'] = 382328;
+var ___optreset = Module['___optreset'] = 384228;
+var ___optpos = Module['___optpos'] = 384232;
+var _optarg = Module['_optarg'] = 384236;
+var _optopt = Module['_optopt'] = 384240;
+var _opterr = Module['_opterr'] = 382332;
+var _optreset = Module['_optreset'] = 384228;
+var _h_errno = Module['_h_errno'] = 384364;
+var ___signgam = Module['___signgam'] = 399564;
+var __ns_flagdata = Module['__ns_flagdata'] = 211680;
+var ___progname_full = Module['___progname_full'] = 385268;
+var _program_invocation_short_name = Module['_program_invocation_short_name'] = 385264;
+var _program_invocation_name = Module['_program_invocation_name'] = 385268;
+var ___sig_pending = Module['___sig_pending'] = 389616;
+var ___sig_actions = Module['___sig_actions'] = 390464;
+var _signgam = Module['_signgam'] = 399564;
+var _stdin = Module['_stdin'] = 217060;
+var _stdout = Module['_stdout'] = 217064;
+var ___THREW__ = Module['___THREW__'] = 406368;
+var ___threwValue = Module['___threwValue'] = 406372;
+var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 230992;
+var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 231032;
+var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 231012;
+var __ZTISt8bad_cast = Module['__ZTISt8bad_cast'] = 382220;
+var __ZTVNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTVNSt12experimental15fundamentals_v112bad_any_castE'] = 231044;
+var __ZTINSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTINSt12experimental15fundamentals_v112bad_any_castE'] = 231116;
+var __ZTSNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTSNSt12experimental15fundamentals_v112bad_any_castE'] = 231064;
+var __ZNSt3__212placeholders2_1E = Module['__ZNSt3__212placeholders2_1E'] = 231128;
+var __ZNSt3__212placeholders2_2E = Module['__ZNSt3__212placeholders2_2E'] = 231129;
+var __ZNSt3__212placeholders2_3E = Module['__ZNSt3__212placeholders2_3E'] = 231130;
+var __ZNSt3__212placeholders2_4E = Module['__ZNSt3__212placeholders2_4E'] = 231131;
+var __ZNSt3__212placeholders2_5E = Module['__ZNSt3__212placeholders2_5E'] = 231132;
+var __ZNSt3__212placeholders2_6E = Module['__ZNSt3__212placeholders2_6E'] = 231133;
+var __ZNSt3__212placeholders2_7E = Module['__ZNSt3__212placeholders2_7E'] = 231134;
+var __ZNSt3__212placeholders2_8E = Module['__ZNSt3__212placeholders2_8E'] = 231135;
+var __ZNSt3__212placeholders2_9E = Module['__ZNSt3__212placeholders2_9E'] = 231136;
+var __ZNSt3__212placeholders3_10E = Module['__ZNSt3__212placeholders3_10E'] = 231137;
+var __ZNSt3__213__DIGIT_TABLEE = Module['__ZNSt3__213__DIGIT_TABLEE'] = 231152;
+var __ZNSt3__26__itoa16_Charconv_digitsE = Module['__ZNSt3__26__itoa16_Charconv_digitsE'] = 231360;
+var __ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE'] = 231456;
+var __ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE'] = 231712;
+var __ZNSt3__225_General_precision_tablesIfE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIfE6_Max_PE'] = 231888;
+var __ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE'] = 231904;
+var __ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE'] = 233472;
+var __ZNSt3__225_General_precision_tablesIdE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIdE6_Max_PE'] = 235984;
+var __ZNSt3__26chrono12system_clock9is_steadyE = Module['__ZNSt3__26chrono12system_clock9is_steadyE'] = 235988;
+var __ZNSt3__26chrono12steady_clock9is_steadyE = Module['__ZNSt3__26chrono12steady_clock9is_steadyE'] = 235989;
+var __ZNSt3__214__POW10_OFFSETE = Module['__ZNSt3__214__POW10_OFFSETE'] = 265376;
+var __ZNSt3__213__POW10_SPLITE = Module['__ZNSt3__213__POW10_SPLITE'] = 236000;
+var __ZNSt3__213__MIN_BLOCK_2E = Module['__ZNSt3__213__MIN_BLOCK_2E'] = 265504;
+var __ZNSt3__216__POW10_OFFSET_2E = Module['__ZNSt3__216__POW10_OFFSET_2E'] = 265584;
+var __ZNSt3__215__POW10_SPLIT_2E = Module['__ZNSt3__215__POW10_SPLIT_2E'] = 265728;
+var __ZNSt3__223__DOUBLE_POW5_INV_SPLITE = Module['__ZNSt3__223__DOUBLE_POW5_INV_SPLITE'] = 340928;
+var __ZNSt3__219__DOUBLE_POW5_SPLITE = Module['__ZNSt3__219__DOUBLE_POW5_SPLITE'] = 345600;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment'] = 350816;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa'] = 351136;
+var __ZNSt3__223__libcpp_debug_functionE = Module['__ZNSt3__223__libcpp_debug_functionE'] = 382940;
+var __ZTVNSt3__28__c_nodeE = Module['__ZTVNSt3__28__c_nodeE'] = 351320;
+var __ZTINSt3__28__c_nodeE = Module['__ZTINSt3__28__c_nodeE'] = 351372;
+var __ZTSNSt3__28__c_nodeE = Module['__ZTSNSt3__28__c_nodeE'] = 351352;
+var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351380;
+var __ZTVNSt3__219__shared_weak_countE = Module['__ZTVNSt3__219__shared_weak_countE'] = 367532;
+var __ZTVNSt3__214__shared_countE = Module['__ZTVNSt3__214__shared_countE'] = 367476;
+var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351508;
+var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351496;
+var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351408;
+var __ZTINSt3__219__shared_weak_countE = Module['__ZTINSt3__219__shared_weak_countE'] = 367592;
+var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351656;
+var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351536;
+var __ZTVSt16nested_exception = Module['__ZTVSt16nested_exception'] = 351680;
+var __ZTISt16nested_exception = Module['__ZTISt16nested_exception'] = 351720;
+var __ZTSSt16nested_exception = Module['__ZTSSt16nested_exception'] = 351696;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment'] = 352368;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa'] = 352416;
+var __ZNSt3__222__FLOAT_POW5_INV_SPLITE = Module['__ZNSt3__222__FLOAT_POW5_INV_SPLITE'] = 351728;
+var __ZNSt3__218__FLOAT_POW5_SPLITE = Module['__ZNSt3__218__FLOAT_POW5_SPLITE'] = 351984;
+var __ZTVNSt3__212format_errorE = Module['__ZTVNSt3__212format_errorE'] = 352460;
+var __ZTINSt3__212format_errorE = Module['__ZTINSt3__212format_errorE'] = 352504;
+var __ZTSNSt3__212format_errorE = Module['__ZTSNSt3__212format_errorE'] = 352480;
+var __ZTISt13runtime_error = Module['__ZTISt13runtime_error'] = 382000;
+var __ZTSNSt3__217bad_function_callE = Module['__ZTSNSt3__217bad_function_callE'] = 352536;
+var __ZTISt9exception = Module['__ZTISt9exception'] = 381536;
+var __ZTVNSt3__212future_errorE = Module['__ZTVNSt3__212future_errorE'] = 352612;
+var __ZTVNSt3__217__assoc_sub_stateE = Module['__ZTVNSt3__217__assoc_sub_stateE'] = 352632;
+var __ZTVNSt3__223__future_error_categoryE = Module['__ZTVNSt3__223__future_error_categoryE'] = 352576;
+var __ZTINSt3__223__future_error_categoryE = Module['__ZTINSt3__223__future_error_categoryE'] = 352732;
+var __ZTINSt3__212future_errorE = Module['__ZTINSt3__212future_errorE'] = 352768;
+var __ZTINSt3__217__assoc_sub_stateE = Module['__ZTINSt3__217__assoc_sub_stateE'] = 352684;
+var __ZTSNSt3__217__assoc_sub_stateE = Module['__ZTSNSt3__217__assoc_sub_stateE'] = 352656;
+var __ZTINSt3__214__shared_countE = Module['__ZTINSt3__214__shared_countE'] = 367524;
+var __ZTSNSt3__223__future_error_categoryE = Module['__ZTSNSt3__223__future_error_categoryE'] = 352696;
+var __ZTINSt3__212__do_messageE = Module['__ZTINSt3__212__do_messageE'] = 370492;
+var __ZTSNSt3__212future_errorE = Module['__ZTSNSt3__212future_errorE'] = 352744;
+var __ZTISt11logic_error = Module['__ZTISt11logic_error'] = 381760;
+var __ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353184;
+var __ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353288;
+var __ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353336;
+var __ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423988;
+var __ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353404;
+var __ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 353432;
+var __ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353536;
+var __ZNSt3__25ctypeIwE2idE = Module['__ZNSt3__25ctypeIwE2idE'] = 424152;
+var __ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353584;
+var __ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423996;
+var __ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353592;
+var __ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 353656;
+var __ZNSt3__27codecvtIcc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIcc11__mbstate_tE2idE'] = 424168;
+var __ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354572;
+var __ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354876;
+var __ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355056;
+var __ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355236;
+var __ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355392;
+var __ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423972;
+var __ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423980;
+var __ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353844;
+var __ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353248;
+var __ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353900;
+var __ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353296;
+var __ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353972;
+var __ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353344;
+var __ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 354124;
+var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 353996;
+var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 354036;
+var __ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 354280;
+var __ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353496;
+var __ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 354336;
+var __ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353544;
+var __ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 354408;
+var __ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354500;
+var __ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 355556;
+var __ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353720;
+var __ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353780;
+var __ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353736;
+var __ZTINSt3__28ios_baseE = Module['__ZTINSt3__28ios_baseE'] = 355772;
+var __ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353792;
+var __ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353852;
+var __ZTVN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTVN10__cxxabiv121__vmi_class_type_infoE'] = 381284;
+var __ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353924;
+var __ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 354076;
+var __ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 354156;
+var __ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 354216;
+var __ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 354172;
+var __ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 354228;
+var __ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 354288;
+var __ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 354360;
+var __ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354432;
+var __ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354512;
+var __ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354824;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE'] = 354612;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354672;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 354712;
+var __ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354752;
+var __ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354836;
+var __ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355004;
+var __ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 354892;
+var __ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354932;
+var __ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355016;
+var __ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355184;
+var __ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 355072;
+var __ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355112;
+var __ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355196;
+var __ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355340;
+var __ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 355252;
+var __ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355292;
+var __ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355352;
+var __ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355496;
+var __ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 355408;
+var __ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355448;
+var __ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 355508;
+var __ZTVNSt3__28ios_base7failureE = Module['__ZTVNSt3__28ios_base7failureE'] = 355604;
+var __ZNSt3__28ios_base9__xindex_E = Module['__ZNSt3__28ios_base9__xindex_E'] = 422904;
+var __ZTVNSt3__28ios_baseE = Module['__ZTVNSt3__28ios_baseE'] = 355736;
+var __ZTVNSt3__219__iostream_categoryE = Module['__ZTVNSt3__219__iostream_categoryE'] = 355568;
+var __ZTINSt3__219__iostream_categoryE = Module['__ZTINSt3__219__iostream_categoryE'] = 355812;
+var __ZTINSt3__28ios_base7failureE = Module['__ZTINSt3__28ios_base7failureE'] = 355852;
+var __ZNSt3__28ios_base9boolalphaE = Module['__ZNSt3__28ios_base9boolalphaE'] = 355624;
+var __ZNSt3__28ios_base3decE = Module['__ZNSt3__28ios_base3decE'] = 355628;
+var __ZNSt3__28ios_base5fixedE = Module['__ZNSt3__28ios_base5fixedE'] = 355632;
+var __ZNSt3__28ios_base3hexE = Module['__ZNSt3__28ios_base3hexE'] = 355636;
+var __ZNSt3__28ios_base8internalE = Module['__ZNSt3__28ios_base8internalE'] = 355640;
+var __ZNSt3__28ios_base4leftE = Module['__ZNSt3__28ios_base4leftE'] = 355644;
+var __ZNSt3__28ios_base3octE = Module['__ZNSt3__28ios_base3octE'] = 355648;
+var __ZNSt3__28ios_base5rightE = Module['__ZNSt3__28ios_base5rightE'] = 355652;
+var __ZNSt3__28ios_base10scientificE = Module['__ZNSt3__28ios_base10scientificE'] = 355656;
+var __ZNSt3__28ios_base8showbaseE = Module['__ZNSt3__28ios_base8showbaseE'] = 355660;
+var __ZNSt3__28ios_base9showpointE = Module['__ZNSt3__28ios_base9showpointE'] = 355664;
+var __ZNSt3__28ios_base7showposE = Module['__ZNSt3__28ios_base7showposE'] = 355668;
+var __ZNSt3__28ios_base6skipwsE = Module['__ZNSt3__28ios_base6skipwsE'] = 355672;
+var __ZNSt3__28ios_base7unitbufE = Module['__ZNSt3__28ios_base7unitbufE'] = 355676;
+var __ZNSt3__28ios_base9uppercaseE = Module['__ZNSt3__28ios_base9uppercaseE'] = 355680;
+var __ZNSt3__28ios_base11adjustfieldE = Module['__ZNSt3__28ios_base11adjustfieldE'] = 355684;
+var __ZNSt3__28ios_base9basefieldE = Module['__ZNSt3__28ios_base9basefieldE'] = 355688;
+var __ZNSt3__28ios_base10floatfieldE = Module['__ZNSt3__28ios_base10floatfieldE'] = 355692;
+var __ZNSt3__28ios_base6badbitE = Module['__ZNSt3__28ios_base6badbitE'] = 355696;
+var __ZNSt3__28ios_base6eofbitE = Module['__ZNSt3__28ios_base6eofbitE'] = 355700;
+var __ZNSt3__28ios_base7failbitE = Module['__ZNSt3__28ios_base7failbitE'] = 355704;
+var __ZNSt3__28ios_base7goodbitE = Module['__ZNSt3__28ios_base7goodbitE'] = 355708;
+var __ZNSt3__28ios_base3appE = Module['__ZNSt3__28ios_base3appE'] = 355712;
+var __ZNSt3__28ios_base3ateE = Module['__ZNSt3__28ios_base3ateE'] = 355716;
+var __ZNSt3__28ios_base6binaryE = Module['__ZNSt3__28ios_base6binaryE'] = 355720;
+var __ZNSt3__28ios_base2inE = Module['__ZNSt3__28ios_base2inE'] = 355724;
+var __ZNSt3__28ios_base3outE = Module['__ZNSt3__28ios_base3outE'] = 355728;
+var __ZNSt3__28ios_base5truncE = Module['__ZNSt3__28ios_base5truncE'] = 355732;
+var __ZTSNSt3__28ios_baseE = Module['__ZTSNSt3__28ios_baseE'] = 355752;
+var __ZTSNSt3__219__iostream_categoryE = Module['__ZTSNSt3__219__iostream_categoryE'] = 355780;
+var __ZTSNSt3__28ios_base7failureE = Module['__ZTSNSt3__28ios_base7failureE'] = 355824;
+var __ZTINSt3__212system_errorE = Module['__ZTINSt3__212system_errorE'] = 370624;
+var __ZNSt3__219__start_std_streamsE = Module['__ZNSt3__219__start_std_streamsE'] = 423596;
+var __ZNSt3__23cinE = Module['__ZNSt3__23cinE'] = 422916;
+var __ZNSt3__24cerrE = Module['__ZNSt3__24cerrE'] = 423260;
+var __ZNSt3__24clogE = Module['__ZNSt3__24clogE'] = 423428;
+var __ZNSt3__24wcinE = Module['__ZNSt3__24wcinE'] = 423004;
+var __ZNSt3__25wcoutE = Module['__ZNSt3__25wcoutE'] = 423176;
+var __ZNSt3__25wcerrE = Module['__ZNSt3__25wcerrE'] = 423344;
+var __ZNSt3__25wclogE = Module['__ZNSt3__25wclogE'] = 423512;
+var __ZTVNSt3__210__stdinbufIcEE = Module['__ZTVNSt3__210__stdinbufIcEE'] = 355864;
+var __ZTVNSt3__211__stdoutbufIcEE = Module['__ZTVNSt3__211__stdoutbufIcEE'] = 355964;
+var __ZTVNSt3__210__stdinbufIwEE = Module['__ZTVNSt3__210__stdinbufIwEE'] = 356068;
+var __ZTVNSt3__211__stdoutbufIwEE = Module['__ZTVNSt3__211__stdoutbufIwEE'] = 356168;
+var __ZNSt3__27codecvtIwc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIwc11__mbstate_tE2idE'] = 424176;
+var __ZTINSt3__210__stdinbufIcEE = Module['__ZTINSt3__210__stdinbufIcEE'] = 355952;
+var __ZTSNSt3__210__stdinbufIcEE = Module['__ZTSNSt3__210__stdinbufIcEE'] = 355928;
+var __ZTINSt3__211__stdoutbufIcEE = Module['__ZTINSt3__211__stdoutbufIcEE'] = 356056;
+var __ZTSNSt3__211__stdoutbufIcEE = Module['__ZTSNSt3__211__stdoutbufIcEE'] = 356028;
+var __ZTINSt3__210__stdinbufIwEE = Module['__ZTINSt3__210__stdinbufIwEE'] = 356156;
+var __ZTSNSt3__210__stdinbufIwEE = Module['__ZTSNSt3__210__stdinbufIwEE'] = 356132;
+var __ZTINSt3__211__stdoutbufIwEE = Module['__ZTINSt3__211__stdoutbufIwEE'] = 356260;
+var __ZTSNSt3__211__stdoutbufIwEE = Module['__ZTSNSt3__211__stdoutbufIwEE'] = 356232;
+var __ZNSt3__28numpunctIcE2idE = Module['__ZNSt3__28numpunctIcE2idE'] = 424216;
+var __ZNSt3__214__num_get_base5__srcE = Module['__ZNSt3__214__num_get_base5__srcE'] = 356272;
+var __ZNSt3__28numpunctIwE2idE = Module['__ZNSt3__28numpunctIwE2idE'] = 424224;
+var __ZNSt3__210moneypunctIcLb1EE2idE = Module['__ZNSt3__210moneypunctIcLb1EE2idE'] = 424044;
+var __ZNSt3__210moneypunctIcLb0EE2idE = Module['__ZNSt3__210moneypunctIcLb0EE2idE'] = 424036;
+var __ZNSt3__210moneypunctIwLb1EE2idE = Module['__ZNSt3__210moneypunctIwLb1EE2idE'] = 424060;
+var __ZNSt3__210moneypunctIwLb0EE2idE = Module['__ZNSt3__210moneypunctIwLb0EE2idE'] = 424052;
+var __ZTVNSt3__26locale5__impE = Module['__ZTVNSt3__26locale5__impE'] = 356548;
+var __ZTVNSt3__26locale5facetE = Module['__ZTVNSt3__26locale5facetE'] = 358348;
+var __ZNSt3__27collateIcE2idE = Module['__ZNSt3__27collateIcE2idE'] = 423956;
+var __ZNSt3__27collateIwE2idE = Module['__ZNSt3__27collateIwE2idE'] = 423964;
+var __ZNSt3__27codecvtIDsc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsc11__mbstate_tE2idE'] = 424184;
+var __ZNSt3__27codecvtIDic11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDic11__mbstate_tE2idE'] = 424200;
+var __ZNSt3__27codecvtIDsDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsDu11__mbstate_tE2idE'] = 424192;
+var __ZNSt3__27codecvtIDiDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDiDu11__mbstate_tE2idE'] = 424208;
+var __ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424068;
+var __ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424076;
+var __ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424084;
+var __ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424092;
+var __ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424004;
+var __ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424012;
+var __ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424020;
+var __ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424028;
+var __ZNSt3__28messagesIcE2idE = Module['__ZNSt3__28messagesIcE2idE'] = 424100;
+var __ZNSt3__28messagesIwE2idE = Module['__ZNSt3__28messagesIwE2idE'] = 424108;
+var __ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365684;
+var __ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365788;
+var __ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365892;
+var __ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365996;
+var __ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 366100;
+var __ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366204;
+var __ZTVNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb0EEE'] = 364252;
+var __ZTVNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb1EEE'] = 364356;
+var __ZTVNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb0EEE'] = 364460;
+var __ZTVNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb1EEE'] = 364564;
+var __ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362676;
+var __ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362972;
+var __ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363524;
+var __ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363640;
+var __ZTVNSt3__215messages_bynameIcEE = Module['__ZTVNSt3__215messages_bynameIcEE'] = 365532;
+var __ZTVNSt3__215messages_bynameIwEE = Module['__ZTVNSt3__215messages_bynameIwEE'] = 365608;
+var __ZNSt3__26locale2id9__next_idE = Module['__ZNSt3__26locale2id9__next_idE'] = 424148;
+var __ZTVNSt3__214collate_bynameIcEE = Module['__ZTVNSt3__214collate_bynameIcEE'] = 356568;
+var __ZTVNSt3__214collate_bynameIwEE = Module['__ZTVNSt3__214collate_bynameIwEE'] = 356600;
+var __ZTVNSt3__25ctypeIcEE = Module['__ZTVNSt3__25ctypeIcEE'] = 356684;
+var __ZTVNSt3__212ctype_bynameIcEE = Module['__ZTVNSt3__212ctype_bynameIcEE'] = 357760;
+var __ZTVNSt3__212ctype_bynameIwEE = Module['__ZTVNSt3__212ctype_bynameIwEE'] = 357812;
+var __ZTVNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIwc11__mbstate_tEE'] = 357880;
+var __ZTVNSt3__28numpunctIcEE = Module['__ZTVNSt3__28numpunctIcEE'] = 357928;
+var __ZTVNSt3__28numpunctIwEE = Module['__ZTVNSt3__28numpunctIwEE'] = 357968;
+var __ZTVNSt3__215numpunct_bynameIcEE = Module['__ZTVNSt3__215numpunct_bynameIcEE'] = 358052;
+var __ZTVNSt3__215numpunct_bynameIwEE = Module['__ZTVNSt3__215numpunct_bynameIwEE'] = 358092;
+var __ZTVNSt3__215__time_get_tempIcEE = Module['__ZTVNSt3__215__time_get_tempIcEE'] = 367264;
+var __ZTVNSt3__215__time_get_tempIwEE = Module['__ZTVNSt3__215__time_get_tempIwEE'] = 367360;
+var __ZTVNSt3__27collateIcEE = Module['__ZTVNSt3__27collateIcEE'] = 361224;
+var __ZTVNSt3__27collateIwEE = Module['__ZTVNSt3__27collateIwEE'] = 361256;
+var __ZTVNSt3__25ctypeIwEE = Module['__ZTVNSt3__25ctypeIwEE'] = 358404;
+var __ZTVNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIcc11__mbstate_tEE'] = 358552;
+var __ZTVNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsc11__mbstate_tEE'] = 358700;
+var __ZTVNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDic11__mbstate_tEE'] = 358932;
+var __ZTVNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358816;
+var __ZTVNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDiDu11__mbstate_tEE'] = 359048;
+var __ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361288;
+var __ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361532;
+var __ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361744;
+var __ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361976;
+var __ZTVNSt3__210moneypunctIcLb0EEE = Module['__ZTVNSt3__210moneypunctIcLb0EEE'] = 363756;
+var __ZTVNSt3__210moneypunctIcLb1EEE = Module['__ZTVNSt3__210moneypunctIcLb1EEE'] = 363904;
+var __ZTVNSt3__210moneypunctIwLb0EEE = Module['__ZTVNSt3__210moneypunctIwLb0EEE'] = 364020;
+var __ZTVNSt3__210moneypunctIwLb1EEE = Module['__ZTVNSt3__210moneypunctIwLb1EEE'] = 364136;
+var __ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364668;
+var __ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364832;
+var __ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364996;
+var __ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365160;
+var __ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362176;
+var __ZTVNSt3__220__time_get_c_storageIcEE = Module['__ZTVNSt3__220__time_get_c_storageIcEE'] = 367192;
+var __ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362440;
+var __ZTVNSt3__220__time_get_c_storageIwEE = Module['__ZTVNSt3__220__time_get_c_storageIwEE'] = 367228;
+var __ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363240;
+var __ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363396;
+var __ZTVNSt3__28messagesIcEE = Module['__ZTVNSt3__28messagesIcEE'] = 365324;
+var __ZTVNSt3__28messagesIwEE = Module['__ZTVNSt3__28messagesIwEE'] = 365444;
+var __ZNSt3__210moneypunctIcLb0EE4intlE = Module['__ZNSt3__210moneypunctIcLb0EE4intlE'] = 356512;
+var __ZNSt3__210moneypunctIcLb1EE4intlE = Module['__ZNSt3__210moneypunctIcLb1EE4intlE'] = 356513;
+var __ZNSt3__210moneypunctIwLb0EE4intlE = Module['__ZNSt3__210moneypunctIwLb0EE4intlE'] = 356514;
+var __ZNSt3__210moneypunctIwLb1EE4intlE = Module['__ZNSt3__210moneypunctIwLb1EE4intlE'] = 356515;
+var __ZNSt3__26locale4noneE = Module['__ZNSt3__26locale4noneE'] = 356516;
+var __ZNSt3__26locale7collateE = Module['__ZNSt3__26locale7collateE'] = 356520;
+var __ZNSt3__26locale5ctypeE = Module['__ZNSt3__26locale5ctypeE'] = 356524;
+var __ZNSt3__26locale8monetaryE = Module['__ZNSt3__26locale8monetaryE'] = 356528;
+var __ZNSt3__26locale7numericE = Module['__ZNSt3__26locale7numericE'] = 356532;
+var __ZNSt3__26locale4timeE = Module['__ZNSt3__26locale4timeE'] = 356536;
+var __ZNSt3__26locale8messagesE = Module['__ZNSt3__26locale8messagesE'] = 356540;
+var __ZNSt3__26locale3allE = Module['__ZNSt3__26locale3allE'] = 356544;
+var __ZTINSt3__26locale5__impE = Module['__ZTINSt3__26locale5__impE'] = 360776;
+var __ZTINSt3__214collate_bynameIcEE = Module['__ZTINSt3__214collate_bynameIcEE'] = 360848;
+var __ZTINSt3__214collate_bynameIwEE = Module['__ZTINSt3__214collate_bynameIwEE'] = 360920;
+var __ZNSt3__210ctype_base5spaceE = Module['__ZNSt3__210ctype_base5spaceE'] = 356632;
+var __ZNSt3__210ctype_base5printE = Module['__ZNSt3__210ctype_base5printE'] = 356636;
+var __ZNSt3__210ctype_base5cntrlE = Module['__ZNSt3__210ctype_base5cntrlE'] = 356640;
+var __ZNSt3__210ctype_base5upperE = Module['__ZNSt3__210ctype_base5upperE'] = 356644;
+var __ZNSt3__210ctype_base5lowerE = Module['__ZNSt3__210ctype_base5lowerE'] = 356648;
+var __ZNSt3__210ctype_base5alphaE = Module['__ZNSt3__210ctype_base5alphaE'] = 356652;
+var __ZNSt3__210ctype_base5digitE = Module['__ZNSt3__210ctype_base5digitE'] = 356656;
+var __ZNSt3__210ctype_base5punctE = Module['__ZNSt3__210ctype_base5punctE'] = 356660;
+var __ZNSt3__210ctype_base6xdigitE = Module['__ZNSt3__210ctype_base6xdigitE'] = 356664;
+var __ZNSt3__210ctype_base5blankE = Module['__ZNSt3__210ctype_base5blankE'] = 356668;
+var __ZNSt3__210ctype_base5alnumE = Module['__ZNSt3__210ctype_base5alnumE'] = 356672;
+var __ZNSt3__210ctype_base5graphE = Module['__ZNSt3__210ctype_base5graphE'] = 356676;
+var __ZNSt3__25ctypeIcE10table_sizeE = Module['__ZNSt3__25ctypeIcE10table_sizeE'] = 356680;
+var __ZTINSt3__25ctypeIcEE = Module['__ZTINSt3__25ctypeIcEE'] = 360952;
+var __ZTINSt3__212ctype_bynameIcEE = Module['__ZTINSt3__212ctype_bynameIcEE'] = 361012;
+var __ZTINSt3__212ctype_bynameIwEE = Module['__ZTINSt3__212ctype_bynameIwEE'] = 361052;
+var __ZTINSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIwc11__mbstate_tEE'] = 359660;
+var __ZTINSt3__28numpunctIcEE = Module['__ZTINSt3__28numpunctIcEE'] = 361088;
+var __ZTINSt3__28numpunctIwEE = Module['__ZTINSt3__28numpunctIwEE'] = 361124;
+var __ZTINSt3__215numpunct_bynameIcEE = Module['__ZTINSt3__215numpunct_bynameIcEE'] = 361168;
+var __ZTINSt3__215numpunct_bynameIwEE = Module['__ZTINSt3__215numpunct_bynameIwEE'] = 361212;
+var __ZTINSt3__26locale5facetE = Module['__ZTINSt3__26locale5facetE'] = 358392;
+var __ZTSNSt3__26locale5facetE = Module['__ZTSNSt3__26locale5facetE'] = 358368;
+var __ZTINSt3__25ctypeIwEE = Module['__ZTINSt3__25ctypeIwEE'] = 358520;
+var __ZTSNSt3__25ctypeIwEE = Module['__ZTSNSt3__25ctypeIwEE'] = 358472;
+var __ZTSNSt3__210ctype_baseE = Module['__ZTSNSt3__210ctype_baseE'] = 358490;
+var __ZTINSt3__210ctype_baseE = Module['__ZTINSt3__210ctype_baseE'] = 358512;
+var __ZTINSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIcc11__mbstate_tEE'] = 358668;
+var __ZTSNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIcc11__mbstate_tEE'] = 358600;
+var __ZTSNSt3__212codecvt_baseE = Module['__ZTSNSt3__212codecvt_baseE'] = 358634;
+var __ZTINSt3__212codecvt_baseE = Module['__ZTINSt3__212codecvt_baseE'] = 358660;
+var __ZTINSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsc11__mbstate_tEE'] = 358784;
+var __ZTSNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsc11__mbstate_tEE'] = 358748;
+var __ZTINSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsDu11__mbstate_tEE'] = 358900;
+var __ZTSNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358864;
+var __ZTINSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDic11__mbstate_tEE'] = 359016;
+var __ZTSNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDic11__mbstate_tEE'] = 358980;
+var __ZTINSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDiDu11__mbstate_tEE'] = 359132;
+var __ZTSNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDiDu11__mbstate_tEE'] = 359096;
+var __ZTVNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm16EEE'] = 359164;
+var __ZTINSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm16EEE'] = 359248;
+var __ZTSNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm16EEE'] = 359212;
+var __ZTVNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm32EEE'] = 359260;
+var __ZTINSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm32EEE'] = 359344;
+var __ZTSNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm32EEE'] = 359308;
+var __ZTVNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm16EEE'] = 359356;
+var __ZTINSt3__217__widen_from_utf8ILm16EEE = Module['__ZTINSt3__217__widen_from_utf8ILm16EEE'] = 359440;
+var __ZTSNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm16EEE'] = 359404;
+var __ZTVNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm32EEE'] = 359452;
+var __ZTINSt3__217__widen_from_utf8ILm32EEE = Module['__ZTINSt3__217__widen_from_utf8ILm32EEE'] = 359536;
+var __ZTSNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm32EEE'] = 359500;
+var __ZTVNSt3__214__codecvt_utf8IwEE = Module['__ZTVNSt3__214__codecvt_utf8IwEE'] = 359548;
+var __ZTINSt3__214__codecvt_utf8IwEE = Module['__ZTINSt3__214__codecvt_utf8IwEE'] = 359692;
+var __ZTSNSt3__214__codecvt_utf8IwEE = Module['__ZTSNSt3__214__codecvt_utf8IwEE'] = 359596;
+var __ZTSNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIwc11__mbstate_tEE'] = 359624;
+var __ZTVNSt3__214__codecvt_utf8IDsEE = Module['__ZTVNSt3__214__codecvt_utf8IDsEE'] = 359704;
+var __ZTINSt3__214__codecvt_utf8IDsEE = Module['__ZTINSt3__214__codecvt_utf8IDsEE'] = 359784;
+var __ZTSNSt3__214__codecvt_utf8IDsEE = Module['__ZTSNSt3__214__codecvt_utf8IDsEE'] = 359752;
+var __ZTVNSt3__214__codecvt_utf8IDiEE = Module['__ZTVNSt3__214__codecvt_utf8IDiEE'] = 359796;
+var __ZTINSt3__214__codecvt_utf8IDiEE = Module['__ZTINSt3__214__codecvt_utf8IDiEE'] = 359876;
+var __ZTSNSt3__214__codecvt_utf8IDiEE = Module['__ZTSNSt3__214__codecvt_utf8IDiEE'] = 359844;
+var __ZTVNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb0EEE'] = 359888;
+var __ZTINSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb0EEE'] = 359972;
+var __ZTSNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb0EEE'] = 359936;
+var __ZTVNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb1EEE'] = 359984;
+var __ZTINSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb1EEE'] = 360068;
+var __ZTSNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb1EEE'] = 360032;
+var __ZTVNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb0EEE'] = 360080;
+var __ZTINSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb0EEE'] = 360164;
+var __ZTSNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb0EEE'] = 360128;
+var __ZTVNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb1EEE'] = 360176;
+var __ZTINSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb1EEE'] = 360260;
+var __ZTSNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb1EEE'] = 360224;
+var __ZTVNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb0EEE'] = 360272;
+var __ZTINSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb0EEE'] = 360356;
+var __ZTSNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb0EEE'] = 360320;
+var __ZTVNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb1EEE'] = 360368;
+var __ZTINSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb1EEE'] = 360452;
+var __ZTSNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb1EEE'] = 360416;
+var __ZTVNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IwEE'] = 360464;
+var __ZTINSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IwEE'] = 360548;
+var __ZTSNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IwEE'] = 360512;
+var __ZTVNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDiEE'] = 360560;
+var __ZTINSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDiEE'] = 360644;
+var __ZTSNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDiEE'] = 360608;
+var __ZTVNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDsEE'] = 360656;
+var __ZTINSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDsEE'] = 360740;
+var __ZTSNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDsEE'] = 360704;
+var __ZTSNSt3__26locale5__impE = Module['__ZTSNSt3__26locale5__impE'] = 360752;
+var __ZTSNSt3__214collate_bynameIcEE = Module['__ZTSNSt3__214collate_bynameIcEE'] = 360788;
+var __ZTSNSt3__27collateIcEE = Module['__ZTSNSt3__27collateIcEE'] = 360816;
+var __ZTINSt3__27collateIcEE = Module['__ZTINSt3__27collateIcEE'] = 360836;
+var __ZTSNSt3__214collate_bynameIwEE = Module['__ZTSNSt3__214collate_bynameIwEE'] = 360860;
+var __ZTSNSt3__27collateIwEE = Module['__ZTSNSt3__27collateIwEE'] = 360888;
+var __ZTINSt3__27collateIwEE = Module['__ZTINSt3__27collateIwEE'] = 360908;
+var __ZTSNSt3__25ctypeIcEE = Module['__ZTSNSt3__25ctypeIcEE'] = 360932;
+var __ZTSNSt3__212ctype_bynameIcEE = Module['__ZTSNSt3__212ctype_bynameIcEE'] = 360984;
+var __ZTSNSt3__212ctype_bynameIwEE = Module['__ZTSNSt3__212ctype_bynameIwEE'] = 361024;
+var __ZTSNSt3__28numpunctIcEE = Module['__ZTSNSt3__28numpunctIcEE'] = 361064;
+var __ZTSNSt3__28numpunctIwEE = Module['__ZTSNSt3__28numpunctIwEE'] = 361100;
+var __ZTSNSt3__215numpunct_bynameIcEE = Module['__ZTSNSt3__215numpunct_bynameIcEE'] = 361136;
+var __ZTSNSt3__215numpunct_bynameIwEE = Module['__ZTSNSt3__215numpunct_bynameIwEE'] = 361180;
+var __ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361500;
+var __ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361352;
+var __ZTSNSt3__29__num_getIcEE = Module['__ZTSNSt3__29__num_getIcEE'] = 361420;
+var __ZTSNSt3__214__num_get_baseE = Module['__ZTSNSt3__214__num_get_baseE'] = 361442;
+var __ZTINSt3__214__num_get_baseE = Module['__ZTINSt3__214__num_get_baseE'] = 361468;
+var __ZTINSt3__29__num_getIcEE = Module['__ZTINSt3__29__num_getIcEE'] = 361476;
+var __ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361712;
+var __ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361596;
+var __ZTSNSt3__29__num_getIwEE = Module['__ZTSNSt3__29__num_getIwEE'] = 361664;
+var __ZTINSt3__29__num_getIwEE = Module['__ZTINSt3__29__num_getIwEE'] = 361688;
+var __ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361944;
+var __ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361796;
+var __ZTSNSt3__29__num_putIcEE = Module['__ZTSNSt3__29__num_putIcEE'] = 361864;
+var __ZTSNSt3__214__num_put_baseE = Module['__ZTSNSt3__214__num_put_baseE'] = 361886;
+var __ZTINSt3__214__num_put_baseE = Module['__ZTINSt3__214__num_put_baseE'] = 361912;
+var __ZTINSt3__29__num_putIcEE = Module['__ZTINSt3__29__num_putIcEE'] = 361920;
+var __ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362144;
+var __ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362028;
+var __ZTSNSt3__29__num_putIwEE = Module['__ZTSNSt3__29__num_putIwEE'] = 362096;
+var __ZTINSt3__29__num_putIwEE = Module['__ZTINSt3__29__num_putIwEE'] = 362120;
+var __ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362400;
+var __ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362260;
+var __ZTSNSt3__29time_baseE = Module['__ZTSNSt3__29time_baseE'] = 362329;
+var __ZTINSt3__29time_baseE = Module['__ZTINSt3__29time_baseE'] = 362348;
+var __ZTSNSt3__220__time_get_c_storageIcEE = Module['__ZTSNSt3__220__time_get_c_storageIcEE'] = 362356;
+var __ZTINSt3__220__time_get_c_storageIcEE = Module['__ZTINSt3__220__time_get_c_storageIcEE'] = 362392;
+var __ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362636;
+var __ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362524;
+var __ZTSNSt3__220__time_get_c_storageIwEE = Module['__ZTSNSt3__220__time_get_c_storageIwEE'] = 362593;
+var __ZTINSt3__220__time_get_c_storageIwEE = Module['__ZTINSt3__220__time_get_c_storageIwEE'] = 362628;
+var __ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362940;
+var __ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362788;
+var __ZTSNSt3__218__time_get_storageIcEE = Module['__ZTSNSt3__218__time_get_storageIcEE'] = 362865;
+var __ZTSNSt3__210__time_getE = Module['__ZTSNSt3__210__time_getE'] = 362897;
+var __ZTINSt3__210__time_getE = Module['__ZTINSt3__210__time_getE'] = 362920;
+var __ZTINSt3__218__time_get_storageIcEE = Module['__ZTINSt3__218__time_get_storageIcEE'] = 362928;
+var __ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363208;
+var __ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363084;
+var __ZTSNSt3__218__time_get_storageIwEE = Module['__ZTSNSt3__218__time_get_storageIwEE'] = 363161;
+var __ZTINSt3__218__time_get_storageIwEE = Module['__ZTINSt3__218__time_get_storageIwEE'] = 363196;
+var __ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363364;
+var __ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363264;
+var __ZTSNSt3__210__time_putE = Module['__ZTSNSt3__210__time_putE'] = 363333;
+var __ZTINSt3__210__time_putE = Module['__ZTINSt3__210__time_putE'] = 363356;
+var __ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363492;
+var __ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363420;
+var __ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363628;
+var __ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363548;
+var __ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363744;
+var __ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363664;
+var __ZTINSt3__210moneypunctIcLb0EEE = Module['__ZTINSt3__210moneypunctIcLb0EEE'] = 363872;
+var __ZTSNSt3__210moneypunctIcLb0EEE = Module['__ZTSNSt3__210moneypunctIcLb0EEE'] = 363812;
+var __ZTSNSt3__210money_baseE = Module['__ZTSNSt3__210money_baseE'] = 363840;
+var __ZTINSt3__210money_baseE = Module['__ZTINSt3__210money_baseE'] = 363864;
+var __ZTINSt3__210moneypunctIcLb1EEE = Module['__ZTINSt3__210moneypunctIcLb1EEE'] = 363988;
+var __ZTSNSt3__210moneypunctIcLb1EEE = Module['__ZTSNSt3__210moneypunctIcLb1EEE'] = 363960;
+var __ZTINSt3__210moneypunctIwLb0EEE = Module['__ZTINSt3__210moneypunctIwLb0EEE'] = 364104;
+var __ZTSNSt3__210moneypunctIwLb0EEE = Module['__ZTSNSt3__210moneypunctIwLb0EEE'] = 364076;
+var __ZTINSt3__210moneypunctIwLb1EEE = Module['__ZTINSt3__210moneypunctIwLb1EEE'] = 364220;
+var __ZTSNSt3__210moneypunctIwLb1EEE = Module['__ZTSNSt3__210moneypunctIwLb1EEE'] = 364192;
+var __ZTINSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb0EEE'] = 364344;
+var __ZTSNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb0EEE'] = 364308;
+var __ZTINSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb1EEE'] = 364448;
+var __ZTSNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb1EEE'] = 364412;
+var __ZTINSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb0EEE'] = 364552;
+var __ZTSNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb0EEE'] = 364516;
+var __ZTINSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb1EEE'] = 364656;
+var __ZTSNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb1EEE'] = 364620;
+var __ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364800;
+var __ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364696;
+var __ZTSNSt3__211__money_getIcEE = Module['__ZTSNSt3__211__money_getIcEE'] = 364766;
+var __ZTINSt3__211__money_getIcEE = Module['__ZTINSt3__211__money_getIcEE'] = 364792;
+var __ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364964;
+var __ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364860;
+var __ZTSNSt3__211__money_getIwEE = Module['__ZTSNSt3__211__money_getIwEE'] = 364930;
+var __ZTINSt3__211__money_getIwEE = Module['__ZTINSt3__211__money_getIwEE'] = 364956;
+var __ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 365128;
+var __ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 365024;
+var __ZTSNSt3__211__money_putIcEE = Module['__ZTSNSt3__211__money_putIcEE'] = 365094;
+var __ZTINSt3__211__money_putIcEE = Module['__ZTINSt3__211__money_putIcEE'] = 365120;
+var __ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365292;
+var __ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365188;
+var __ZTSNSt3__211__money_putIwEE = Module['__ZTSNSt3__211__money_putIwEE'] = 365258;
+var __ZTINSt3__211__money_putIwEE = Module['__ZTINSt3__211__money_putIwEE'] = 365284;
+var __ZTINSt3__28messagesIcEE = Module['__ZTINSt3__28messagesIcEE'] = 365412;
+var __ZTSNSt3__28messagesIcEE = Module['__ZTSNSt3__28messagesIcEE'] = 365356;
+var __ZTSNSt3__213messages_baseE = Module['__ZTSNSt3__213messages_baseE'] = 365377;
+var __ZTINSt3__213messages_baseE = Module['__ZTINSt3__213messages_baseE'] = 365404;
+var __ZTINSt3__28messagesIwEE = Module['__ZTINSt3__28messagesIwEE'] = 365500;
+var __ZTSNSt3__28messagesIwEE = Module['__ZTSNSt3__28messagesIwEE'] = 365476;
+var __ZTINSt3__215messages_bynameIcEE = Module['__ZTINSt3__215messages_bynameIcEE'] = 365596;
+var __ZTSNSt3__215messages_bynameIcEE = Module['__ZTSNSt3__215messages_bynameIcEE'] = 365564;
+var __ZTINSt3__215messages_bynameIwEE = Module['__ZTINSt3__215messages_bynameIwEE'] = 365672;
+var __ZTSNSt3__215messages_bynameIwEE = Module['__ZTSNSt3__215messages_bynameIwEE'] = 365640;
+var __ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365776;
+var __ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365732;
+var __ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365880;
+var __ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365836;
+var __ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365984;
+var __ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365940;
+var __ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 366088;
+var __ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 366044;
+var __ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 366192;
+var __ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 366148;
+var __ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366296;
+var __ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366252;
+var __ZTINSt3__215__time_get_tempIcEE = Module['__ZTINSt3__215__time_get_tempIcEE'] = 367348;
+var __ZTSNSt3__215__time_get_tempIcEE = Module['__ZTSNSt3__215__time_get_tempIcEE'] = 367316;
+var __ZTINSt3__215__time_get_tempIwEE = Module['__ZTINSt3__215__time_get_tempIwEE'] = 367460;
+var __ZTSNSt3__215__time_get_tempIwEE = Module['__ZTSNSt3__215__time_get_tempIwEE'] = 367428;
+var __ZNSt3__213allocator_argE = Module['__ZNSt3__213allocator_argE'] = 367472;
+var __ZTSNSt3__214__shared_countE = Module['__ZTSNSt3__214__shared_countE'] = 367496;
+var __ZTSNSt3__219__shared_weak_countE = Module['__ZTSNSt3__219__shared_weak_countE'] = 367560;
+var __ZTVNSt3__212bad_weak_ptrE = Module['__ZTVNSt3__212bad_weak_ptrE'] = 367616;
+var __ZTINSt3__212bad_weak_ptrE = Module['__ZTINSt3__212bad_weak_ptrE'] = 367660;
+var __ZTSNSt3__212bad_weak_ptrE = Module['__ZTSNSt3__212bad_weak_ptrE'] = 367636;
+var __ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367672;
+var __ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367868;
+var __ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367700;
+var __ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367948;
+var __ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367728;
+var __ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367802;
+var __ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367860;
+var __ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367880;
+var __ZNSt3__210defer_lockE = Module['__ZNSt3__210defer_lockE'] = 367960;
+var __ZNSt3__211try_to_lockE = Module['__ZNSt3__211try_to_lockE'] = 367961;
+var __ZNSt3__210adopt_lockE = Module['__ZNSt3__210adopt_lockE'] = 367962;
+var __ZSt7nothrow = Module['__ZSt7nothrow'] = 367963;
+var __ZTVNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTVNSt3__24__fs10filesystem16filesystem_errorE'] = 367968;
+var __ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE = Module['__ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE'] = 367964;
+var __ZTINSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTINSt3__24__fs10filesystem16filesystem_errorE'] = 368064;
+var __ZNSt3__24__fs10filesystem4path19preferred_separatorE = Module['__ZNSt3__24__fs10filesystem4path19preferred_separatorE'] = 368016;
+var __ZTSNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTSNSt3__24__fs10filesystem16filesystem_errorE'] = 368017;
+var __ZTVSt19bad_optional_access = Module['__ZTVSt19bad_optional_access'] = 368100;
+var __ZTISt19bad_optional_access = Module['__ZTISt19bad_optional_access'] = 368144;
+var __ZTSSt19bad_optional_access = Module['__ZTSSt19bad_optional_access'] = 368120;
+var __ZTVNSt12experimental19bad_optional_accessE = Module['__ZTVNSt12experimental19bad_optional_accessE'] = 368156;
+var __ZTINSt12experimental19bad_optional_accessE = Module['__ZTINSt12experimental19bad_optional_accessE'] = 368216;
+var __ZTSNSt12experimental19bad_optional_accessE = Module['__ZTSNSt12experimental19bad_optional_accessE'] = 368176;
+var __ZNSt3__212__rs_default4__c_E = Module['__ZNSt3__212__rs_default4__c_E'] = 426392;
+var __ZTVNSt3__211regex_errorE = Module['__ZTVNSt3__211regex_errorE'] = 368228;
+var __ZTINSt3__211regex_errorE = Module['__ZTINSt3__211regex_errorE'] = 369296;
+var __ZTSNSt3__211regex_errorE = Module['__ZTSNSt3__211regex_errorE'] = 369272;
+var __ZTVSt11logic_error = Module['__ZTVSt11logic_error'] = 381664;
+var __ZTVSt13runtime_error = Module['__ZTVSt13runtime_error'] = 381684;
+var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE = Module['__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE'] = 369376;
+var __ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE = Module['__ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE'] = 369380;
+var __ZTVNSt3__212strstreambufE = Module['__ZTVNSt3__212strstreambufE'] = 369632;
+var __ZTTNSt3__210istrstreamE = Module['__ZTTNSt3__210istrstreamE'] = 369736;
+var __ZTTNSt3__210ostrstreamE = Module['__ZTTNSt3__210ostrstreamE'] = 369792;
+var __ZTTNSt3__29strstreamE = Module['__ZTTNSt3__29strstreamE'] = 369868;
+var __ZTINSt3__212strstreambufE = Module['__ZTINSt3__212strstreambufE'] = 369932;
+var __ZTVNSt3__210istrstreamE = Module['__ZTVNSt3__210istrstreamE'] = 369696;
+var __ZTINSt3__210istrstreamE = Module['__ZTINSt3__210istrstreamE'] = 370008;
+var __ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 369944;
+var __ZTVNSt3__210ostrstreamE = Module['__ZTVNSt3__210ostrstreamE'] = 369752;
+var __ZTINSt3__210ostrstreamE = Module['__ZTINSt3__210ostrstreamE'] = 370084;
+var __ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 370020;
+var __ZTVNSt3__29strstreamE = Module['__ZTVNSt3__29strstreamE'] = 369808;
+var __ZTINSt3__29strstreamE = Module['__ZTINSt3__29strstreamE'] = 370256;
+var __ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE'] = 370096;
+var __ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 370156;
+var __ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 370196;
+var __ZTSNSt3__212strstreambufE = Module['__ZTSNSt3__212strstreambufE'] = 369908;
+var __ZTSNSt3__210istrstreamE = Module['__ZTSNSt3__210istrstreamE'] = 369984;
+var __ZTSNSt3__210ostrstreamE = Module['__ZTSNSt3__210ostrstreamE'] = 370060;
+var __ZTSNSt3__29strstreamE = Module['__ZTSNSt3__29strstreamE'] = 370236;
+var __ZTVNSt3__212system_errorE = Module['__ZTVNSt3__212system_errorE'] = 370340;
+var __ZTVNSt3__224__generic_error_categoryE = Module['__ZTVNSt3__224__generic_error_categoryE'] = 370268;
+var __ZTINSt3__224__generic_error_categoryE = Module['__ZTINSt3__224__generic_error_categoryE'] = 370540;
+var __ZTVNSt3__223__system_error_categoryE = Module['__ZTVNSt3__223__system_error_categoryE'] = 370304;
+var __ZTINSt3__223__system_error_categoryE = Module['__ZTINSt3__223__system_error_categoryE'] = 370588;
+var __ZTVNSt3__214error_categoryE = Module['__ZTVNSt3__214error_categoryE'] = 370360;
+var __ZTINSt3__214error_categoryE = Module['__ZTINSt3__214error_categoryE'] = 370424;
+var __ZTSNSt3__214error_categoryE = Module['__ZTSNSt3__214error_categoryE'] = 370396;
+var __ZTVNSt3__212__do_messageE = Module['__ZTVNSt3__212__do_messageE'] = 370432;
+var __ZTSNSt3__212__do_messageE = Module['__ZTSNSt3__212__do_messageE'] = 370468;
+var __ZTSNSt3__224__generic_error_categoryE = Module['__ZTSNSt3__224__generic_error_categoryE'] = 370504;
+var __ZTSNSt3__223__system_error_categoryE = Module['__ZTSNSt3__223__system_error_categoryE'] = 370552;
+var __ZTSNSt3__212system_errorE = Module['__ZTSNSt3__212system_errorE'] = 370600;
+var __ZNSt3__219piecewise_constructE = Module['__ZNSt3__219piecewise_constructE'] = 370636;
+var __ZTVSt18bad_variant_access = Module['__ZTVSt18bad_variant_access'] = 370640;
+var __ZTISt18bad_variant_access = Module['__ZTISt18bad_variant_access'] = 370684;
+var __ZTSSt18bad_variant_access = Module['__ZTSSt18bad_variant_access'] = 370660;
+var ___cxa_unexpected_handler = Module['___cxa_unexpected_handler'] = 383048;
+var ___cxa_terminate_handler = Module['___cxa_terminate_handler'] = 383044;
+var ___cxa_new_handler = Module['___cxa_new_handler'] = 428932;
+var __ZTIN10__cxxabiv116__shim_type_infoE = Module['__ZTIN10__cxxabiv116__shim_type_infoE'] = 379264;
+var __ZTIN10__cxxabiv117__class_type_infoE = Module['__ZTIN10__cxxabiv117__class_type_infoE'] = 379312;
+var __ZTIN10__cxxabiv117__pbase_type_infoE = Module['__ZTIN10__cxxabiv117__pbase_type_infoE'] = 379360;
+var __ZTIDn = Module['__ZTIDn'] = 379708;
+var __ZTIN10__cxxabiv119__pointer_type_infoE = Module['__ZTIN10__cxxabiv119__pointer_type_infoE'] = 379408;
+var __ZTIv = Module['__ZTIv'] = 379656;
+var __ZTIN10__cxxabiv120__function_type_infoE = Module['__ZTIN10__cxxabiv120__function_type_infoE'] = 379460;
+var __ZTIN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTIN10__cxxabiv129__pointer_to_member_type_infoE'] = 379520;
+var __ZTSN10__cxxabiv116__shim_type_infoE = Module['__ZTSN10__cxxabiv116__shim_type_infoE'] = 379228;
+var __ZTISt9type_info = Module['__ZTISt9type_info'] = 382200;
+var __ZTSN10__cxxabiv117__class_type_infoE = Module['__ZTSN10__cxxabiv117__class_type_infoE'] = 379276;
+var __ZTSN10__cxxabiv117__pbase_type_infoE = Module['__ZTSN10__cxxabiv117__pbase_type_infoE'] = 379324;
+var __ZTSN10__cxxabiv119__pointer_type_infoE = Module['__ZTSN10__cxxabiv119__pointer_type_infoE'] = 379372;
+var __ZTSN10__cxxabiv120__function_type_infoE = Module['__ZTSN10__cxxabiv120__function_type_infoE'] = 379420;
+var __ZTSN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTSN10__cxxabiv129__pointer_to_member_type_infoE'] = 379472;
+var __ZTVN10__cxxabiv116__shim_type_infoE = Module['__ZTVN10__cxxabiv116__shim_type_infoE'] = 379544;
+var __ZTVN10__cxxabiv123__fundamental_type_infoE = Module['__ZTVN10__cxxabiv123__fundamental_type_infoE'] = 379572;
+var __ZTIN10__cxxabiv123__fundamental_type_infoE = Module['__ZTIN10__cxxabiv123__fundamental_type_infoE'] = 379640;
+var __ZTSN10__cxxabiv123__fundamental_type_infoE = Module['__ZTSN10__cxxabiv123__fundamental_type_infoE'] = 379600;
+var __ZTSv = Module['__ZTSv'] = 379652;
+var __ZTSPv = Module['__ZTSPv'] = 379664;
+var __ZTIPv = Module['__ZTIPv'] = 379668;
+var __ZTVN10__cxxabiv119__pointer_type_infoE = Module['__ZTVN10__cxxabiv119__pointer_type_infoE'] = 381404;
+var __ZTSPKv = Module['__ZTSPKv'] = 379684;
+var __ZTIPKv = Module['__ZTIPKv'] = 379688;
+var __ZTSDn = Module['__ZTSDn'] = 379704;
+var __ZTSPDn = Module['__ZTSPDn'] = 379716;
+var __ZTIPDn = Module['__ZTIPDn'] = 379720;
+var __ZTSPKDn = Module['__ZTSPKDn'] = 379736;
+var __ZTIPKDn = Module['__ZTIPKDn'] = 379744;
+var __ZTSb = Module['__ZTSb'] = 379760;
+var __ZTIb = Module['__ZTIb'] = 379764;
+var __ZTSPb = Module['__ZTSPb'] = 379772;
+var __ZTIPb = Module['__ZTIPb'] = 379776;
+var __ZTSPKb = Module['__ZTSPKb'] = 379792;
+var __ZTIPKb = Module['__ZTIPKb'] = 379796;
+var __ZTSw = Module['__ZTSw'] = 379812;
+var __ZTIw = Module['__ZTIw'] = 379816;
+var __ZTSPw = Module['__ZTSPw'] = 379824;
+var __ZTIPw = Module['__ZTIPw'] = 379828;
+var __ZTSPKw = Module['__ZTSPKw'] = 379844;
+var __ZTIPKw = Module['__ZTIPKw'] = 379848;
+var __ZTSc = Module['__ZTSc'] = 379864;
+var __ZTIc = Module['__ZTIc'] = 379868;
+var __ZTSPc = Module['__ZTSPc'] = 379876;
+var __ZTIPc = Module['__ZTIPc'] = 379880;
+var __ZTSPKc = Module['__ZTSPKc'] = 379896;
+var __ZTIPKc = Module['__ZTIPKc'] = 379900;
+var __ZTSh = Module['__ZTSh'] = 379916;
+var __ZTIh = Module['__ZTIh'] = 379920;
+var __ZTSPh = Module['__ZTSPh'] = 379928;
+var __ZTIPh = Module['__ZTIPh'] = 379932;
+var __ZTSPKh = Module['__ZTSPKh'] = 379948;
+var __ZTIPKh = Module['__ZTIPKh'] = 379952;
+var __ZTSa = Module['__ZTSa'] = 379968;
+var __ZTIa = Module['__ZTIa'] = 379972;
+var __ZTSPa = Module['__ZTSPa'] = 379980;
+var __ZTIPa = Module['__ZTIPa'] = 379984;
+var __ZTSPKa = Module['__ZTSPKa'] = 380000;
+var __ZTIPKa = Module['__ZTIPKa'] = 380004;
+var __ZTSs = Module['__ZTSs'] = 380020;
+var __ZTIs = Module['__ZTIs'] = 380024;
+var __ZTSPs = Module['__ZTSPs'] = 380032;
+var __ZTIPs = Module['__ZTIPs'] = 380036;
+var __ZTSPKs = Module['__ZTSPKs'] = 380052;
+var __ZTIPKs = Module['__ZTIPKs'] = 380056;
+var __ZTSt = Module['__ZTSt'] = 380072;
+var __ZTIt = Module['__ZTIt'] = 380076;
+var __ZTSPt = Module['__ZTSPt'] = 380084;
+var __ZTIPt = Module['__ZTIPt'] = 380088;
+var __ZTSPKt = Module['__ZTSPKt'] = 380104;
+var __ZTIPKt = Module['__ZTIPKt'] = 380108;
+var __ZTSi = Module['__ZTSi'] = 380124;
+var __ZTIi = Module['__ZTIi'] = 380128;
+var __ZTSPi = Module['__ZTSPi'] = 380136;
+var __ZTIPi = Module['__ZTIPi'] = 380140;
+var __ZTSPKi = Module['__ZTSPKi'] = 380156;
+var __ZTIPKi = Module['__ZTIPKi'] = 380160;
+var __ZTSj = Module['__ZTSj'] = 380176;
+var __ZTIj = Module['__ZTIj'] = 380180;
+var __ZTSPj = Module['__ZTSPj'] = 380188;
+var __ZTIPj = Module['__ZTIPj'] = 380192;
+var __ZTSPKj = Module['__ZTSPKj'] = 380208;
+var __ZTIPKj = Module['__ZTIPKj'] = 380212;
+var __ZTSl = Module['__ZTSl'] = 380228;
+var __ZTIl = Module['__ZTIl'] = 380232;
+var __ZTSPl = Module['__ZTSPl'] = 380240;
+var __ZTIPl = Module['__ZTIPl'] = 380244;
+var __ZTSPKl = Module['__ZTSPKl'] = 380260;
+var __ZTIPKl = Module['__ZTIPKl'] = 380264;
+var __ZTSm = Module['__ZTSm'] = 380280;
+var __ZTIm = Module['__ZTIm'] = 380284;
+var __ZTSPm = Module['__ZTSPm'] = 380292;
+var __ZTIPm = Module['__ZTIPm'] = 380296;
+var __ZTSPKm = Module['__ZTSPKm'] = 380312;
+var __ZTIPKm = Module['__ZTIPKm'] = 380316;
+var __ZTSx = Module['__ZTSx'] = 380332;
+var __ZTIx = Module['__ZTIx'] = 380336;
+var __ZTSPx = Module['__ZTSPx'] = 380344;
+var __ZTIPx = Module['__ZTIPx'] = 380348;
+var __ZTSPKx = Module['__ZTSPKx'] = 380364;
+var __ZTIPKx = Module['__ZTIPKx'] = 380368;
+var __ZTSy = Module['__ZTSy'] = 380384;
+var __ZTIy = Module['__ZTIy'] = 380388;
+var __ZTSPy = Module['__ZTSPy'] = 380396;
+var __ZTIPy = Module['__ZTIPy'] = 380400;
+var __ZTSPKy = Module['__ZTSPKy'] = 380416;
+var __ZTIPKy = Module['__ZTIPKy'] = 380420;
+var __ZTSn = Module['__ZTSn'] = 380436;
+var __ZTIn = Module['__ZTIn'] = 380440;
+var __ZTSPn = Module['__ZTSPn'] = 380448;
+var __ZTIPn = Module['__ZTIPn'] = 380452;
+var __ZTSPKn = Module['__ZTSPKn'] = 380468;
+var __ZTIPKn = Module['__ZTIPKn'] = 380472;
+var __ZTSo = Module['__ZTSo'] = 380488;
+var __ZTIo = Module['__ZTIo'] = 380492;
+var __ZTSPo = Module['__ZTSPo'] = 380500;
+var __ZTIPo = Module['__ZTIPo'] = 380504;
+var __ZTSPKo = Module['__ZTSPKo'] = 380520;
+var __ZTIPKo = Module['__ZTIPKo'] = 380524;
+var __ZTSDh = Module['__ZTSDh'] = 380540;
+var __ZTIDh = Module['__ZTIDh'] = 380544;
+var __ZTSPDh = Module['__ZTSPDh'] = 380552;
+var __ZTIPDh = Module['__ZTIPDh'] = 380556;
+var __ZTSPKDh = Module['__ZTSPKDh'] = 380572;
+var __ZTIPKDh = Module['__ZTIPKDh'] = 380580;
+var __ZTSf = Module['__ZTSf'] = 380596;
+var __ZTIf = Module['__ZTIf'] = 380600;
+var __ZTSPf = Module['__ZTSPf'] = 380608;
+var __ZTIPf = Module['__ZTIPf'] = 380612;
+var __ZTSPKf = Module['__ZTSPKf'] = 380628;
+var __ZTIPKf = Module['__ZTIPKf'] = 380632;
+var __ZTSd = Module['__ZTSd'] = 380648;
+var __ZTId = Module['__ZTId'] = 380652;
+var __ZTSPd = Module['__ZTSPd'] = 380660;
+var __ZTIPd = Module['__ZTIPd'] = 380664;
+var __ZTSPKd = Module['__ZTSPKd'] = 380680;
+var __ZTIPKd = Module['__ZTIPKd'] = 380684;
+var __ZTSe = Module['__ZTSe'] = 380700;
+var __ZTIe = Module['__ZTIe'] = 380704;
+var __ZTSPe = Module['__ZTSPe'] = 380712;
+var __ZTIPe = Module['__ZTIPe'] = 380716;
+var __ZTSPKe = Module['__ZTSPKe'] = 380732;
+var __ZTIPKe = Module['__ZTIPKe'] = 380736;
+var __ZTSg = Module['__ZTSg'] = 380752;
+var __ZTIg = Module['__ZTIg'] = 380756;
+var __ZTSPg = Module['__ZTSPg'] = 380764;
+var __ZTIPg = Module['__ZTIPg'] = 380768;
+var __ZTSPKg = Module['__ZTSPKg'] = 380784;
+var __ZTIPKg = Module['__ZTIPKg'] = 380788;
+var __ZTSDu = Module['__ZTSDu'] = 380804;
+var __ZTIDu = Module['__ZTIDu'] = 380808;
+var __ZTSPDu = Module['__ZTSPDu'] = 380816;
+var __ZTIPDu = Module['__ZTIPDu'] = 380820;
+var __ZTSPKDu = Module['__ZTSPKDu'] = 380836;
+var __ZTIPKDu = Module['__ZTIPKDu'] = 380844;
+var __ZTSDs = Module['__ZTSDs'] = 380860;
+var __ZTIDs = Module['__ZTIDs'] = 380864;
+var __ZTSPDs = Module['__ZTSPDs'] = 380872;
+var __ZTIPDs = Module['__ZTIPDs'] = 380876;
+var __ZTSPKDs = Module['__ZTSPKDs'] = 380892;
+var __ZTIPKDs = Module['__ZTIPKDs'] = 380900;
+var __ZTSDi = Module['__ZTSDi'] = 380916;
+var __ZTIDi = Module['__ZTIDi'] = 380920;
+var __ZTSPDi = Module['__ZTSPDi'] = 380928;
+var __ZTIPDi = Module['__ZTIPDi'] = 380932;
+var __ZTSPKDi = Module['__ZTSPKDi'] = 380948;
+var __ZTIPKDi = Module['__ZTIPKDi'] = 380956;
+var __ZTVN10__cxxabiv117__array_type_infoE = Module['__ZTVN10__cxxabiv117__array_type_infoE'] = 380972;
+var __ZTIN10__cxxabiv117__array_type_infoE = Module['__ZTIN10__cxxabiv117__array_type_infoE'] = 381036;
+var __ZTSN10__cxxabiv117__array_type_infoE = Module['__ZTSN10__cxxabiv117__array_type_infoE'] = 381000;
+var __ZTVN10__cxxabiv120__function_type_infoE = Module['__ZTVN10__cxxabiv120__function_type_infoE'] = 381048;
+var __ZTVN10__cxxabiv116__enum_type_infoE = Module['__ZTVN10__cxxabiv116__enum_type_infoE'] = 381076;
+var __ZTIN10__cxxabiv116__enum_type_infoE = Module['__ZTIN10__cxxabiv116__enum_type_infoE'] = 381140;
+var __ZTSN10__cxxabiv116__enum_type_infoE = Module['__ZTSN10__cxxabiv116__enum_type_infoE'] = 381104;
+var __ZTIN10__cxxabiv120__si_class_type_infoE = Module['__ZTIN10__cxxabiv120__si_class_type_infoE'] = 381272;
+var __ZTSN10__cxxabiv120__si_class_type_infoE = Module['__ZTSN10__cxxabiv120__si_class_type_infoE'] = 381232;
+var __ZTIN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTIN10__cxxabiv121__vmi_class_type_infoE'] = 381364;
+var __ZTSN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTSN10__cxxabiv121__vmi_class_type_infoE'] = 381324;
+var __ZTVN10__cxxabiv117__pbase_type_infoE = Module['__ZTVN10__cxxabiv117__pbase_type_infoE'] = 381376;
+var __ZTVN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTVN10__cxxabiv129__pointer_to_member_type_infoE'] = 381432;
+var __ZTVSt9bad_alloc = Module['__ZTVSt9bad_alloc'] = 381460;
+var __ZTVSt20bad_array_new_length = Module['__ZTVSt20bad_array_new_length'] = 381480;
+var __ZTISt9bad_alloc = Module['__ZTISt9bad_alloc'] = 381612;
+var __ZTSSt9exception = Module['__ZTSSt9exception'] = 381520;
+var __ZTVSt13bad_exception = Module['__ZTVSt13bad_exception'] = 381544;
+var __ZTISt13bad_exception = Module['__ZTISt13bad_exception'] = 381584;
+var __ZTSSt13bad_exception = Module['__ZTSSt13bad_exception'] = 381564;
+var __ZTSSt9bad_alloc = Module['__ZTSSt9bad_alloc'] = 381596;
+var __ZTSSt20bad_array_new_length = Module['__ZTSSt20bad_array_new_length'] = 381624;
+var __ZTVSt12domain_error = Module['__ZTVSt12domain_error'] = 381704;
+var __ZTISt12domain_error = Module['__ZTISt12domain_error'] = 381772;
+var __ZTSSt12domain_error = Module['__ZTSSt12domain_error'] = 381724;
+var __ZTSSt11logic_error = Module['__ZTSSt11logic_error'] = 381741;
+var __ZTVSt16invalid_argument = Module['__ZTVSt16invalid_argument'] = 381784;
+var __ZTISt16invalid_argument = Module['__ZTISt16invalid_argument'] = 381828;
+var __ZTSSt16invalid_argument = Module['__ZTSSt16invalid_argument'] = 381804;
+var __ZTSSt12length_error = Module['__ZTSSt12length_error'] = 381860;
+var __ZTVSt12out_of_range = Module['__ZTVSt12out_of_range'] = 381892;
+var __ZTISt12out_of_range = Module['__ZTISt12out_of_range'] = 381932;
+var __ZTSSt12out_of_range = Module['__ZTSSt12out_of_range'] = 381912;
+var __ZTVSt11range_error = Module['__ZTVSt11range_error'] = 381944;
+var __ZTISt11range_error = Module['__ZTISt11range_error'] = 382012;
+var __ZTSSt11range_error = Module['__ZTSSt11range_error'] = 381964;
+var __ZTSSt13runtime_error = Module['__ZTSSt13runtime_error'] = 381980;
+var __ZTVSt14overflow_error = Module['__ZTVSt14overflow_error'] = 382024;
+var __ZTISt14overflow_error = Module['__ZTISt14overflow_error'] = 382064;
+var __ZTSSt14overflow_error = Module['__ZTSSt14overflow_error'] = 382044;
+var __ZTVSt15underflow_error = Module['__ZTVSt15underflow_error'] = 382076;
+var __ZTISt15underflow_error = Module['__ZTISt15underflow_error'] = 382116;
+var __ZTSSt15underflow_error = Module['__ZTSSt15underflow_error'] = 382096;
+var __ZTVSt8bad_cast = Module['__ZTVSt8bad_cast'] = 382128;
+var __ZTVSt10bad_typeid = Module['__ZTVSt10bad_typeid'] = 382148;
+var __ZTISt10bad_typeid = Module['__ZTISt10bad_typeid'] = 382248;
+var __ZTVSt9type_info = Module['__ZTVSt9type_info'] = 382168;
+var __ZTSSt9type_info = Module['__ZTSSt9type_info'] = 382184;
+var __ZTSSt8bad_cast = Module['__ZTSSt8bad_cast'] = 382208;
+var __ZTSSt10bad_typeid = Module['__ZTSSt10bad_typeid'] = 382232;
+var _in6addr_any = Module['_in6addr_any'] = 382260;
+var _in6addr_loopback = Module['_in6addr_loopback'] = 382276;
 
 
 
@@ -41089,6 +42448,7 @@ var unexportedRuntimeSymbols = [
   'GLEW',
   'IDBStore',
   'runAndAbortIfError',
+  'emscriptenWebGLGetIndexed',
   'GLEmulation',
   'GLImmediate',
   'GLImmediateSetup',
@@ -41115,7 +42475,6 @@ var missingLibrarySymbols = [
   'writeI53ToI64Signaling',
   'writeI53ToU64Clamped',
   'writeI53ToU64Signaling',
-  'convertI32PairToI53',
   'convertU32PairToI53',
   'reallyNegative',
   'unSign',
