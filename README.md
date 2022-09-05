@@ -12,10 +12,14 @@ sudo apt-get install libglew-dev emscripten libglfw3 libglfw3-dev
 
 To build the OpenGL version, run
 
-```make && ./fdg```
+```
+make && ./fdg
+```
 
 To build for WebGL, run
 
-```make -f Makefile_emscripten```
+```
+make -f Makefile_emscripten
+```
 
 Emscripten will generate `index.js`, `index.wasm` under the `build` directory. The webpage can be opened at `build/index.html`.
