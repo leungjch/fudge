@@ -65,7 +65,7 @@ void init_graph()
     int n1 = graph.add_node("A");
     int n2 = graph.add_node("B");
     std::srand(time(NULL));
-    for (int i = 0; i < 500; i++)
+    for (int i = 0; i < 100; i++)
     {
         int n3 = graph.add_node("C");
         int rd = rand() % (graph.node_list.size());
@@ -300,7 +300,7 @@ int main(int ArgCount, char **Args)
         // cout << "Update time: " << currentTime - startTime << endl;
 
         if (autoRotateX) {
-            camera.update_view_mat(0.1,0);
+            camera.update_view_mat(1.5,0);
         }
 
         // glClearColor(0.f, 0.f, 0.f, 0.f);
