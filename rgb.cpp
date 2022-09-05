@@ -14,5 +14,5 @@ Rgb Rgb::random() {
    uint8_t rand_r = unif(rd);
    uint8_t rand_g = unif(rd);
    uint8_t rand_b = unif(rd);
-    return Rgb(rand_r, rand_g, rand_b);
+    return Rgb((rand_r+255)/2, (rand_g+255)/2, (rand_b+255)/2);
 }

@@ -1,5 +1,4 @@
-# force-graph
-An implementation of the force-directed graph drawing algorithm in C++.
+# Fudge: A 3D Force Directed Graph Visualizer
 
-## Building
+## Build
 ```make && ./fdg```

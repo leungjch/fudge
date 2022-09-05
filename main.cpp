@@ -5,7 +5,6 @@
 #include "universe.h"
 #include "vec3d.h"
 #include "mycamera.h"
-#include <GL/glut.h>
 #include <ctime>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -32,7 +31,6 @@ Universe universe(graph,
                   1.0,  // spring
                   1.0   // damping
 );
-
 
 
 void init_graph()
@@ -280,56 +278,3 @@ int main(int ArgCount, char **Args)
     }
     return 0;
 }
-// // --------------------------------------------------------------------------------------------
-
-// void reshape(int width, int height)
-// {
-//     glViewport(0, 0, (GLsizei)width, (GLsizei)height);                // Set our viewport to the size of our window
-//     glMatrixMode(GL_PROJECTION);                                      // Switch to the projection matrix so that we can manipulate how our scene is viewed
-//     glLoadIdentity();                                                 // Reset the projection matrix to the identity matrix so that we don't get any artifacts (cleaning up)
-//     gluPerspective(60, (GLfloat)width / (GLfloat)height, 1.0, 200.0); // Set the Field of view angle (in degrees), the aspect ratio of our window, and the new and far planes
-//     glMatrixMode(GL_MODELVIEW);                                       // Switch back to the model view matrix, so that we can start drawing shapes correctly
-// }
-
-// // --------------------------------------------------------------------------------------------
-
-// int main(int argc, char **argv)
-// {
-
-//     int n1 = graph.add_node("A");
-//     int n2 = graph.add_node("B");
-//     for (int i = 0; i < 500; i++)
-//     {
-//         int n3 = graph.add_node("C");
-
-//         graph.add_edge(n3, rand()%graph.node_list.size());
-
-//     }
-//     // graph.node_list[n1].pos = Vec3D(-1.0, 0, 0);
-//     // graph.node_list[n2].pos = Vec3D(1.0, 0, 0);
-//     graph.add_edge(n1, n2);
-
-//     universe.set_graph(graph);
-
-//     srand(time(NULL));
-//     glutInit(&argc, argv);            // Initialize GLUT
-//     glutInitDisplayMode(GLUT_DOUBLE); // Set up a basic display buffer (only single buffered for now)
-//     glutInitWindowSize(1000, 1000);   // Set the width and height of the window
-//     glutInitWindowPosition(800, 200); // Set the position of the window
-//     glutCreateWindow("Force graph");  // Set the title for the window
-
-//     glutDisplayFunc(display); // Tell GLUT to use the method "display" for rendering
-//     glutIdleFunc(display);    // Tell GLUT to use the method "display" as our idle method as well
-//     glutReshapeFunc(reshape); // Tell GLUT to use the method "reshape" for reshaping
-
-//     glutMainLoop(); // Enter GLUT's main loop
-
-//     // cout << "Hello world!" << endl;
-
-//     // for (int i = 0; i < 5000; i++)
-//     // {
-//     //     universe.update();
-//     //     cout << Vec3D::distance(universe.graph.node_list[0].pos, universe.graph.node_list[1].pos) << endl;
-//     // }
-//     return 0;
-// }
