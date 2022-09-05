@@ -73,45 +73,68 @@ void SolidSphere::init() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
     
+    GLfloat x, y, z, alpha, beta; // Storage for coordinates and angles        
+    GLfloat radius = 1.0f;
+    int gradation = 20;
+    vertices.clear();
+    for (alpha = 0.0; alpha < M_PI; alpha += M_PI/gradation)
+    {        
+        for (beta = 0.0; beta < 2.01*M_PI; beta += M_PI/gradation)            
+        {            
+            x = radius*cos(beta)*sin(alpha);
+            y = radius*sin(beta)*sin(alpha);
+            z = radius*cos(alpha);
+            vertices.push_back(x);
+            vertices.push_back(y);
+            vertices.push_back(z);
+            x = radius*cos(beta)*sin(alpha + M_PI/gradation);
+            y = radius*sin(beta)*sin(alpha + M_PI/gradation);
+            z = radius*cos(alpha + M_PI/gradation);            
+            vertices.push_back(x);
+            vertices.push_back(y);
+            vertices.push_back(z);
+        }        
+    }
 
-    vertices = {
-    -1.0f,-1.0f,-1.0f, // triangle 1 : begin
-    -1.0f,-1.0f, 1.0f,
-    -1.0f, 1.0f, 1.0f, // triangle 1 : end
-    1.0f, 1.0f,-1.0f, // triangle 2 : begin
-    -1.0f,-1.0f,-1.0f,
-    -1.0f, 1.0f,-1.0f, // triangle 2 : end
-    1.0f,-1.0f, 1.0f,
-    -1.0f,-1.0f,-1.0f,
-    1.0f,-1.0f,-1.0f,
-    1.0f, 1.0f,-1.0f,
-    1.0f,-1.0f,-1.0f,
-    -1.0f,-1.0f,-1.0f,
-    -1.0f,-1.0f,-1.0f,
-    -1.0f, 1.0f, 1.0f,
-    -1.0f, 1.0f,-1.0f,
-    1.0f,-1.0f, 1.0f,
-    -1.0f,-1.0f, 1.0f,
-    -1.0f,-1.0f,-1.0f,
-    -1.0f, 1.0f, 1.0f,
-    -1.0f,-1.0f, 1.0f,
-    1.0f,-1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f,-1.0f,-1.0f,
-    1.0f, 1.0f,-1.0f,
-    1.0f,-1.0f,-1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f,-1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f,-1.0f,
-    -1.0f, 1.0f,-1.0f,
-    1.0f, 1.0f, 1.0f,
-    -1.0f, 1.0f,-1.0f,
-    -1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    -1.0f, 1.0f, 1.0f,
-    1.0f,-1.0f, 1.0f
-};
+
+//     vertices = {
+//     -1.0f,-1.0f,-1.0f, // triangle 1 : begin
+//     -1.0f,-1.0f, 1.0f,
+//     -1.0f, 1.0f, 1.0f, // triangle 1 : end
+//     1.0f, 1.0f,-1.0f, // triangle 2 : begin
+//     -1.0f,-1.0f,-1.0f,
+//     -1.0f, 1.0f,-1.0f, // triangle 2 : end
+//     1.0f,-1.0f, 1.0f,
+//     -1.0f,-1.0f,-1.0f,
+//     1.0f,-1.0f,-1.0f,
+//     1.0f, 1.0f,-1.0f,
+//     1.0f,-1.0f,-1.0f,
+//     -1.0f,-1.0f,-1.0f,
+//     -1.0f,-1.0f,-1.0f,
+//     -1.0f, 1.0f, 1.0f,
+//     -1.0f, 1.0f,-1.0f,
+//     1.0f,-1.0f, 1.0f,
+//     -1.0f,-1.0f, 1.0f,
+//     -1.0f,-1.0f,-1.0f,
+//     -1.0f, 1.0f, 1.0f,
+//     -1.0f,-1.0f, 1.0f,
+//     1.0f,-1.0f, 1.0f,
+//     1.0f, 1.0f, 1.0f,
+//     1.0f,-1.0f,-1.0f,
+//     1.0f, 1.0f,-1.0f,
+//     1.0f,-1.0f,-1.0f,
+//     1.0f, 1.0f, 1.0f,
+//     1.0f,-1.0f, 1.0f,
+//     1.0f, 1.0f, 1.0f,
+//     1.0f, 1.0f,-1.0f,
+//     -1.0f, 1.0f,-1.0f,
+//     1.0f, 1.0f, 1.0f,
+//     -1.0f, 1.0f,-1.0f,
+//     -1.0f, 1.0f, 1.0f,
+//     1.0f, 1.0f, 1.0f,
+//     -1.0f, 1.0f, 1.0f,
+//     1.0f,-1.0f, 1.0f
+// };
 
 
 
@@ -168,6 +191,6 @@ void SolidSphere::draw()
     glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &color[0]);
 
     glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 12*3);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertices.size());
 
 }

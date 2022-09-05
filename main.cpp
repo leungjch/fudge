@@ -24,8 +24,8 @@ typedef int32_t i32;
 typedef uint32_t u32;
 typedef int32_t b32;
 
-#define WIN_WIDTH 1920
-#define WIN_HEIGHT 1080
+#define WIN_WIDTH 1200
+#define WIN_HEIGHT 1200
 
 using namespace std;
 bool movingUp = false;  // Whether or not we are moving up or down
