@@ -1163,8 +1163,8 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  383052: ($0) => { if (!$0) { AL.alcErr = 0xA004 ; return 1; } },  
- 383100: ($0) => { if (!AL.currentCtx) { err("alGetProcAddress() called without a valid context"); return 1; } if (!$0) { AL.currentCtx.err = 0xA003 ; return 1; } }
+  382412: ($0) => { if (!$0) { AL.alcErr = 0xA004 ; return 1; } },  
+ 382460: ($0) => { if (!AL.currentCtx) { err("alGetProcAddress() called without a valid context"); return 1; } if (!$0) { AL.currentCtx.err = 0xA003 ; return 1; } }
 };
 
 
@@ -6613,7 +6613,7 @@ var ASM_CONSTS = {
           var contextAttributes = {
             antialias: false,
             alpha: false,
-            majorVersion: (typeof WebGL2RenderingContext != 'undefined') ? 2 : 1,
+            majorVersion: 2,
           };
   
           if (webGLContextAttributes) {
@@ -10996,41 +10996,6 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_get_now_res"] = _emscripten_get_now_res;
 
-  function __webgl_enable_ANGLE_instanced_arrays(ctx) {
-      // Extension available in WebGL 1 from Firefox 26 and Google Chrome 30 onwards. Core feature in WebGL 2.
-      var ext = ctx.getExtension('ANGLE_instanced_arrays');
-      if (ext) {
-        ctx['vertexAttribDivisor'] = function(index, divisor) { ext['vertexAttribDivisorANGLE'](index, divisor); };
-        ctx['drawArraysInstanced'] = function(mode, first, count, primcount) { ext['drawArraysInstancedANGLE'](mode, first, count, primcount); };
-        ctx['drawElementsInstanced'] = function(mode, count, type, indices, primcount) { ext['drawElementsInstancedANGLE'](mode, count, type, indices, primcount); };
-        return 1;
-      }
-    }
-  Module["__webgl_enable_ANGLE_instanced_arrays"] = __webgl_enable_ANGLE_instanced_arrays;
-  
-  function __webgl_enable_OES_vertex_array_object(ctx) {
-      // Extension available in WebGL 1 from Firefox 25 and WebKit 536.28/desktop Safari 6.0.3 onwards. Core feature in WebGL 2.
-      var ext = ctx.getExtension('OES_vertex_array_object');
-      if (ext) {
-        ctx['createVertexArray'] = function() { return ext['createVertexArrayOES'](); };
-        ctx['deleteVertexArray'] = function(vao) { ext['deleteVertexArrayOES'](vao); };
-        ctx['bindVertexArray'] = function(vao) { ext['bindVertexArrayOES'](vao); };
-        ctx['isVertexArray'] = function(vao) { return ext['isVertexArrayOES'](vao); };
-        return 1;
-      }
-    }
-  Module["__webgl_enable_OES_vertex_array_object"] = __webgl_enable_OES_vertex_array_object;
-  
-  function __webgl_enable_WEBGL_draw_buffers(ctx) {
-      // Extension available in WebGL 1 from Firefox 28 onwards. Core feature in WebGL 2.
-      var ext = ctx.getExtension('WEBGL_draw_buffers');
-      if (ext) {
-        ctx['drawBuffers'] = function(n, bufs) { ext['drawBuffersWEBGL'](n, bufs); };
-        return 1;
-      }
-    }
-  Module["__webgl_enable_WEBGL_draw_buffers"] = __webgl_enable_WEBGL_draw_buffers;
-  
   function __webgl_enable_WEBGL_draw_instanced_base_vertex_base_instance(ctx) {
       // Closure is expected to be allowed to minify the '.dibvbi' property, so not accessing it quoted.
       return !!(ctx.dibvbi = ctx.getExtension('WEBGL_draw_instanced_base_vertex_base_instance'));
@@ -11048,7 +11013,7 @@ var ASM_CONSTS = {
       return !!(ctx.multiDrawWebgl = ctx.getExtension('WEBGL_multi_draw'));
     }
   Module["__webgl_enable_WEBGL_multi_draw"] = __webgl_enable_WEBGL_multi_draw;
-  var GL = {counter:1,buffers:[],programs:[],framebuffers:[],renderbuffers:[],textures:[],shaders:[],vaos:[],contexts:[],offscreenCanvases:{},queries:[],samplers:[],transformFeedbacks:[],syncs:[],byteSizeByTypeRoot:5120,byteSizeByType:[1,1,2,2,4,4,4,2,3,4,8],stringCache:{},stringiCache:{},unpackAlignment:4,recordError:function recordError(errorCode) {
+  var GL = {counter:1,buffers:[],mappedBuffers:{},programs:[],framebuffers:[],renderbuffers:[],textures:[],shaders:[],vaos:[],contexts:[],offscreenCanvases:{},queries:[],samplers:[],transformFeedbacks:[],syncs:[],byteSizeByTypeRoot:5120,byteSizeByType:[1,1,2,2,4,4,4,2,3,4,8],stringCache:{},stringiCache:{},unpackAlignment:4,recordError:function recordError(errorCode) {
         if (!GL.lastError) {
           GL.lastError = errorCode;
         }
@@ -11156,17 +11121,35 @@ var ASM_CONSTS = {
           var len = length ? HEAP32[(((length)+(i*4))>>2)] : -1;
           source += UTF8ToString(HEAP32[(((string)+(i*4))>>2)], len < 0 ? undefined : len);
         }
-        // Let's see if we need to enable the standard derivatives extension
-        var type = GLctx.getShaderParameter(GL.shaders[shader], 0x8B4F /* GL_SHADER_TYPE */);
-        if (type == 0x8B30 /* GL_FRAGMENT_SHADER */) {
-          if (GLEmulation.findToken(source, "dFdx") ||
-              GLEmulation.findToken(source, "dFdy") ||
-              GLEmulation.findToken(source, "fwidth")) {
-            source = "#extension GL_OES_standard_derivatives : enable\n" + source;
-            var extension = GLctx.getExtension("OES_standard_derivatives");
-          }
-        }
         return source;
+      },calcBufLength:function calcBufLength(size, type, stride, count) {
+        if (stride > 0) {
+          return count * stride;  // XXXvlad this is not exactly correct I don't think
+        }
+        var typeSize = GL.byteSizeByType[type - GL.byteSizeByTypeRoot];
+        return size * typeSize * count;
+      },usedTempBuffers:[],preDrawHandleClientVertexAttribBindings:function preDrawHandleClientVertexAttribBindings(count) {
+        GL.resetBufferBinding = false;
+  
+        // TODO: initial pass to detect ranges we need to upload, might not need an upload per attrib
+        for (var i = 0; i < GL.currentContext.maxVertexAttribs; ++i) {
+          var cb = GL.currentContext.clientBuffers[i];
+          if (!cb.clientside || !cb.enabled) continue;
+  
+          GL.resetBufferBinding = true;
+  
+          var size = GL.calcBufLength(cb.size, cb.type, cb.stride, count);
+          var buf = GL.getTempVertexBuffer(size);
+          GLctx.bindBuffer(0x8892 /*GL_ARRAY_BUFFER*/, buf);
+          GLctx.bufferSubData(0x8892 /*GL_ARRAY_BUFFER*/,
+                                   0,
+                                   HEAPU8.subarray(cb.ptr, cb.ptr + size));
+          cb.vertexAttribPointerAdaptor.call(GLctx, i, cb.size, cb.type, cb.normalized, cb.stride, 0);
+        }
+      },postDrawHandleClientVertexAttribBindings:function postDrawHandleClientVertexAttribBindings() {
+        if (GL.resetBufferBinding) {
+          GLctx.bindBuffer(0x8892 /*GL_ARRAY_BUFFER*/, GL.buffers[GLctx.currentArrayBufferBinding]);
+        }
       },createContext:function(/** @type {HTMLCanvasElement} */ canvas, webGLContextAttributes) {
   
         // BUG: Workaround Safari WebGL issue: After successfully acquiring WebGL context on a canvas,
@@ -11184,14 +11167,7 @@ var ASM_CONSTS = {
           canvas.getContext = fixedGetContext;
         }
   
-        var ctx = 
-          (webGLContextAttributes.majorVersion > 1)
-          ?
-            canvas.getContext("webgl2", webGLContextAttributes)
-          :
-          (canvas.getContext("webgl", webGLContextAttributes)
-            // https://caniuse.com/#feat=webgl
-            );
+        var ctx = canvas.getContext("webgl2", webGLContextAttributes);
   
         if (!ctx) return 0;
   
@@ -11216,6 +11192,14 @@ var ASM_CONSTS = {
           GL.initExtensions(context);
         }
   
+        context.maxVertexAttribs = context.GLctx.getParameter(0x8869 /*GL_MAX_VERTEX_ATTRIBS*/);
+        context.clientBuffers = [];
+        for (var i = 0; i < context.maxVertexAttribs; i++) {
+          context.clientBuffers[i] = { enabled: false, clientside: false, size: 0, type: 0, normalized: 0, stride: 0, ptr: 0, vertexAttribPointerAdaptor: null };
+        }
+  
+        GL.generateTempBuffers(false, context);
+  
         return handle;
       },makeContextCurrent:function(contextHandle) {
   
@@ -11239,13 +11223,7 @@ var ASM_CONSTS = {
         var GLctx = context.GLctx;
   
         // Detect the presence of a few extensions manually, this GL interop layer itself will need to know if they exist.
-        context.compressionExt = GLctx.getExtension('WEBGL_compressed_texture_s3tc');
-        context.anisotropicExt = GLctx.getExtension('EXT_texture_filter_anisotropic');
   
-        // Extensions that are only available in WebGL 1 (the calls will be no-ops if called on a WebGL 2 context active)
-        __webgl_enable_ANGLE_instanced_arrays(GLctx);
-        __webgl_enable_OES_vertex_array_object(GLctx);
-        __webgl_enable_WEBGL_draw_buffers(GLctx);
         // Extensions that are available from WebGL >= 2 (no-op if called on a WebGL 1 context active)
         __webgl_enable_WEBGL_draw_instanced_base_vertex_base_instance(GLctx);
         __webgl_enable_WEBGL_multi_draw_instanced_base_vertex_base_instance(GLctx);
@@ -11281,42 +11259,955 @@ var ASM_CONSTS = {
   function _emscripten_glActiveTexture(x0) { GLctx['activeTexture'](x0) }
   Module["_emscripten_glActiveTexture"] = _emscripten_glActiveTexture;
 
-  function _emscripten_glAlphaFunc(func, ref) {
-      switch(func) {
-        case 0x200: // GL_NEVER
-        case 0x201: // GL_LESS
-        case 0x202: // GL_EQUAL
-        case 0x203: // GL_LEQUAL
-        case 0x204: // GL_GREATER
-        case 0x205: // GL_NOTEQUAL
-        case 0x206: // GL_GEQUAL
-        case 0x207: // GL_ALWAYS
-          GLEmulation.alphaTestRef = ref;
-          if (GLEmulation.alphaTestFunc != func) {
-            GLEmulation.alphaTestFunc = func;
-            GLImmediate.currentRenderer = null; // alpha test mode is part of the FFP shader state, we must re-lookup the renderer to use.
-          }
-          break;
-        default: // invalid value provided
-          break;
-      }
-    }
-  Module["_emscripten_glAlphaFunc"] = _emscripten_glAlphaFunc;
-
   function _emscripten_glAttachShader(program, shader) {
       GLctx.attachShader(GL.programs[program], GL.shaders[shader]);
     }
   Module["_emscripten_glAttachShader"] = _emscripten_glAttachShader;
 
-  function _glEnable(x0) { GLctx['enable'](x0) }
-  Module["_glEnable"] = _glEnable;
+  function _emscripten_glBeginQuery(target, id) {
+      GLctx['beginQuery'](target, GL.queries[id]);
+    }
+  Module["_emscripten_glBeginQuery"] = _emscripten_glBeginQuery;
+
+  function _emscripten_glBeginQueryEXT(target, id) {
+      GLctx.disjointTimerQueryExt['beginQueryEXT'](target, GL.queries[id]);
+    }
+  Module["_emscripten_glBeginQueryEXT"] = _emscripten_glBeginQueryEXT;
+
+  function _emscripten_glBeginTransformFeedback(x0) { GLctx['beginTransformFeedback'](x0) }
+  Module["_emscripten_glBeginTransformFeedback"] = _emscripten_glBeginTransformFeedback;
+
+  function _emscripten_glBindAttribLocation(program, index, name) {
+      GLctx.bindAttribLocation(GL.programs[program], index, UTF8ToString(name));
+    }
+  Module["_emscripten_glBindAttribLocation"] = _emscripten_glBindAttribLocation;
+
+  function _emscripten_glBindBuffer(target, buffer) {
+      if (target == 0x8892 /*GL_ARRAY_BUFFER*/) {
+        GLctx.currentArrayBufferBinding = buffer;
+      } else if (target == 0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/) {
+        GLctx.currentElementArrayBufferBinding = buffer;
+      }
   
-  function _glDisable(x0) { GLctx['disable'](x0) }
-  Module["_glDisable"] = _glDisable;
+      if (target == 0x88EB /*GL_PIXEL_PACK_BUFFER*/) {
+        // In WebGL 2 glReadPixels entry point, we need to use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_PACK_BUFFER_BINDING point, so must keep track whether that binding point is non-null to know what is
+        // the proper API function to call.
+        GLctx.currentPixelPackBufferBinding = buffer;
+      } else if (target == 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/) {
+        // In WebGL 2 gl(Compressed)Tex(Sub)Image[23]D entry points, we need to
+        // use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_UNPACK_BUFFER_BINDING point, so must keep track whether that
+        // binding point is non-null to know what is the proper API function to
+        // call.
+        GLctx.currentPixelUnpackBufferBinding = buffer;
+      }
+      GLctx.bindBuffer(target, GL.buffers[buffer]);
+    }
+  Module["_emscripten_glBindBuffer"] = _emscripten_glBindBuffer;
+
+  function _emscripten_glBindBufferBase(target, index, buffer) {
+      GLctx['bindBufferBase'](target, index, GL.buffers[buffer]);
+    }
+  Module["_emscripten_glBindBufferBase"] = _emscripten_glBindBufferBase;
+
+  function _emscripten_glBindBufferRange(target, index, buffer, offset, ptrsize) {
+      GLctx['bindBufferRange'](target, index, GL.buffers[buffer], offset, ptrsize);
+    }
+  Module["_emscripten_glBindBufferRange"] = _emscripten_glBindBufferRange;
+
+  function _emscripten_glBindFramebuffer(target, framebuffer) {
   
-  function _glIsEnabled(x0) { return GLctx['isEnabled'](x0) }
-  Module["_glIsEnabled"] = _glIsEnabled;
+      GLctx.bindFramebuffer(target, GL.framebuffers[framebuffer]);
   
+    }
+  Module["_emscripten_glBindFramebuffer"] = _emscripten_glBindFramebuffer;
+
+  function _emscripten_glBindRenderbuffer(target, renderbuffer) {
+      GLctx.bindRenderbuffer(target, GL.renderbuffers[renderbuffer]);
+    }
+  Module["_emscripten_glBindRenderbuffer"] = _emscripten_glBindRenderbuffer;
+
+  function _emscripten_glBindSampler(unit, sampler) {
+      GLctx['bindSampler'](unit, GL.samplers[sampler]);
+    }
+  Module["_emscripten_glBindSampler"] = _emscripten_glBindSampler;
+
+  function _emscripten_glBindTexture(target, texture) {
+      GLctx.bindTexture(target, GL.textures[texture]);
+    }
+  Module["_emscripten_glBindTexture"] = _emscripten_glBindTexture;
+
+  function _emscripten_glBindTransformFeedback(target, id) {
+      GLctx['bindTransformFeedback'](target, GL.transformFeedbacks[id]);
+    }
+  Module["_emscripten_glBindTransformFeedback"] = _emscripten_glBindTransformFeedback;
+
+  function _emscripten_glBindVertexArray(vao) {
+      GLctx['bindVertexArray'](GL.vaos[vao]);
+      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
+      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
+    }
+  Module["_emscripten_glBindVertexArray"] = _emscripten_glBindVertexArray;
+
+  function _emscripten_glBindVertexArrayOES(vao) {
+      GLctx['bindVertexArray'](GL.vaos[vao]);
+      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
+      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
+    }
+  Module["_emscripten_glBindVertexArrayOES"] = _emscripten_glBindVertexArrayOES;
+
+  function _emscripten_glBlendColor(x0, x1, x2, x3) { GLctx['blendColor'](x0, x1, x2, x3) }
+  Module["_emscripten_glBlendColor"] = _emscripten_glBlendColor;
+
+  function _emscripten_glBlendEquation(x0) { GLctx['blendEquation'](x0) }
+  Module["_emscripten_glBlendEquation"] = _emscripten_glBlendEquation;
+
+  function _emscripten_glBlendEquationSeparate(x0, x1) { GLctx['blendEquationSeparate'](x0, x1) }
+  Module["_emscripten_glBlendEquationSeparate"] = _emscripten_glBlendEquationSeparate;
+
+  function _emscripten_glBlendFunc(x0, x1) { GLctx['blendFunc'](x0, x1) }
+  Module["_emscripten_glBlendFunc"] = _emscripten_glBlendFunc;
+
+  function _emscripten_glBlendFuncSeparate(x0, x1, x2, x3) { GLctx['blendFuncSeparate'](x0, x1, x2, x3) }
+  Module["_emscripten_glBlendFuncSeparate"] = _emscripten_glBlendFuncSeparate;
+
+  function _emscripten_glBlitFramebuffer(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) { GLctx['blitFramebuffer'](x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) }
+  Module["_emscripten_glBlitFramebuffer"] = _emscripten_glBlitFramebuffer;
+
+  function _emscripten_glBufferData(target, size, data, usage) {
+  
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        // If size is zero, WebGL would interpret uploading the whole input arraybuffer (starting from given offset), which would
+        // not make sense in WebAssembly, so avoid uploading if size is zero. However we must still call bufferData to establish a
+        // backing storage of zero bytes.
+        if (data && size) {
+          GLctx.bufferData(target, HEAPU8, usage, data, size);
+        } else {
+          GLctx.bufferData(target, size, usage);
+        }
+      } else {
+        // N.b. here first form specifies a heap subarray, second form an integer size, so the ?: code here is polymorphic. It is advised to avoid
+        // randomly mixing both uses in calling code, to avoid any potential JS engine JIT issues.
+        GLctx.bufferData(target, data ? HEAPU8.subarray(data, data+size) : size, usage);
+      }
+    }
+  Module["_emscripten_glBufferData"] = _emscripten_glBufferData;
+
+  function _emscripten_glBufferSubData(target, offset, size, data) {
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        size && GLctx.bufferSubData(target, offset, HEAPU8, data, size);
+        return;
+      }
+      GLctx.bufferSubData(target, offset, HEAPU8.subarray(data, data+size));
+    }
+  Module["_emscripten_glBufferSubData"] = _emscripten_glBufferSubData;
+
+  function _emscripten_glCheckFramebufferStatus(x0) { return GLctx['checkFramebufferStatus'](x0) }
+  Module["_emscripten_glCheckFramebufferStatus"] = _emscripten_glCheckFramebufferStatus;
+
+  function _emscripten_glClear(x0) { GLctx['clear'](x0) }
+  Module["_emscripten_glClear"] = _emscripten_glClear;
+
+  function _emscripten_glClearBufferfi(x0, x1, x2, x3) { GLctx['clearBufferfi'](x0, x1, x2, x3) }
+  Module["_emscripten_glClearBufferfi"] = _emscripten_glClearBufferfi;
+
+  function _emscripten_glClearBufferfv(buffer, drawbuffer, value) {
+  
+      GLctx['clearBufferfv'](buffer, drawbuffer, HEAPF32, value>>2);
+    }
+  Module["_emscripten_glClearBufferfv"] = _emscripten_glClearBufferfv;
+
+  function _emscripten_glClearBufferiv(buffer, drawbuffer, value) {
+  
+      GLctx['clearBufferiv'](buffer, drawbuffer, HEAP32, value>>2);
+    }
+  Module["_emscripten_glClearBufferiv"] = _emscripten_glClearBufferiv;
+
+  function _emscripten_glClearBufferuiv(buffer, drawbuffer, value) {
+  
+      GLctx['clearBufferuiv'](buffer, drawbuffer, HEAPU32, value>>2);
+    }
+  Module["_emscripten_glClearBufferuiv"] = _emscripten_glClearBufferuiv;
+
+  function _emscripten_glClearColor(x0, x1, x2, x3) { GLctx['clearColor'](x0, x1, x2, x3) }
+  Module["_emscripten_glClearColor"] = _emscripten_glClearColor;
+
+  function _emscripten_glClearDepthf(x0) { GLctx['clearDepth'](x0) }
+  Module["_emscripten_glClearDepthf"] = _emscripten_glClearDepthf;
+
+  function _emscripten_glClearStencil(x0) { GLctx['clearStencil'](x0) }
+  Module["_emscripten_glClearStencil"] = _emscripten_glClearStencil;
+
+  function convertI32PairToI53(lo, hi) {
+      // This function should not be getting called with too large unsigned numbers
+      // in high part (if hi >= 0x7FFFFFFFF, one should have been calling
+      // convertU32PairToI53())
+      assert(hi === (hi|0));
+      return (lo >>> 0) + hi * 4294967296;
+    }
+  Module["convertI32PairToI53"] = convertI32PairToI53;
+  function _emscripten_glClientWaitSync(sync, flags, timeoutLo, timeoutHi) {
+      // WebGL2 vs GLES3 differences: in GLES3, the timeout parameter is a uint64, where 0xFFFFFFFFFFFFFFFFULL means GL_TIMEOUT_IGNORED.
+      // In JS, there's no 64-bit value types, so instead timeout is taken to be signed, and GL_TIMEOUT_IGNORED is given value -1.
+      // Inherently the value accepted in the timeout is lossy, and can't take in arbitrary u64 bit pattern (but most likely doesn't matter)
+      // See https://www.khronos.org/registry/webgl/specs/latest/2.0/#5.15
+      return GLctx.clientWaitSync(GL.syncs[sync], flags, convertI32PairToI53(timeoutLo, timeoutHi));
+    }
+  Module["_emscripten_glClientWaitSync"] = _emscripten_glClientWaitSync;
+
+  function _emscripten_glColorMask(red, green, blue, alpha) {
+      GLctx.colorMask(!!red, !!green, !!blue, !!alpha);
+    }
+  Module["_emscripten_glColorMask"] = _emscripten_glColorMask;
+
+  function _emscripten_glCompileShader(shader) {
+      GLctx.compileShader(GL.shaders[shader]);
+    }
+  Module["_emscripten_glCompileShader"] = _emscripten_glCompileShader;
+
+  function _emscripten_glCompressedTexImage2D(target, level, internalFormat, width, height, border, imageSize, data) {
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
+          GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, imageSize, data);
+        } else {
+          GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, HEAPU8, data, imageSize);
+        }
+        return;
+      }
+      GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
+    }
+  Module["_emscripten_glCompressedTexImage2D"] = _emscripten_glCompressedTexImage2D;
+
+  function _emscripten_glCompressedTexImage3D(target, level, internalFormat, width, height, depth, border, imageSize, data) {
+      if (GLctx.currentPixelUnpackBufferBinding) {
+        GLctx['compressedTexImage3D'](target, level, internalFormat, width, height, depth, border, imageSize, data);
+      } else {
+        GLctx['compressedTexImage3D'](target, level, internalFormat, width, height, depth, border, HEAPU8, data, imageSize);
+      }
+    }
+  Module["_emscripten_glCompressedTexImage3D"] = _emscripten_glCompressedTexImage3D;
+
+  function _emscripten_glCompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data) {
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
+          GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, imageSize, data);
+        } else {
+          GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, HEAPU8, data, imageSize);
+        }
+        return;
+      }
+      GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
+    }
+  Module["_emscripten_glCompressedTexSubImage2D"] = _emscripten_glCompressedTexSubImage2D;
+
+  function _emscripten_glCompressedTexSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data) {
+      if (GLctx.currentPixelUnpackBufferBinding) {
+        GLctx['compressedTexSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data);
+      } else {
+        GLctx['compressedTexSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, HEAPU8, data, imageSize);
+      }
+    }
+  Module["_emscripten_glCompressedTexSubImage3D"] = _emscripten_glCompressedTexSubImage3D;
+
+  function _emscripten_glCopyBufferSubData(x0, x1, x2, x3, x4) { GLctx['copyBufferSubData'](x0, x1, x2, x3, x4) }
+  Module["_emscripten_glCopyBufferSubData"] = _emscripten_glCopyBufferSubData;
+
+  function _emscripten_glCopyTexImage2D(x0, x1, x2, x3, x4, x5, x6, x7) { GLctx['copyTexImage2D'](x0, x1, x2, x3, x4, x5, x6, x7) }
+  Module["_emscripten_glCopyTexImage2D"] = _emscripten_glCopyTexImage2D;
+
+  function _emscripten_glCopyTexSubImage2D(x0, x1, x2, x3, x4, x5, x6, x7) { GLctx['copyTexSubImage2D'](x0, x1, x2, x3, x4, x5, x6, x7) }
+  Module["_emscripten_glCopyTexSubImage2D"] = _emscripten_glCopyTexSubImage2D;
+
+  function _emscripten_glCopyTexSubImage3D(x0, x1, x2, x3, x4, x5, x6, x7, x8) { GLctx['copyTexSubImage3D'](x0, x1, x2, x3, x4, x5, x6, x7, x8) }
+  Module["_emscripten_glCopyTexSubImage3D"] = _emscripten_glCopyTexSubImage3D;
+
+  function _emscripten_glCreateProgram() {
+      var id = GL.getNewId(GL.programs);
+      var program = GLctx.createProgram();
+      // Store additional information needed for each shader program:
+      program.name = id;
+      // Lazy cache results of glGetProgramiv(GL_ACTIVE_UNIFORM_MAX_LENGTH/GL_ACTIVE_ATTRIBUTE_MAX_LENGTH/GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH)
+      program.maxUniformLength = program.maxAttributeLength = program.maxUniformBlockNameLength = 0;
+      program.uniformIdCounter = 1;
+      GL.programs[id] = program;
+      return id;
+    }
+  Module["_emscripten_glCreateProgram"] = _emscripten_glCreateProgram;
+
+  function _emscripten_glCreateShader(shaderType) {
+      var id = GL.getNewId(GL.shaders);
+      GL.shaders[id] = GLctx.createShader(shaderType);
+  
+      return id;
+    }
+  Module["_emscripten_glCreateShader"] = _emscripten_glCreateShader;
+
+  function _emscripten_glCullFace(x0) { GLctx['cullFace'](x0) }
+  Module["_emscripten_glCullFace"] = _emscripten_glCullFace;
+
+  function _emscripten_glDeleteBuffers(n, buffers) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((buffers)+(i*4))>>2)];
+        var buffer = GL.buffers[id];
+  
+        // From spec: "glDeleteBuffers silently ignores 0's and names that do not
+        // correspond to existing buffer objects."
+        if (!buffer) continue;
+  
+        GLctx.deleteBuffer(buffer);
+        buffer.name = 0;
+        GL.buffers[id] = null;
+  
+        if (id == GLctx.currentArrayBufferBinding) GLctx.currentArrayBufferBinding = 0;
+        if (id == GLctx.currentElementArrayBufferBinding) GLctx.currentElementArrayBufferBinding = 0;
+        if (id == GLctx.currentPixelPackBufferBinding) GLctx.currentPixelPackBufferBinding = 0;
+        if (id == GLctx.currentPixelUnpackBufferBinding) GLctx.currentPixelUnpackBufferBinding = 0;
+      }
+    }
+  Module["_emscripten_glDeleteBuffers"] = _emscripten_glDeleteBuffers;
+
+  function _emscripten_glDeleteFramebuffers(n, framebuffers) {
+      for (var i = 0; i < n; ++i) {
+        var id = HEAP32[(((framebuffers)+(i*4))>>2)];
+        var framebuffer = GL.framebuffers[id];
+        if (!framebuffer) continue; // GL spec: "glDeleteFramebuffers silently ignores 0s and names that do not correspond to existing framebuffer objects".
+        GLctx.deleteFramebuffer(framebuffer);
+        framebuffer.name = 0;
+        GL.framebuffers[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteFramebuffers"] = _emscripten_glDeleteFramebuffers;
+
+  function _emscripten_glDeleteProgram(id) {
+      if (!id) return;
+      var program = GL.programs[id];
+      if (!program) { // glDeleteProgram actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteProgram(program);
+      program.name = 0;
+      GL.programs[id] = null;
+    }
+  Module["_emscripten_glDeleteProgram"] = _emscripten_glDeleteProgram;
+
+  function _emscripten_glDeleteQueries(n, ids) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((ids)+(i*4))>>2)];
+        var query = GL.queries[id];
+        if (!query) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
+        GLctx['deleteQuery'](query);
+        GL.queries[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteQueries"] = _emscripten_glDeleteQueries;
+
+  function _emscripten_glDeleteQueriesEXT(n, ids) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((ids)+(i*4))>>2)];
+        var query = GL.queries[id];
+        if (!query) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
+        GLctx.disjointTimerQueryExt['deleteQueryEXT'](query);
+        GL.queries[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteQueriesEXT"] = _emscripten_glDeleteQueriesEXT;
+
+  function _emscripten_glDeleteRenderbuffers(n, renderbuffers) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((renderbuffers)+(i*4))>>2)];
+        var renderbuffer = GL.renderbuffers[id];
+        if (!renderbuffer) continue; // GL spec: "glDeleteRenderbuffers silently ignores 0s and names that do not correspond to existing renderbuffer objects".
+        GLctx.deleteRenderbuffer(renderbuffer);
+        renderbuffer.name = 0;
+        GL.renderbuffers[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteRenderbuffers"] = _emscripten_glDeleteRenderbuffers;
+
+  function _emscripten_glDeleteSamplers(n, samplers) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((samplers)+(i*4))>>2)];
+        var sampler = GL.samplers[id];
+        if (!sampler) continue;
+        GLctx['deleteSampler'](sampler);
+        sampler.name = 0;
+        GL.samplers[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteSamplers"] = _emscripten_glDeleteSamplers;
+
+  function _emscripten_glDeleteShader(id) {
+      if (!id) return;
+      var shader = GL.shaders[id];
+      if (!shader) { // glDeleteShader actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteShader(shader);
+      GL.shaders[id] = null;
+    }
+  Module["_emscripten_glDeleteShader"] = _emscripten_glDeleteShader;
+
+  function _emscripten_glDeleteSync(id) {
+      if (!id) return;
+      var sync = GL.syncs[id];
+      if (!sync) { // glDeleteSync signals an error when deleting a nonexisting object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteSync(sync);
+      sync.name = 0;
+      GL.syncs[id] = null;
+    }
+  Module["_emscripten_glDeleteSync"] = _emscripten_glDeleteSync;
+
+  function _emscripten_glDeleteTextures(n, textures) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((textures)+(i*4))>>2)];
+        var texture = GL.textures[id];
+        if (!texture) continue; // GL spec: "glDeleteTextures silently ignores 0s and names that do not correspond to existing textures".
+        GLctx.deleteTexture(texture);
+        texture.name = 0;
+        GL.textures[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteTextures"] = _emscripten_glDeleteTextures;
+
+  function _emscripten_glDeleteTransformFeedbacks(n, ids) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((ids)+(i*4))>>2)];
+        var transformFeedback = GL.transformFeedbacks[id];
+        if (!transformFeedback) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
+        GLctx['deleteTransformFeedback'](transformFeedback);
+        transformFeedback.name = 0;
+        GL.transformFeedbacks[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteTransformFeedbacks"] = _emscripten_glDeleteTransformFeedbacks;
+
+  function _emscripten_glDeleteVertexArrays(n, vaos) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((vaos)+(i*4))>>2)];
+        GLctx['deleteVertexArray'](GL.vaos[id]);
+        GL.vaos[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteVertexArrays"] = _emscripten_glDeleteVertexArrays;
+
+  function _emscripten_glDeleteVertexArraysOES(n, vaos) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((vaos)+(i*4))>>2)];
+        GLctx['deleteVertexArray'](GL.vaos[id]);
+        GL.vaos[id] = null;
+      }
+    }
+  Module["_emscripten_glDeleteVertexArraysOES"] = _emscripten_glDeleteVertexArraysOES;
+
+  function _emscripten_glDepthFunc(x0) { GLctx['depthFunc'](x0) }
+  Module["_emscripten_glDepthFunc"] = _emscripten_glDepthFunc;
+
+  function _emscripten_glDepthMask(flag) {
+      GLctx.depthMask(!!flag);
+    }
+  Module["_emscripten_glDepthMask"] = _emscripten_glDepthMask;
+
+  function _emscripten_glDepthRangef(x0, x1) { GLctx['depthRange'](x0, x1) }
+  Module["_emscripten_glDepthRangef"] = _emscripten_glDepthRangef;
+
+  function _emscripten_glDetachShader(program, shader) {
+      GLctx.detachShader(GL.programs[program], GL.shaders[shader]);
+    }
+  Module["_emscripten_glDetachShader"] = _emscripten_glDetachShader;
+
+  function _emscripten_glDisable(x0) { GLctx['disable'](x0) }
+  Module["_emscripten_glDisable"] = _emscripten_glDisable;
+
+  function _emscripten_glDisableVertexAttribArray(index) {
+      var cb = GL.currentContext.clientBuffers[index];
+      cb.enabled = false;
+      GLctx.disableVertexAttribArray(index);
+    }
+  Module["_emscripten_glDisableVertexAttribArray"] = _emscripten_glDisableVertexAttribArray;
+
+  function _emscripten_glDrawArrays(mode, first, count) {
+      // bind any client-side buffers
+      GL.preDrawHandleClientVertexAttribBindings(first + count);
+  
+      GLctx.drawArrays(mode, first, count);
+  
+      GL.postDrawHandleClientVertexAttribBindings();
+    }
+  Module["_emscripten_glDrawArrays"] = _emscripten_glDrawArrays;
+
+  function _emscripten_glDrawArraysInstanced(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstanced"] = _emscripten_glDrawArraysInstanced;
+
+  function _emscripten_glDrawArraysInstancedANGLE(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedANGLE"] = _emscripten_glDrawArraysInstancedANGLE;
+
+  function _emscripten_glDrawArraysInstancedARB(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedARB"] = _emscripten_glDrawArraysInstancedARB;
+
+  function _emscripten_glDrawArraysInstancedEXT(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedEXT"] = _emscripten_glDrawArraysInstancedEXT;
+
+  function _emscripten_glDrawArraysInstancedNV(mode, first, count, primcount) {
+      GLctx['drawArraysInstanced'](mode, first, count, primcount);
+    }
+  Module["_emscripten_glDrawArraysInstancedNV"] = _emscripten_glDrawArraysInstancedNV;
+
+  var tempFixedLengthArray = [];
+  Module["tempFixedLengthArray"] = tempFixedLengthArray;
+  function _emscripten_glDrawBuffers(n, bufs) {
+  
+      var bufArray = tempFixedLengthArray[n];
+      for (var i = 0; i < n; i++) {
+        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
+      }
+  
+      GLctx['drawBuffers'](bufArray);
+    }
+  Module["_emscripten_glDrawBuffers"] = _emscripten_glDrawBuffers;
+
+  function _emscripten_glDrawBuffersEXT(n, bufs) {
+  
+      var bufArray = tempFixedLengthArray[n];
+      for (var i = 0; i < n; i++) {
+        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
+      }
+  
+      GLctx['drawBuffers'](bufArray);
+    }
+  Module["_emscripten_glDrawBuffersEXT"] = _emscripten_glDrawBuffersEXT;
+
+  function _emscripten_glDrawBuffersWEBGL(n, bufs) {
+  
+      var bufArray = tempFixedLengthArray[n];
+      for (var i = 0; i < n; i++) {
+        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
+      }
+  
+      GLctx['drawBuffers'](bufArray);
+    }
+  Module["_emscripten_glDrawBuffersWEBGL"] = _emscripten_glDrawBuffersWEBGL;
+
+  function _emscripten_glDrawElements(mode, count, type, indices) {
+      var buf;
+      if (!GLctx.currentElementArrayBufferBinding) {
+        var size = GL.calcBufLength(1, type, 0, count);
+        buf = GL.getTempIndexBuffer(size);
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, buf);
+        GLctx.bufferSubData(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/,
+                                 0,
+                                 HEAPU8.subarray(indices, indices + size));
+        // the index is now 0
+        indices = 0;
+      }
+  
+      // bind any client-side buffers
+      GL.preDrawHandleClientVertexAttribBindings(count);
+  
+      GLctx.drawElements(mode, count, type, indices);
+  
+      GL.postDrawHandleClientVertexAttribBindings(count);
+  
+      if (!GLctx.currentElementArrayBufferBinding) {
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, null);
+      }
+    }
+  Module["_emscripten_glDrawElements"] = _emscripten_glDrawElements;
+
+  function _emscripten_glDrawElementsInstanced(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstanced"] = _emscripten_glDrawElementsInstanced;
+
+  function _emscripten_glDrawElementsInstancedANGLE(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedANGLE"] = _emscripten_glDrawElementsInstancedANGLE;
+
+  function _emscripten_glDrawElementsInstancedARB(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedARB"] = _emscripten_glDrawElementsInstancedARB;
+
+  function _emscripten_glDrawElementsInstancedEXT(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedEXT"] = _emscripten_glDrawElementsInstancedEXT;
+
+  function _emscripten_glDrawElementsInstancedNV(mode, count, type, indices, primcount) {
+      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
+    }
+  Module["_emscripten_glDrawElementsInstancedNV"] = _emscripten_glDrawElementsInstancedNV;
+
+  function _glDrawElements(mode, count, type, indices) {
+      var buf;
+      if (!GLctx.currentElementArrayBufferBinding) {
+        var size = GL.calcBufLength(1, type, 0, count);
+        buf = GL.getTempIndexBuffer(size);
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, buf);
+        GLctx.bufferSubData(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/,
+                                 0,
+                                 HEAPU8.subarray(indices, indices + size));
+        // the index is now 0
+        indices = 0;
+      }
+  
+      // bind any client-side buffers
+      GL.preDrawHandleClientVertexAttribBindings(count);
+  
+      GLctx.drawElements(mode, count, type, indices);
+  
+      GL.postDrawHandleClientVertexAttribBindings(count);
+  
+      if (!GLctx.currentElementArrayBufferBinding) {
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, null);
+      }
+    }
+  Module["_glDrawElements"] = _glDrawElements;
+  function _emscripten_glDrawRangeElements(mode, start, end, count, type, indices) {
+      // TODO: This should be a trivial pass-though function registered at the bottom of this page as
+      // glFuncs[6][1] += ' drawRangeElements';
+      // but due to https://bugzilla.mozilla.org/show_bug.cgi?id=1202427,
+      // we work around by ignoring the range.
+      _glDrawElements(mode, count, type, indices);
+    }
+  Module["_emscripten_glDrawRangeElements"] = _emscripten_glDrawRangeElements;
+
+  function _emscripten_glEnable(x0) { GLctx['enable'](x0) }
+  Module["_emscripten_glEnable"] = _emscripten_glEnable;
+
+  function _emscripten_glEnableVertexAttribArray(index) {
+      var cb = GL.currentContext.clientBuffers[index];
+      cb.enabled = true;
+      GLctx.enableVertexAttribArray(index);
+    }
+  Module["_emscripten_glEnableVertexAttribArray"] = _emscripten_glEnableVertexAttribArray;
+
+  function _emscripten_glEndQuery(x0) { GLctx['endQuery'](x0) }
+  Module["_emscripten_glEndQuery"] = _emscripten_glEndQuery;
+
+  function _emscripten_glEndQueryEXT(target) {
+      GLctx.disjointTimerQueryExt['endQueryEXT'](target);
+    }
+  Module["_emscripten_glEndQueryEXT"] = _emscripten_glEndQueryEXT;
+
+  function _emscripten_glEndTransformFeedback() { GLctx['endTransformFeedback']() }
+  Module["_emscripten_glEndTransformFeedback"] = _emscripten_glEndTransformFeedback;
+
+  function _emscripten_glFenceSync(condition, flags) {
+      var sync = GLctx.fenceSync(condition, flags);
+      if (sync) {
+        var id = GL.getNewId(GL.syncs);
+        sync.name = id;
+        GL.syncs[id] = sync;
+        return id;
+      }
+      return 0; // Failed to create a sync object
+    }
+  Module["_emscripten_glFenceSync"] = _emscripten_glFenceSync;
+
+  function _emscripten_glFinish() { GLctx['finish']() }
+  Module["_emscripten_glFinish"] = _emscripten_glFinish;
+
+  function _emscripten_glFlush() { GLctx['flush']() }
+  Module["_emscripten_glFlush"] = _emscripten_glFlush;
+
+  function emscriptenWebGLGetBufferBinding(target) {
+      switch (target) {
+        case 0x8892 /*GL_ARRAY_BUFFER*/: target = 0x8894 /*GL_ARRAY_BUFFER_BINDING*/; break;
+        case 0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/: target = 0x8895 /*GL_ELEMENT_ARRAY_BUFFER_BINDING*/; break;
+        case 0x88EB /*GL_PIXEL_PACK_BUFFER*/: target = 0x88ED /*GL_PIXEL_PACK_BUFFER_BINDING*/; break;
+        case 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/: target = 0x88EF /*GL_PIXEL_UNPACK_BUFFER_BINDING*/; break;
+        case 0x8C8E /*GL_TRANSFORM_FEEDBACK_BUFFER*/: target = 0x8C8F /*GL_TRANSFORM_FEEDBACK_BUFFER_BINDING*/; break;
+        case 0x8F36 /*GL_COPY_READ_BUFFER*/: target = 0x8F36 /*GL_COPY_READ_BUFFER_BINDING*/; break;
+        case 0x8F37 /*GL_COPY_WRITE_BUFFER*/: target = 0x8F37 /*GL_COPY_WRITE_BUFFER_BINDING*/; break;
+        case 0x8A11 /*GL_UNIFORM_BUFFER*/: target = 0x8A28 /*GL_UNIFORM_BUFFER_BINDING*/; break;
+        // In default case, fall through and assume passed one of the _BINDING enums directly.
+      }
+      var buffer = GLctx.getParameter(target);
+      if (buffer) return buffer.name|0;
+      else return 0;
+    }
+  Module["emscriptenWebGLGetBufferBinding"] = emscriptenWebGLGetBufferBinding;
+  
+  function emscriptenWebGLValidateMapBufferTarget(target) {
+      switch (target) {
+        case 0x8892: // GL_ARRAY_BUFFER
+        case 0x8893: // GL_ELEMENT_ARRAY_BUFFER
+        case 0x8F36: // GL_COPY_READ_BUFFER
+        case 0x8F37: // GL_COPY_WRITE_BUFFER
+        case 0x88EB: // GL_PIXEL_PACK_BUFFER
+        case 0x88EC: // GL_PIXEL_UNPACK_BUFFER
+        case 0x8C2A: // GL_TEXTURE_BUFFER
+        case 0x8C8E: // GL_TRANSFORM_FEEDBACK_BUFFER
+        case 0x8A11: // GL_UNIFORM_BUFFER
+          return true;
+        default:
+          return false;
+      }
+    }
+  Module["emscriptenWebGLValidateMapBufferTarget"] = emscriptenWebGLValidateMapBufferTarget;
+  function _emscripten_glFlushMappedBufferRange(target, offset, length) {
+      if (!emscriptenWebGLValidateMapBufferTarget(target)) {
+        GL.recordError(0x500/*GL_INVALID_ENUM*/);
+        err('GL_INVALID_ENUM in glFlushMappedBufferRange');
+        return;
+      }
+  
+      var mapping = GL.mappedBuffers[emscriptenWebGLGetBufferBinding(target)];
+      if (!mapping) {
+        GL.recordError(0x502 /* GL_INVALID_OPERATION */);
+        err('buffer was never mapped in glFlushMappedBufferRange');
+        return;
+      }
+  
+      if (!(mapping.access & 0x10)) {
+        GL.recordError(0x502 /* GL_INVALID_OPERATION */);
+        err('buffer was not mapped with GL_MAP_FLUSH_EXPLICIT_BIT in glFlushMappedBufferRange');
+        return;
+      }
+      if (offset < 0 || length < 0 || offset + length > mapping.length) {
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        err('invalid range in glFlushMappedBufferRange');
+        return;
+      }
+  
+      GLctx.bufferSubData(
+        target,
+        mapping.offset,
+        HEAPU8.subarray(mapping.mem + offset, mapping.mem + offset + length));
+    }
+  Module["_emscripten_glFlushMappedBufferRange"] = _emscripten_glFlushMappedBufferRange;
+
+  function _emscripten_glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer) {
+      GLctx.framebufferRenderbuffer(target, attachment, renderbuffertarget,
+                                         GL.renderbuffers[renderbuffer]);
+    }
+  Module["_emscripten_glFramebufferRenderbuffer"] = _emscripten_glFramebufferRenderbuffer;
+
+  function _emscripten_glFramebufferTexture2D(target, attachment, textarget, texture, level) {
+      GLctx.framebufferTexture2D(target, attachment, textarget,
+                                      GL.textures[texture], level);
+    }
+  Module["_emscripten_glFramebufferTexture2D"] = _emscripten_glFramebufferTexture2D;
+
+  function _emscripten_glFramebufferTextureLayer(target, attachment, texture, level, layer) {
+      GLctx.framebufferTextureLayer(target, attachment, GL.textures[texture], level, layer);
+    }
+  Module["_emscripten_glFramebufferTextureLayer"] = _emscripten_glFramebufferTextureLayer;
+
+  function _emscripten_glFrontFace(x0) { GLctx['frontFace'](x0) }
+  Module["_emscripten_glFrontFace"] = _emscripten_glFrontFace;
+
+  function __glGenObject(n, buffers, createFunction, objectTable
+      ) {
+      for (var i = 0; i < n; i++) {
+        var buffer = GLctx[createFunction]();
+        var id = buffer && GL.getNewId(objectTable);
+        if (buffer) {
+          buffer.name = id;
+          objectTable[id] = buffer;
+        } else {
+          GL.recordError(0x502 /* GL_INVALID_OPERATION */);
+        }
+        HEAP32[(((buffers)+(i*4))>>2)] = id;
+      }
+    }
+  Module["__glGenObject"] = __glGenObject;
+  function _emscripten_glGenBuffers(n, buffers) {
+      __glGenObject(n, buffers, 'createBuffer', GL.buffers
+        );
+    }
+  Module["_emscripten_glGenBuffers"] = _emscripten_glGenBuffers;
+
+  function _emscripten_glGenFramebuffers(n, ids) {
+      __glGenObject(n, ids, 'createFramebuffer', GL.framebuffers
+        );
+    }
+  Module["_emscripten_glGenFramebuffers"] = _emscripten_glGenFramebuffers;
+
+  function _emscripten_glGenQueries(n, ids) {
+      __glGenObject(n, ids, 'createQuery', GL.queries
+        );
+    }
+  Module["_emscripten_glGenQueries"] = _emscripten_glGenQueries;
+
+  function _emscripten_glGenQueriesEXT(n, ids) {
+      for (var i = 0; i < n; i++) {
+        var query = GLctx.disjointTimerQueryExt['createQueryEXT']();
+        if (!query) {
+          GL.recordError(0x502 /* GL_INVALID_OPERATION */);
+          while (i < n) HEAP32[(((ids)+(i++*4))>>2)] = 0;
+          return;
+        }
+        var id = GL.getNewId(GL.queries);
+        query.name = id;
+        GL.queries[id] = query;
+        HEAP32[(((ids)+(i*4))>>2)] = id;
+      }
+    }
+  Module["_emscripten_glGenQueriesEXT"] = _emscripten_glGenQueriesEXT;
+
+  function _emscripten_glGenRenderbuffers(n, renderbuffers) {
+      __glGenObject(n, renderbuffers, 'createRenderbuffer', GL.renderbuffers
+        );
+    }
+  Module["_emscripten_glGenRenderbuffers"] = _emscripten_glGenRenderbuffers;
+
+  function _emscripten_glGenSamplers(n, samplers) {
+      __glGenObject(n, samplers, 'createSampler', GL.samplers
+        );
+    }
+  Module["_emscripten_glGenSamplers"] = _emscripten_glGenSamplers;
+
+  function _emscripten_glGenTextures(n, textures) {
+      __glGenObject(n, textures, 'createTexture', GL.textures
+        );
+    }
+  Module["_emscripten_glGenTextures"] = _emscripten_glGenTextures;
+
+  function _emscripten_glGenTransformFeedbacks(n, ids) {
+      __glGenObject(n, ids, 'createTransformFeedback', GL.transformFeedbacks
+        );
+    }
+  Module["_emscripten_glGenTransformFeedbacks"] = _emscripten_glGenTransformFeedbacks;
+
+  function _emscripten_glGenVertexArrays(n, arrays) {
+      __glGenObject(n, arrays, 'createVertexArray', GL.vaos
+        );
+    }
+  Module["_emscripten_glGenVertexArrays"] = _emscripten_glGenVertexArrays;
+
+  function _emscripten_glGenVertexArraysOES(n, arrays) {
+      __glGenObject(n, arrays, 'createVertexArray', GL.vaos
+        );
+    }
+  Module["_emscripten_glGenVertexArraysOES"] = _emscripten_glGenVertexArraysOES;
+
+  function _emscripten_glGenerateMipmap(x0) { GLctx['generateMipmap'](x0) }
+  Module["_emscripten_glGenerateMipmap"] = _emscripten_glGenerateMipmap;
+
+  function __glGetActiveAttribOrUniform(funcName, program, index, bufSize, length, size, type, name) {
+      program = GL.programs[program];
+      var info = GLctx[funcName](program, index);
+      if (info) { // If an error occurs, nothing will be written to length, size and type and name.
+        var numBytesWrittenExclNull = name && stringToUTF8(info.name, name, bufSize);
+        if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
+        if (size) HEAP32[((size)>>2)] = info.size;
+        if (type) HEAP32[((type)>>2)] = info.type;
+      }
+    }
+  Module["__glGetActiveAttribOrUniform"] = __glGetActiveAttribOrUniform;
+  function _emscripten_glGetActiveAttrib(program, index, bufSize, length, size, type, name) {
+      __glGetActiveAttribOrUniform('getActiveAttrib', program, index, bufSize, length, size, type, name);
+    }
+  Module["_emscripten_glGetActiveAttrib"] = _emscripten_glGetActiveAttrib;
+
+  function _emscripten_glGetActiveUniform(program, index, bufSize, length, size, type, name) {
+      __glGetActiveAttribOrUniform('getActiveUniform', program, index, bufSize, length, size, type, name);
+    }
+  Module["_emscripten_glGetActiveUniform"] = _emscripten_glGetActiveUniform;
+
+  function _emscripten_glGetActiveUniformBlockName(program, uniformBlockIndex, bufSize, length, uniformBlockName) {
+      program = GL.programs[program];
+  
+      var result = GLctx['getActiveUniformBlockName'](program, uniformBlockIndex);
+      if (!result) return; // If an error occurs, nothing will be written to uniformBlockName or length.
+      if (uniformBlockName && bufSize > 0) {
+        var numBytesWrittenExclNull = stringToUTF8(result, uniformBlockName, bufSize);
+        if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
+      } else {
+        if (length) HEAP32[((length)>>2)] = 0;
+      }
+    }
+  Module["_emscripten_glGetActiveUniformBlockName"] = _emscripten_glGetActiveUniformBlockName;
+
+  function _emscripten_glGetActiveUniformBlockiv(program, uniformBlockIndex, pname, params) {
+      if (!params) {
+        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if params == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      program = GL.programs[program];
+  
+      if (pname == 0x8A41 /* GL_UNIFORM_BLOCK_NAME_LENGTH */) {
+        var name = GLctx['getActiveUniformBlockName'](program, uniformBlockIndex);
+        HEAP32[((params)>>2)] = name.length+1;
+        return;
+      }
+  
+      var result = GLctx['getActiveUniformBlockParameter'](program, uniformBlockIndex, pname);
+      if (result === null) return; // If an error occurs, nothing should be written to params.
+      if (pname == 0x8A43 /*GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES*/) {
+        for (var i = 0; i < result.length; i++) {
+          HEAP32[(((params)+(i*4))>>2)] = result[i];
+        }
+      } else {
+        HEAP32[((params)>>2)] = result;
+      }
+    }
+  Module["_emscripten_glGetActiveUniformBlockiv"] = _emscripten_glGetActiveUniformBlockiv;
+
+  function _emscripten_glGetActiveUniformsiv(program, uniformCount, uniformIndices, pname, params) {
+      if (!params) {
+        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
+        // if params == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      if (uniformCount > 0 && uniformIndices == 0) {
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      program = GL.programs[program];
+      var ids = [];
+      for (var i = 0; i < uniformCount; i++) {
+        ids.push(HEAP32[(((uniformIndices)+(i*4))>>2)]);
+      }
+  
+      var result = GLctx['getActiveUniforms'](program, ids, pname);
+      if (!result) return; // GL spec: If an error is generated, nothing is written out to params.
+  
+      var len = result.length;
+      for (var i = 0; i < len; i++) {
+        HEAP32[(((params)+(i*4))>>2)] = result[i];
+      }
+    }
+  Module["_emscripten_glGetActiveUniformsiv"] = _emscripten_glGetActiveUniformsiv;
+
+  function _emscripten_glGetAttachedShaders(program, maxCount, count, shaders) {
+      var result = GLctx.getAttachedShaders(GL.programs[program]);
+      var len = result.length;
+      if (len > maxCount) {
+        len = maxCount;
+      }
+      HEAP32[((count)>>2)] = len;
+      for (var i = 0; i < len; ++i) {
+        var id = GL.shaders.indexOf(result[i]);
+        HEAP32[(((shaders)+(i*4))>>2)] = id;
+      }
+    }
+  Module["_emscripten_glGetAttachedShaders"] = _emscripten_glGetAttachedShaders;
+
+  function _emscripten_glGetAttribLocation(program, name) {
+      return GLctx.getAttribLocation(GL.programs[program], UTF8ToString(name));
+    }
+  Module["_emscripten_glGetAttribLocation"] = _emscripten_glGetAttribLocation;
+
   function readI53FromU64(ptr) {
       return HEAPU32[ptr>>2] + HEAPU32[ptr+4>>2] * 4294967296;
     }
@@ -11458,6007 +12349,6 @@ var ASM_CONSTS = {
       }
     }
   Module["emscriptenWebGLGet"] = emscriptenWebGLGet;
-  function _glGetBooleanv(name_, p) {
-      emscriptenWebGLGet(name_, p, 4);
-    }
-  Module["_glGetBooleanv"] = _glGetBooleanv;
-  
-  function _glGetIntegerv(name_, p) {
-      emscriptenWebGLGet(name_, p, 0);
-    }
-  Module["_glGetIntegerv"] = _glGetIntegerv;
-  
-  function stringToNewUTF8(jsString) {
-      var length = lengthBytesUTF8(jsString)+1;
-      var cString = _malloc(length);
-      stringToUTF8(jsString, cString, length);
-      return cString;
-    }
-  Module["stringToNewUTF8"] = stringToNewUTF8;
-  function _glGetString(name_) {
-      var ret = GL.stringCache[name_];
-      if (!ret) {
-        switch (name_) {
-          case 0x1F03 /* GL_EXTENSIONS */:
-            var exts = GLctx.getSupportedExtensions() || []; // .getSupportedExtensions() can return null if context is lost, so coerce to empty array.
-            exts = exts.concat(exts.map(function(e) { return "GL_" + e; }));
-            ret = stringToNewUTF8(exts.join(' '));
-            break;
-          case 0x1F00 /* GL_VENDOR */:
-          case 0x1F01 /* GL_RENDERER */:
-          case 0x9245 /* UNMASKED_VENDOR_WEBGL */:
-          case 0x9246 /* UNMASKED_RENDERER_WEBGL */:
-            var s = GLctx.getParameter(name_);
-            if (!s) {
-              GL.recordError(0x500/*GL_INVALID_ENUM*/);
-            }
-            ret = s && stringToNewUTF8(s);
-            break;
-  
-          case 0x1F02 /* GL_VERSION */:
-            var glVersion = GLctx.getParameter(0x1F02 /*GL_VERSION*/);
-            // return GLES version string corresponding to the version of the WebGL context
-            if (GL.currentContext.version >= 2) glVersion = 'OpenGL ES 3.0 (' + glVersion + ')';
-            else
-            {
-              glVersion = 'OpenGL ES 2.0 (' + glVersion + ')';
-            }
-            ret = stringToNewUTF8(glVersion);
-            break;
-          case 0x8B8C /* GL_SHADING_LANGUAGE_VERSION */:
-            var glslVersion = GLctx.getParameter(0x8B8C /*GL_SHADING_LANGUAGE_VERSION*/);
-            // extract the version number 'N.M' from the string 'WebGL GLSL ES N.M ...'
-            var ver_re = /^WebGL GLSL ES ([0-9]\.[0-9][0-9]?)(?:$| .*)/;
-            var ver_num = glslVersion.match(ver_re);
-            if (ver_num !== null) {
-              if (ver_num[1].length == 3) ver_num[1] = ver_num[1] + '0'; // ensure minor version has 2 digits
-              glslVersion = 'OpenGL ES GLSL ES ' + ver_num[1] + ' (' + glslVersion + ')';
-            }
-            ret = stringToNewUTF8(glslVersion);
-            break;
-          default:
-            GL.recordError(0x500/*GL_INVALID_ENUM*/);
-            // fall through
-        }
-        GL.stringCache[name_] = ret;
-      }
-      return ret;
-    }
-  Module["_glGetString"] = _glGetString;
-  
-  function _glCreateShader(shaderType) {
-      var id = GL.getNewId(GL.shaders);
-      GL.shaders[id] = GLctx.createShader(shaderType);
-  
-      return id;
-    }
-  Module["_glCreateShader"] = _glCreateShader;
-  
-  function _glShaderSource(shader, count, string, length) {
-      var source = GL.getSource(shader, count, string, length);
-  
-      GLctx.shaderSource(GL.shaders[shader], source);
-    }
-  Module["_glShaderSource"] = _glShaderSource;
-  
-  function _glCompileShader(shader) {
-      GLctx.compileShader(GL.shaders[shader]);
-    }
-  Module["_glCompileShader"] = _glCompileShader;
-  
-  function _glAttachShader(program, shader) {
-      GLctx.attachShader(GL.programs[program], GL.shaders[shader]);
-    }
-  Module["_glAttachShader"] = _glAttachShader;
-  
-  function _glDetachShader(program, shader) {
-      GLctx.detachShader(GL.programs[program], GL.shaders[shader]);
-    }
-  Module["_glDetachShader"] = _glDetachShader;
-  
-  function _glUseProgram(program) {
-      program = GL.programs[program];
-      GLctx.useProgram(program);
-      // Record the currently active program so that we can access the uniform
-      // mapping table of that program.
-      GLctx.currentProgram = program;
-    }
-  Module["_glUseProgram"] = _glUseProgram;
-  
-  function _glDeleteProgram(id) {
-      if (!id) return;
-      var program = GL.programs[id];
-      if (!program) { // glDeleteProgram actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      GLctx.deleteProgram(program);
-      program.name = 0;
-      GL.programs[id] = null;
-    }
-  Module["_glDeleteProgram"] = _glDeleteProgram;
-  
-  function _glBindAttribLocation(program, index, name) {
-      GLctx.bindAttribLocation(GL.programs[program], index, UTF8ToString(name));
-    }
-  Module["_glBindAttribLocation"] = _glBindAttribLocation;
-  
-  function _glLinkProgram(program) {
-      program = GL.programs[program];
-      GLctx.linkProgram(program);
-      // Invalidate earlier computed uniform->ID mappings, those have now become stale
-      program.uniformLocsById = 0; // Mark as null-like so that glGetUniformLocation() knows to populate this again.
-      program.uniformSizeAndIdsByName = {};
-  
-    }
-  Module["_glLinkProgram"] = _glLinkProgram;
-  
-  function _glBindBuffer(target, buffer) {
-      if (target == 0x8892 /*GL_ARRAY_BUFFER*/) {
-        GLctx.currentArrayBufferBinding = buffer;
-        GLImmediate.lastArrayBuffer = buffer;
-      } else if (target == 0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/) {
-        GLctx.currentElementArrayBufferBinding = buffer;
-      }
-  
-      if (target == 0x88EB /*GL_PIXEL_PACK_BUFFER*/) {
-        // In WebGL 2 glReadPixels entry point, we need to use a different WebGL 2 API function call when a buffer is bound to
-        // GL_PIXEL_PACK_BUFFER_BINDING point, so must keep track whether that binding point is non-null to know what is
-        // the proper API function to call.
-        GLctx.currentPixelPackBufferBinding = buffer;
-      } else if (target == 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/) {
-        // In WebGL 2 gl(Compressed)Tex(Sub)Image[23]D entry points, we need to
-        // use a different WebGL 2 API function call when a buffer is bound to
-        // GL_PIXEL_UNPACK_BUFFER_BINDING point, so must keep track whether that
-        // binding point is non-null to know what is the proper API function to
-        // call.
-        GLctx.currentPixelUnpackBufferBinding = buffer;
-      }
-      GLctx.bindBuffer(target, GL.buffers[buffer]);
-    }
-  Module["_glBindBuffer"] = _glBindBuffer;
-  
-  function _glGetFloatv(name_, p) {
-      emscriptenWebGLGet(name_, p, 2);
-    }
-  Module["_glGetFloatv"] = _glGetFloatv;
-  
-  function _glHint(x0, x1) { GLctx['hint'](x0, x1) }
-  Module["_glHint"] = _glHint;
-  
-  function _glEnableVertexAttribArray(index) {
-      GLctx.enableVertexAttribArray(index);
-    }
-  Module["_glEnableVertexAttribArray"] = _glEnableVertexAttribArray;
-  
-  function _glDisableVertexAttribArray(index) {
-      GLctx.disableVertexAttribArray(index);
-    }
-  Module["_glDisableVertexAttribArray"] = _glDisableVertexAttribArray;
-  
-  function _glVertexAttribPointer(index, size, type, normalized, stride, ptr) {
-      GLctx.vertexAttribPointer(index, size, type, !!normalized, stride, ptr);
-    }
-  Module["_glVertexAttribPointer"] = _glVertexAttribPointer;
-  
-  function _glActiveTexture(x0) { GLctx['activeTexture'](x0) }
-  Module["_glActiveTexture"] = _glActiveTexture;
-  var GLEmulation = {fogStart:0,fogEnd:1,fogDensity:1,fogColor:null,fogMode:2048,fogEnabled:false,MAX_CLIP_PLANES:6,clipPlaneEnabled:[false,false,false,false,false,false],clipPlaneEquation:[],lightingEnabled:false,lightModelAmbient:null,lightModelLocalViewer:false,lightModelTwoSide:false,materialAmbient:null,materialDiffuse:null,materialSpecular:null,materialShininess:null,materialEmission:null,MAX_LIGHTS:8,lightEnabled:[false,false,false,false,false,false,false,false],lightAmbient:[],lightDiffuse:[],lightSpecular:[],lightPosition:[],alphaTestEnabled:false,alphaTestFunc:519,alphaTestRef:0,pointSize:1,vaos:[],currentVao:null,enabledVertexAttribArrays:{},hasRunInit:false,findToken:function(source, token) {
-        function isIdentChar(ch) {
-          if (ch >= 48 && ch <= 57) // 0-9
-            return true;
-          if (ch >= 65 && ch <= 90) // A-Z
-            return true;
-          if (ch >= 97 && ch <= 122) // a-z
-            return true;
-          return false;
-        }
-        var i = -1;
-        do {
-          i = source.indexOf(token, i + 1);
-          if (i < 0) {
-            break;
-          }
-          if (i > 0 && isIdentChar(source[i - 1])) {
-            continue;
-          }
-          i += token.length;
-          if (i < source.length - 1 && isIdentChar(source[i + 1])) {
-            continue;
-          }
-          return true;
-        } while (true);
-        return false;
-      },init:function() {
-        // Do not activate immediate/emulation code (e.g. replace glDrawElements) when in FULL_ES2 mode.
-        // We do not need full emulation, we instead emulate client-side arrays etc. in FULL_ES2 code in
-        // a straightforward manner, and avoid not having a bound buffer be ambiguous between es2 emulation
-        // code and legacy gl emulation code.
-  
-        if (GLEmulation.hasRunInit) {
-          return;
-        }
-        GLEmulation.hasRunInit = true;
-  
-        GLEmulation.fogColor = new Float32Array(4);
-  
-        for (var clipPlaneId = 0; clipPlaneId < GLEmulation.MAX_CLIP_PLANES; clipPlaneId++) {
-          GLEmulation.clipPlaneEquation[clipPlaneId] = new Float32Array(4);
-        }
-  
-        // set defaults for GL_LIGHTING
-        GLEmulation.lightModelAmbient = new Float32Array([0.2, 0.2, 0.2, 1.0]);
-        GLEmulation.materialAmbient = new Float32Array([0.2, 0.2, 0.2, 1.0]);
-        GLEmulation.materialDiffuse = new Float32Array([0.8, 0.8, 0.8, 1.0]);
-        GLEmulation.materialSpecular = new Float32Array([0.0, 0.0, 0.0, 1.0]);
-        GLEmulation.materialShininess = new Float32Array([0.0]);
-        GLEmulation.materialEmission = new Float32Array([0.0, 0.0, 0.0, 1.0]);
-  
-        for (var lightId = 0; lightId < GLEmulation.MAX_LIGHTS; lightId++) {
-          GLEmulation.lightAmbient[lightId] = new Float32Array([0.0, 0.0, 0.0, 1.0]);
-          GLEmulation.lightDiffuse[lightId] = lightId ? new Float32Array([0.0, 0.0, 0.0, 1.0]) : new Float32Array([1.0, 1.0, 1.0, 1.0]);
-          GLEmulation.lightSpecular[lightId] = lightId ? new Float32Array([0.0, 0.0, 0.0, 1.0]) : new Float32Array([1.0, 1.0, 1.0, 1.0]);
-          GLEmulation.lightPosition[lightId] = new Float32Array([0.0, 0.0, 1.0, 0.0]);
-        }
-  
-        // Add some emulation workarounds
-        err('WARNING: using emscripten GL emulation. This is a collection of limited workarounds, do not expect it to work.');
-        err('WARNING: using emscripten GL emulation unsafe opts. If weirdness happens, try -sGL_UNSAFE_OPTS=0');
-  
-        // XXX some of the capabilities we don't support may lead to incorrect rendering, if we do not emulate them in shaders
-        var validCapabilities = {
-          0xB44: 1, // GL_CULL_FACE
-          0xBE2: 1, // GL_BLEND
-          0xBD0: 1, // GL_DITHER,
-          0xB90: 1, // GL_STENCIL_TEST
-          0xB71: 1, // GL_DEPTH_TEST
-          0xC11: 1, // GL_SCISSOR_TEST
-          0x8037: 1, // GL_POLYGON_OFFSET_FILL
-          0x809E: 1, // GL_SAMPLE_ALPHA_TO_COVERAGE
-          0x80A0: 1  // GL_SAMPLE_COVERAGE
-        };
-  
-  
-  
-        var glEnable = _glEnable;
-        _glEnable = _emscripten_glEnable = (cap) => {
-          // Clean up the renderer on any change to the rendering state. The optimization of
-          // skipping renderer setup is aimed at the case of multiple glDraw* right after each other
-          if (GLImmediate.lastRenderer) GLImmediate.lastRenderer.cleanup();
-          if (cap == 0xB60 /* GL_FOG */) {
-            if (GLEmulation.fogEnabled != true) {
-              GLImmediate.currentRenderer = null; // Fog parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.fogEnabled = true;
-            }
-            return;
-          } else if ((cap >= 0x3000) && (cap < 0x3006)  /* GL_CLIP_PLANE0 to GL_CLIP_PLANE5 */) {
-            var clipPlaneId = cap - 0x3000;
-            if (GLEmulation.clipPlaneEnabled[clipPlaneId] != true) {
-              GLImmediate.currentRenderer = null; // clip plane parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.clipPlaneEnabled[clipPlaneId] = true;
-            }
-            return;
-          } else if ((cap >= 0x4000) && (cap < 0x4008)  /* GL_LIGHT0 to GL_LIGHT7 */) {
-            var lightId = cap - 0x4000;
-            if (GLEmulation.lightEnabled[lightId] != true) {
-              GLImmediate.currentRenderer = null; // light parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.lightEnabled[lightId] = true;
-            }
-            return;
-          } else if (cap == 0xB50 /* GL_LIGHTING */) {
-            if (GLEmulation.lightingEnabled != true) {
-              GLImmediate.currentRenderer = null; // light parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.lightingEnabled = true;
-            }
-            return;
-          } else if (cap == 0xBC0 /* GL_ALPHA_TEST */) {
-            if (GLEmulation.alphaTestEnabled != true) {
-              GLImmediate.currentRenderer = null; // alpha testing is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.alphaTestEnabled = true;
-            }
-            return;
-          } else if (cap == 0xDE1 /* GL_TEXTURE_2D */) {
-            // XXX not according to spec, and not in desktop GL, but works in some GLES1.x apparently, so support
-            // it by forwarding to glEnableClientState
-            /* Actually, let's not, for now. (This sounds exceedingly broken)
-             * This is in gl_ps_workaround2.c.
-            _glEnableClientState(cap);
-            */
-            return;
-          } else if (!(cap in validCapabilities)) {
-            return;
-          }
-          glEnable(cap);
-        };
-        
-  
-        var glDisable = _glDisable;
-        _glDisable = _emscripten_glDisable = (cap) => {
-          if (GLImmediate.lastRenderer) GLImmediate.lastRenderer.cleanup();
-          if (cap == 0xB60 /* GL_FOG */) {
-            if (GLEmulation.fogEnabled != false) {
-              GLImmediate.currentRenderer = null; // Fog parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.fogEnabled = false;
-            }
-            return;
-          } else if ((cap >= 0x3000) && (cap < 0x3006)  /* GL_CLIP_PLANE0 to GL_CLIP_PLANE5 */) {
-            var clipPlaneId = cap - 0x3000;
-            if (GLEmulation.clipPlaneEnabled[clipPlaneId] != false) {
-              GLImmediate.currentRenderer = null; // clip plane parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.clipPlaneEnabled[clipPlaneId] = false;
-            }
-            return;
-          } else if ((cap >= 0x4000) && (cap < 0x4008)  /* GL_LIGHT0 to GL_LIGHT7 */) {
-            var lightId = cap - 0x4000;
-            if (GLEmulation.lightEnabled[lightId] != false) {
-              GLImmediate.currentRenderer = null; // light parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.lightEnabled[lightId] = false;
-            }
-            return;
-          } else if (cap == 0xB50 /* GL_LIGHTING */) {
-            if (GLEmulation.lightingEnabled != false) {
-              GLImmediate.currentRenderer = null; // light parameter is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.lightingEnabled = false;
-            }
-            return;
-          } else if (cap == 0xBC0 /* GL_ALPHA_TEST */) {
-            if (GLEmulation.alphaTestEnabled != false) {
-              GLImmediate.currentRenderer = null; // alpha testing is part of the FFP shader state, we must re-lookup the renderer to use.
-              GLEmulation.alphaTestEnabled = false;
-            }
-            return;
-          } else if (cap == 0xDE1 /* GL_TEXTURE_2D */) {
-            // XXX not according to spec, and not in desktop GL, but works in some GLES1.x apparently, so support
-            // it by forwarding to glDisableClientState
-            /* Actually, let's not, for now. (This sounds exceedingly broken)
-             * This is in gl_ps_workaround2.c.
-            _glDisableClientState(cap);
-            */
-            return;
-          } else if (!(cap in validCapabilities)) {
-            return;
-          }
-          glDisable(cap);
-        };
-        
-  
-        _glIsEnabled = _emscripten_glIsEnabled = (cap) => {
-          if (cap == 0xB60 /* GL_FOG */) {
-            return GLEmulation.fogEnabled ? 1 : 0;
-          } else if ((cap >= 0x3000) && (cap < 0x3006)  /* GL_CLIP_PLANE0 to GL_CLIP_PLANE5 */) {
-            var clipPlaneId = cap - 0x3000;
-            return GLEmulation.clipPlaneEnabled[clipPlaneId] ? 1 : 0;
-          } else if ((cap >= 0x4000) && (cap < 0x4008)  /* GL_LIGHT0 to GL_LIGHT7 */) {
-            var lightId = cap - 0x4000;
-            return GLEmulation.lightEnabled[lightId] ? 1 : 0;
-          } else if (cap == 0xB50 /* GL_LIGHTING */) {
-            return GLEmulation.lightingEnabled ? 1 : 0;
-          } else if (cap == 0xBC0 /* GL_ALPHA_TEST */) {
-            return GLEmulation.alphaTestEnabled ? 1 : 0;
-          } else if (!(cap in validCapabilities)) {
-            return 0;
-          }
-          return GLctx.isEnabled(cap);
-        };
-        
-  
-        var glGetBooleanv = _glGetBooleanv;
-        _glGetBooleanv = _emscripten_glGetBooleanv = (pname, p) => {
-          var attrib = GLEmulation.getAttributeFromCapability(pname);
-          if (attrib !== null) {
-            var result = GLImmediate.enabledClientAttributes[attrib];
-            HEAP8[((p)>>0)] = result === true ? 1 : 0;
-            return;
-          }
-          glGetBooleanv(pname, p);
-        };
-        
-  
-        var glGetIntegerv = _glGetIntegerv;
-        _glGetIntegerv = _emscripten_glGetIntegerv = (pname, params) => {
-          switch (pname) {
-            case 0x84E2: pname = GLctx.MAX_TEXTURE_IMAGE_UNITS /* fake it */; break; // GL_MAX_TEXTURE_UNITS
-            case 0x8B4A: { // GL_MAX_VERTEX_UNIFORM_COMPONENTS_ARB
-              var result = GLctx.getParameter(GLctx.MAX_VERTEX_UNIFORM_VECTORS);
-              HEAP32[((params)>>2)] = result*4; // GLES gives num of 4-element vectors, GL wants individual components, so multiply
-              return;
-            }
-            case 0x8B49: { // GL_MAX_FRAGMENT_UNIFORM_COMPONENTS_ARB
-              var result = GLctx.getParameter(GLctx.MAX_FRAGMENT_UNIFORM_VECTORS);
-              HEAP32[((params)>>2)] = result*4; // GLES gives num of 4-element vectors, GL wants individual components, so multiply
-              return;
-            }
-            case 0x8B4B: { // GL_MAX_VARYING_FLOATS_ARB
-              var result = GLctx.getParameter(GLctx.MAX_VARYING_VECTORS);
-              HEAP32[((params)>>2)] = result*4; // GLES gives num of 4-element vectors, GL wants individual components, so multiply
-              return;
-            }
-            case 0x8871: pname = GLctx.MAX_COMBINED_TEXTURE_IMAGE_UNITS /* close enough */; break; // GL_MAX_TEXTURE_COORDS
-            case 0x807A: { // GL_VERTEX_ARRAY_SIZE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.VERTEX];
-              HEAP32[((params)>>2)] = attribute ? attribute.size : 0;
-              return;
-            }
-            case 0x807B: { // GL_VERTEX_ARRAY_TYPE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.VERTEX];
-              HEAP32[((params)>>2)] = attribute ? attribute.type : 0;
-              return;
-            }
-            case 0x807C: { // GL_VERTEX_ARRAY_STRIDE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.VERTEX];
-              HEAP32[((params)>>2)] = attribute ? attribute.stride : 0;
-              return;
-            }
-            case 0x8081: { // GL_COLOR_ARRAY_SIZE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.COLOR];
-              HEAP32[((params)>>2)] = attribute ? attribute.size : 0;
-              return;
-            }
-            case 0x8082: { // GL_COLOR_ARRAY_TYPE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.COLOR];
-              HEAP32[((params)>>2)] = attribute ? attribute.type : 0;
-              return;
-            }
-            case 0x8083: { // GL_COLOR_ARRAY_STRIDE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.COLOR];
-              HEAP32[((params)>>2)] = attribute ? attribute.stride : 0;
-              return;
-            }
-            case 0x8088: { // GL_TEXTURE_COORD_ARRAY_SIZE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.TEXTURE0 + GLImmediate.clientActiveTexture];
-              HEAP32[((params)>>2)] = attribute ? attribute.size : 0;
-              return;
-            }
-            case 0x8089: { // GL_TEXTURE_COORD_ARRAY_TYPE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.TEXTURE0 + GLImmediate.clientActiveTexture];
-              HEAP32[((params)>>2)] = attribute ? attribute.type : 0;
-              return;
-            }
-            case 0x808A: { // GL_TEXTURE_COORD_ARRAY_STRIDE
-              var attribute = GLImmediate.clientAttributes[GLImmediate.TEXTURE0 + GLImmediate.clientActiveTexture];
-              HEAP32[((params)>>2)] = attribute ? attribute.stride : 0;
-              return;
-            }
-            case 0x0D32: { // GL_MAX_CLIP_PLANES
-              HEAP32[((params)>>2)] = GLEmulation.MAX_CLIP_PLANES; // all implementations need to support atleast 6
-              return;
-            }
-            case 0x0BA0: { // GL_MATRIX_MODE
-              HEAP32[((params)>>2)] = GLImmediate.currentMatrix + 0x1700;
-              return;
-            }
-            case 0x0BC1: { // GL_ALPHA_TEST_FUNC
-              HEAP32[((params)>>2)] = GLEmulation.alphaTestFunc;
-              return;
-            }
-          }
-          glGetIntegerv(pname, params);
-        };
-        
-  
-        var glGetString = _glGetString;
-        _glGetString = _emscripten_glGetString = (name_) => {
-          if (GL.stringCache[name_]) return GL.stringCache[name_];
-          switch (name_) {
-            case 0x1F03 /* GL_EXTENSIONS */: // Add various extensions that we can support
-              var ret = stringToNewUTF8((GLctx.getSupportedExtensions() || []).join(' ') +
-                     ' GL_EXT_texture_env_combine GL_ARB_texture_env_crossbar GL_ATI_texture_env_combine3 GL_NV_texture_env_combine4 GL_EXT_texture_env_dot3 GL_ARB_multitexture GL_ARB_vertex_buffer_object GL_EXT_framebuffer_object GL_ARB_vertex_program GL_ARB_fragment_program GL_ARB_shading_language_100 GL_ARB_shader_objects GL_ARB_vertex_shader GL_ARB_fragment_shader GL_ARB_texture_cube_map GL_EXT_draw_range_elements' +
-                     (GL.currentContext.compressionExt ? ' GL_ARB_texture_compression GL_EXT_texture_compression_s3tc' : '') +
-                     (GL.currentContext.anisotropicExt ? ' GL_EXT_texture_filter_anisotropic' : '')
-              );
-              GL.stringCache[name_] = ret;
-              return ret;
-          }
-          return glGetString(name_);
-        };
-        
-  
-        // Do some automatic rewriting to work around GLSL differences. Note that this must be done in
-        // tandem with the rest of the program, by itself it cannot suffice.
-        // Note that we need to remember shader types for this rewriting, saving sources makes it easier to debug.
-        GL.shaderInfos = {};
-        var glCreateShader = _glCreateShader;
-        _glCreateShader = _emscripten_glCreateShader = (shaderType) => {
-          var id = glCreateShader(shaderType);
-          GL.shaderInfos[id] = {
-            type: shaderType,
-            ftransform: false
-          };
-          return id;
-        };
-        
-  
-        function ensurePrecision(source) {
-          if (!/precision +(low|medium|high)p +float *;/.test(source)) {
-            source = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n' + source;
-          }
-          return source;
-        }
-  
-        var glShaderSource = _glShaderSource;
-        _glShaderSource = _emscripten_glShaderSource = (shader, count, string, length) => {
-          var source = GL.getSource(shader, count, string, length);
-          // XXX We add attributes and uniforms to shaders. The program can ask for the # of them, and see the
-          // ones we generated, potentially confusing it? Perhaps we should hide them.
-          if (GL.shaderInfos[shader].type == GLctx.VERTEX_SHADER) {
-            // Replace ftransform() with explicit project/modelview transforms, and add position and matrix info.
-            var has_pm = source.search(/u_projection/) >= 0;
-            var has_mm = source.search(/u_modelView/) >= 0;
-            var has_pv = source.search(/a_position/) >= 0;
-            var need_pm = 0, need_mm = 0, need_pv = 0;
-            var old = source;
-            source = source.replace(/ftransform\(\)/g, '(u_projection * u_modelView * a_position)');
-            if (old != source) need_pm = need_mm = need_pv = 1;
-            old = source;
-            source = source.replace(/gl_ProjectionMatrix/g, 'u_projection');
-            if (old != source) need_pm = 1;
-            old = source;
-            source = source.replace(/gl_ModelViewMatrixTranspose\[2\]/g, 'vec4(u_modelView[0][2], u_modelView[1][2], u_modelView[2][2], u_modelView[3][2])'); // XXX extremely inefficient
-            if (old != source) need_mm = 1;
-            old = source;
-            source = source.replace(/gl_ModelViewMatrix/g, 'u_modelView');
-            if (old != source) need_mm = 1;
-            old = source;
-            source = source.replace(/gl_Vertex/g, 'a_position');
-            if (old != source) need_pv = 1;
-            old = source;
-            source = source.replace(/gl_ModelViewProjectionMatrix/g, '(u_projection * u_modelView)');
-            if (old != source) need_pm = need_mm = 1;
-            if (need_pv && !has_pv) source = 'attribute vec4 a_position; \n' + source;
-            if (need_mm && !has_mm) source = 'uniform mat4 u_modelView; \n' + source;
-            if (need_pm && !has_pm) source = 'uniform mat4 u_projection; \n' + source;
-            GL.shaderInfos[shader].ftransform = need_pm || need_mm || need_pv; // we will need to provide the fixed function stuff as attributes and uniforms
-            for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-              // XXX To handle both regular texture mapping and cube mapping, we use vec4 for tex coordinates.
-              old = source;
-              var need_vtc = source.search('v_texCoord' + i) == -1;
-              source = source.replace(new RegExp('gl_TexCoord\\[' + i + '\\]', 'g'), 'v_texCoord' + i)
-                             .replace(new RegExp('gl_MultiTexCoord' + i, 'g'), 'a_texCoord' + i);
-              if (source != old) {
-                source = 'attribute vec4 a_texCoord' + i + '; \n' + source;
-                if (need_vtc) {
-                  source = 'varying vec4 v_texCoord' + i + ';   \n' + source;
-                }
-              }
-  
-              old = source;
-              source = source.replace(new RegExp('gl_TextureMatrix\\[' + i + '\\]', 'g'), 'u_textureMatrix' + i);
-              if (source != old) {
-                source = 'uniform mat4 u_textureMatrix' + i + '; \n' + source;
-              }
-            }
-            if (source.includes('gl_FrontColor')) {
-              source = 'varying vec4 v_color; \n' +
-                       source.replace(/gl_FrontColor/g, 'v_color');
-            }
-            if (source.includes('gl_Color')) {
-              source = 'attribute vec4 a_color; \n' +
-                       source.replace(/gl_Color/g, 'a_color');
-            }
-            if (source.includes('gl_Normal')) {
-              source = 'attribute vec3 a_normal; \n' +
-                       source.replace(/gl_Normal/g, 'a_normal');
-            }
-            // fog
-            if (source.includes('gl_FogFragCoord')) {
-              source = 'varying float v_fogFragCoord;   \n' +
-                       source.replace(/gl_FogFragCoord/g, 'v_fogFragCoord');
-            }
-          } else { // Fragment shader
-            for (i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-              old = source;
-              source = source.replace(new RegExp('gl_TexCoord\\[' + i + '\\]', 'g'), 'v_texCoord' + i);
-              if (source != old) {
-                source = 'varying vec4 v_texCoord' + i + ';   \n' + source;
-              }
-            }
-            if (source.includes('gl_Color')) {
-              source = 'varying vec4 v_color; \n' + source.replace(/gl_Color/g, 'v_color');
-            }
-            if (source.includes('gl_Fog.color')) {
-              source = 'uniform vec4 u_fogColor;   \n' +
-                       source.replace(/gl_Fog.color/g, 'u_fogColor');
-            }
-            if (source.includes('gl_Fog.end')) {
-              source = 'uniform float u_fogEnd;   \n' +
-                       source.replace(/gl_Fog.end/g, 'u_fogEnd');
-            }
-            if (source.includes('gl_Fog.scale')) {
-              source = 'uniform float u_fogScale;   \n' +
-                       source.replace(/gl_Fog.scale/g, 'u_fogScale');
-            }
-            if (source.includes('gl_Fog.density')) {
-              source = 'uniform float u_fogDensity;   \n' +
-                       source.replace(/gl_Fog.density/g, 'u_fogDensity');
-            }
-            if (source.includes('gl_FogFragCoord')) {
-              source = 'varying float v_fogFragCoord;   \n' +
-                       source.replace(/gl_FogFragCoord/g, 'v_fogFragCoord');
-            }
-            source = ensurePrecision(source);
-          }
-          GLctx.shaderSource(GL.shaders[shader], source);
-        };
-        
-  
-        var glCompileShader = _glCompileShader;
-        _glCompileShader = _emscripten_glCompileShader = (shader) => {
-          GLctx.compileShader(GL.shaders[shader]);
-        };
-        
-  
-        GL.programShaders = {};
-        var glAttachShader = _glAttachShader;
-        _glAttachShader = _emscripten_glAttachShader = (program, shader) => {
-          if (!GL.programShaders[program]) GL.programShaders[program] = [];
-          GL.programShaders[program].push(shader);
-          glAttachShader(program, shader);
-        };
-        
-  
-        var glDetachShader = _glDetachShader;
-        _glDetachShader = _emscripten_glDetachShader = (program, shader) => {
-          var programShader = GL.programShaders[program];
-          if (!programShader) {
-            err('WARNING: _glDetachShader received invalid program: ' + program);
-            return;
-          }
-          var index = programShader.indexOf(shader);
-          programShader.splice(index, 1);
-          glDetachShader(program, shader);
-        };
-        
-  
-        var glUseProgram = _glUseProgram;
-        _glUseProgram = _emscripten_glUseProgram = (program) => {
-          if (GL.currProgram != program) {
-            GLImmediate.currentRenderer = null; // This changes the FFP emulation shader program, need to recompute that.
-            GL.currProgram = program;
-            GLImmediate.fixedFunctionProgram = 0;
-            glUseProgram(program);
-          }
-        }
-        
-  
-        var glDeleteProgram = _glDeleteProgram;
-        _glDeleteProgram = _emscripten_glDeleteProgram = (program) => {
-          glDeleteProgram(program);
-          if (program == GL.currProgram) {
-            GLImmediate.currentRenderer = null; // This changes the FFP emulation shader program, need to recompute that.
-            GL.currProgram = 0;
-          }
-        };
-        
-  
-        // If attribute 0 was not bound, bind it to 0 for WebGL performance reasons. Track if 0 is free for that.
-        var zeroUsedPrograms = {};
-        var glBindAttribLocation = _glBindAttribLocation;
-        _glBindAttribLocation = _emscripten_glBindAttribLocation = (program, index, name) => {
-          if (index == 0) zeroUsedPrograms[program] = true;
-          glBindAttribLocation(program, index, name);
-        };
-        
-  
-        var glLinkProgram = _glLinkProgram;
-        _glLinkProgram = _emscripten_glLinkProgram = (program) => {
-          if (!(program in zeroUsedPrograms)) {
-            GLctx.bindAttribLocation(GL.programs[program], 0, 'a_position');
-          }
-          glLinkProgram(program);
-        };
-        
-  
-        var glBindBuffer = _glBindBuffer;
-        _glBindBuffer = _emscripten_glBindBuffer = (target, buffer) => {
-          glBindBuffer(target, buffer);
-          if (target == GLctx.ARRAY_BUFFER) {
-            if (GLEmulation.currentVao) {
-              assert(GLEmulation.currentVao.arrayBuffer == buffer || GLEmulation.currentVao.arrayBuffer == 0 || buffer == 0, 'TODO: support for multiple array buffers in vao');
-              GLEmulation.currentVao.arrayBuffer = buffer;
-            }
-          } else if (target == GLctx.ELEMENT_ARRAY_BUFFER) {
-            if (GLEmulation.currentVao) GLEmulation.currentVao.elementArrayBuffer = buffer;
-          }
-        };
-        
-  
-        var glGetFloatv = _glGetFloatv;
-        _glGetFloatv = _emscripten_glGetFloatv = (pname, params) => {
-          if (pname == 0xBA6) { // GL_MODELVIEW_MATRIX
-            HEAPF32.set(GLImmediate.matrix[0/*m*/], params >> 2);
-          } else if (pname == 0xBA7) { // GL_PROJECTION_MATRIX
-            HEAPF32.set(GLImmediate.matrix[1/*p*/], params >> 2);
-          } else if (pname == 0xBA8) { // GL_TEXTURE_MATRIX
-            HEAPF32.set(GLImmediate.matrix[2/*t*/ + GLImmediate.clientActiveTexture], params >> 2);
-          } else if (pname == 0xB66) { // GL_FOG_COLOR
-            HEAPF32.set(GLEmulation.fogColor, params >> 2);
-          } else if (pname == 0xB63) { // GL_FOG_START
-            HEAPF32[((params)>>2)] = GLEmulation.fogStart;
-          } else if (pname == 0xB64) { // GL_FOG_END
-            HEAPF32[((params)>>2)] = GLEmulation.fogEnd;
-          } else if (pname == 0xB62) { // GL_FOG_DENSITY
-            HEAPF32[((params)>>2)] = GLEmulation.fogDensity;
-          } else if (pname == 0xB65) { // GL_FOG_MODE
-            HEAPF32[((params)>>2)] = GLEmulation.fogMode;
-          } else if (pname == 0xB53) { // GL_LIGHT_MODEL_AMBIENT
-            HEAPF32[((params)>>2)] = GLEmulation.lightModelAmbient[0];
-            HEAPF32[(((params)+(4))>>2)] = GLEmulation.lightModelAmbient[1];
-            HEAPF32[(((params)+(8))>>2)] = GLEmulation.lightModelAmbient[2];
-            HEAPF32[(((params)+(12))>>2)] = GLEmulation.lightModelAmbient[3];
-          } else if (pname == 0xBC2) { // GL_ALPHA_TEST_REF
-            HEAPF32[((params)>>2)] = GLEmulation.alphaTestRef;
-          } else {
-            glGetFloatv(pname, params);
-          }
-        };
-        
-  
-        var glHint = _glHint;
-        _glHint = _emscripten_glHint = (target, mode) => {
-          if (target == 0x84EF) { // GL_TEXTURE_COMPRESSION_HINT
-            return;
-          }
-          glHint(target, mode);
-        };
-        
-  
-        var glEnableVertexAttribArray = _glEnableVertexAttribArray;
-        _glEnableVertexAttribArray = _emscripten_glEnableVertexAttribArray = (index) => {
-          glEnableVertexAttribArray(index);
-          GLEmulation.enabledVertexAttribArrays[index] = 1;
-          if (GLEmulation.currentVao) GLEmulation.currentVao.enabledVertexAttribArrays[index] = 1;
-        };
-        
-  
-        var glDisableVertexAttribArray = _glDisableVertexAttribArray;
-        _glDisableVertexAttribArray = _emscripten_glDisableVertexAttribArray = (index) => {
-          glDisableVertexAttribArray(index);
-          delete GLEmulation.enabledVertexAttribArrays[index];
-          if (GLEmulation.currentVao) delete GLEmulation.currentVao.enabledVertexAttribArrays[index];
-        };
-        
-  
-        var glVertexAttribPointer = _glVertexAttribPointer;
-        _glVertexAttribPointer = _emscripten_glVertexAttribPointer = (index, size, type, normalized, stride, pointer) => {
-          glVertexAttribPointer(index, size, type, normalized, stride, pointer);
-          if (GLEmulation.currentVao) { // TODO: avoid object creation here? likely not hot though
-            GLEmulation.currentVao.vertexAttribPointers[index] = [index, size, type, normalized, stride, pointer];
-          }
-        };
-        
-      },getAttributeFromCapability:function(cap) {
-        var attrib = null;
-        switch (cap) {
-          case 0xDE1: // GL_TEXTURE_2D - XXX not according to spec, and not in desktop GL, but works in some GLES1.x apparently, so support it
-            abort("GL_TEXTURE_2D is not a spec-defined capability for gl{Enable,Disable}ClientState.");
-            // Fall through:
-          case 0x8078: // GL_TEXTURE_COORD_ARRAY
-            attrib = GLImmediate.TEXTURE0 + GLImmediate.clientActiveTexture; break;
-          case 0x8074: // GL_VERTEX_ARRAY
-            attrib = GLImmediate.VERTEX; break;
-          case 0x8075: // GL_NORMAL_ARRAY
-            attrib = GLImmediate.NORMAL; break;
-          case 0x8076: // GL_COLOR_ARRAY
-            attrib = GLImmediate.COLOR; break;
-        }
-        return attrib;
-      }};
-  Module["GLEmulation"] = GLEmulation;
-  var GLImmediate = {MapTreeLib:null,spawnMapTreeLib:function() {
-        /**
-         * A naive implementation of a map backed by an array, and accessed by
-         * naive iteration along the array. (hashmap with only one bucket)
-         * @constructor
-         */
-        function CNaiveListMap() {
-          var list = [];
-  
-          this.insert = function CNaiveListMap_insert(key, val) {
-            if (this.contains(key|0)) return false;
-            list.push([key, val]);
-            return true;
-          };
-  
-          var __contains_i;
-          this.contains = function CNaiveListMap_contains(key) {
-            for (__contains_i = 0; __contains_i < list.length; ++__contains_i) {
-              if (list[__contains_i][0] === key) return true;
-            }
-            return false;
-          };
-  
-          var __get_i;
-          this.get = function CNaiveListMap_get(key) {
-            for (__get_i = 0; __get_i < list.length; ++__get_i) {
-              if (list[__get_i][0] === key) return list[__get_i][1];
-            }
-            return undefined;
-          };
-        };
-  
-        /**
-         * A tree of map nodes.
-         * Uses `KeyView`s to allow descending the tree without garbage.
-         * Example: {
-         *   // Create our map object.
-         *   var map = new ObjTreeMap();
-         *
-         *   // Grab the static keyView for the map.
-         *   var keyView = map.GetStaticKeyView();
-         *
-         *   // Let's make a map for:
-         *   // root: <undefined>
-         *   //   1: <undefined>
-         *   //     2: <undefined>
-         *   //       5: "Three, sir!"
-         *   //       3: "Three!"
-         *
-         *   // Note how we can chain together `Reset` and `Next` to
-         *   // easily descend based on multiple key fragments.
-         *   keyView.Reset().Next(1).Next(2).Next(5).Set("Three, sir!");
-         *   keyView.Reset().Next(1).Next(2).Next(3).Set("Three!");
-         * }
-         * @constructor
-         */
-        function CMapTree() {
-          /** @constructor */
-          function CNLNode() {
-            var map = new CNaiveListMap();
-  
-            this.child = function CNLNode_child(keyFrag) {
-              if (!map.contains(keyFrag|0)) {
-                map.insert(keyFrag|0, new CNLNode());
-              }
-              return map.get(keyFrag|0);
-            };
-  
-            this.value = undefined;
-            this.get = function CNLNode_get() {
-              return this.value;
-            };
-  
-            this.set = function CNLNode_set(val) {
-              this.value = val;
-            };
-          }
-  
-          /** @constructor */
-          function CKeyView(root) {
-            var cur;
-  
-            this.reset = function CKeyView_reset() {
-              cur = root;
-              return this;
-            };
-            this.reset();
-  
-            this.next = function CKeyView_next(keyFrag) {
-              cur = cur.child(keyFrag);
-              return this;
-            };
-  
-            this.get = function CKeyView_get() {
-              return cur.get();
-            };
-  
-            this.set = function CKeyView_set(val) {
-              cur.set(val);
-            };
-          };
-  
-          var root;
-          var staticKeyView;
-  
-          this.createKeyView = function CNLNode_createKeyView() {
-            return new CKeyView(root);
-          }
-  
-          this.clear = function CNLNode_clear() {
-            root = new CNLNode();
-            staticKeyView = this.createKeyView();
-          };
-          this.clear();
-  
-          this.getStaticKeyView = function CNLNode_getStaticKeyView() {
-            staticKeyView.reset();
-            return staticKeyView;
-          };
-        };
-  
-        // Exports:
-        return {
-          create: function() {
-            return new CMapTree();
-          },
-        };
-      },TexEnvJIT:null,spawnTexEnvJIT:function() {
-        // GL defs:
-        var GL_TEXTURE0 = 0x84C0;
-        var GL_TEXTURE_1D = 0xDE0;
-        var GL_TEXTURE_2D = 0xDE1;
-        var GL_TEXTURE_3D = 0x806f;
-        var GL_TEXTURE_CUBE_MAP = 0x8513;
-        var GL_TEXTURE_ENV = 0x2300;
-        var GL_TEXTURE_ENV_MODE = 0x2200;
-        var GL_TEXTURE_ENV_COLOR = 0x2201;
-        var GL_TEXTURE_CUBE_MAP_POSITIVE_X = 0x8515;
-        var GL_TEXTURE_CUBE_MAP_NEGATIVE_X = 0x8516;
-        var GL_TEXTURE_CUBE_MAP_POSITIVE_Y = 0x8517;
-        var GL_TEXTURE_CUBE_MAP_NEGATIVE_Y = 0x8518;
-        var GL_TEXTURE_CUBE_MAP_POSITIVE_Z = 0x8519;
-        var GL_TEXTURE_CUBE_MAP_NEGATIVE_Z = 0x851A;
-  
-        var GL_SRC0_RGB = 0x8580;
-        var GL_SRC1_RGB = 0x8581;
-        var GL_SRC2_RGB = 0x8582;
-  
-        var GL_SRC0_ALPHA = 0x8588;
-        var GL_SRC1_ALPHA = 0x8589;
-        var GL_SRC2_ALPHA = 0x858A;
-  
-        var GL_OPERAND0_RGB = 0x8590;
-        var GL_OPERAND1_RGB = 0x8591;
-        var GL_OPERAND2_RGB = 0x8592;
-  
-        var GL_OPERAND0_ALPHA = 0x8598;
-        var GL_OPERAND1_ALPHA = 0x8599;
-        var GL_OPERAND2_ALPHA = 0x859A;
-  
-        var GL_COMBINE_RGB = 0x8571;
-        var GL_COMBINE_ALPHA = 0x8572;
-  
-        var GL_RGB_SCALE = 0x8573;
-        var GL_ALPHA_SCALE = 0xD1C;
-  
-        // env.mode
-        var GL_ADD      = 0x104;
-        var GL_BLEND    = 0xBE2;
-        var GL_REPLACE  = 0x1E01;
-        var GL_MODULATE = 0x2100;
-        var GL_DECAL    = 0x2101;
-        var GL_COMBINE  = 0x8570;
-  
-        // env.color/alphaCombiner
-        //var GL_ADD         = 0x104;
-        //var GL_REPLACE     = 0x1E01;
-        //var GL_MODULATE    = 0x2100;
-        var GL_SUBTRACT    = 0x84E7;
-        var GL_INTERPOLATE = 0x8575;
-  
-        // env.color/alphaSrc
-        var GL_TEXTURE       = 0x1702;
-        var GL_CONSTANT      = 0x8576;
-        var GL_PRIMARY_COLOR = 0x8577;
-        var GL_PREVIOUS      = 0x8578;
-  
-        // env.color/alphaOp
-        var GL_SRC_COLOR           = 0x300;
-        var GL_ONE_MINUS_SRC_COLOR = 0x301;
-        var GL_SRC_ALPHA           = 0x302;
-        var GL_ONE_MINUS_SRC_ALPHA = 0x303;
-  
-        var GL_RGB  = 0x1907;
-        var GL_RGBA = 0x1908;
-  
-        // Our defs:
-        var TEXENVJIT_NAMESPACE_PREFIX = "tej_";
-        // Not actually constant, as they can be changed between JIT passes:
-        var TEX_UNIT_UNIFORM_PREFIX = "uTexUnit";
-        var TEX_COORD_VARYING_PREFIX = "vTexCoord";
-        var PRIM_COLOR_VARYING = "vPrimColor";
-        var TEX_MATRIX_UNIFORM_PREFIX = "uTexMatrix";
-  
-        // Static vars:
-        var s_texUnits = null; //[];
-        var s_activeTexture = 0;
-  
-        var s_requiredTexUnitsForPass = [];
-  
-        // Static funcs:
-        function abort(info) {
-          assert(false, "[TexEnvJIT] ABORT: " + info);
-        }
-  
-        function abort_noSupport(info) {
-          abort("No support: " + info);
-        }
-  
-        function abort_sanity(info) {
-          abort("Sanity failure: " + info);
-        }
-  
-        function genTexUnitSampleExpr(texUnitID) {
-          var texUnit = s_texUnits[texUnitID];
-          var texType = texUnit.getTexType();
-  
-          var func = null;
-          switch (texType) {
-            case GL_TEXTURE_1D:
-              func = "texture2D";
-              break;
-            case GL_TEXTURE_2D:
-              func = "texture2D";
-              break;
-            case GL_TEXTURE_3D:
-              return abort_noSupport("No support for 3D textures.");
-            case GL_TEXTURE_CUBE_MAP:
-              func = "textureCube";
-              break;
-            default:
-              return abort_sanity("Unknown texType: 0x" + texType.toString(16));
-          }
-  
-          var texCoordExpr = TEX_COORD_VARYING_PREFIX + texUnitID;
-          if (TEX_MATRIX_UNIFORM_PREFIX != null) {
-            texCoordExpr = "(" + TEX_MATRIX_UNIFORM_PREFIX + texUnitID + " * " + texCoordExpr + ")";
-          }
-          return func + "(" + TEX_UNIT_UNIFORM_PREFIX + texUnitID + ", " + texCoordExpr + ".xy)";
-        }
-  
-        function getTypeFromCombineOp(op) {
-          switch (op) {
-            case GL_SRC_COLOR:
-            case GL_ONE_MINUS_SRC_COLOR:
-              return "vec3";
-            case GL_SRC_ALPHA:
-            case GL_ONE_MINUS_SRC_ALPHA:
-              return "float";
-          }
-  
-          return abort_noSupport("Unsupported combiner op: 0x" + op.toString(16));
-        }
-  
-        function getCurTexUnit() {
-          return s_texUnits[s_activeTexture];
-        }
-  
-        function genCombinerSourceExpr(texUnitID, constantExpr, previousVar,
-                                       src, op)
-        {
-          var srcExpr = null;
-          switch (src) {
-            case GL_TEXTURE:
-              srcExpr = genTexUnitSampleExpr(texUnitID);
-              break;
-            case GL_CONSTANT:
-              srcExpr = constantExpr;
-              break;
-            case GL_PRIMARY_COLOR:
-              srcExpr = PRIM_COLOR_VARYING;
-              break;
-            case GL_PREVIOUS:
-              srcExpr = previousVar;
-              break;
-            default:
-                return abort_noSupport("Unsupported combiner src: 0x" + src.toString(16));
-          }
-  
-          var expr = null;
-          switch (op) {
-            case GL_SRC_COLOR:
-              expr = srcExpr + ".rgb";
-              break;
-            case GL_ONE_MINUS_SRC_COLOR:
-              expr = "(vec3(1.0) - " + srcExpr + ".rgb)";
-              break;
-            case GL_SRC_ALPHA:
-              expr = srcExpr + ".a";
-              break;
-            case GL_ONE_MINUS_SRC_ALPHA:
-              expr = "(1.0 - " + srcExpr + ".a)";
-              break;
-            default:
-              return abort_noSupport("Unsupported combiner op: 0x" + op.toString(16));
-          }
-  
-          return expr;
-        }
-  
-        function valToFloatLiteral(val) {
-          if (val == Math.round(val)) return val + '.0';
-          return val;
-        }
-  
-        // Classes:
-        /** @constructor */
-        function CTexEnv() {
-          this.mode = GL_MODULATE;
-          this.colorCombiner = GL_MODULATE;
-          this.alphaCombiner = GL_MODULATE;
-          this.colorScale = 1;
-          this.alphaScale = 1;
-          this.envColor = [0, 0, 0, 0];
-  
-          this.colorSrc = [
-            GL_TEXTURE,
-            GL_PREVIOUS,
-            GL_CONSTANT
-          ];
-          this.alphaSrc = [
-            GL_TEXTURE,
-            GL_PREVIOUS,
-            GL_CONSTANT
-          ];
-          this.colorOp = [
-            GL_SRC_COLOR,
-            GL_SRC_COLOR,
-            GL_SRC_ALPHA
-          ];
-          this.alphaOp = [
-            GL_SRC_ALPHA,
-            GL_SRC_ALPHA,
-            GL_SRC_ALPHA
-          ];
-  
-          // Map GLenums to small values to efficiently pack the enums to bits for tighter access.
-          this.traverseKey = {
-            // mode
-            0x1E01 /* GL_REPLACE */: 0,
-            0x2100 /* GL_MODULATE */: 1,
-            0x104 /* GL_ADD */: 2,
-            0xBE2 /* GL_BLEND */: 3,
-            0x2101 /* GL_DECAL */: 4,
-            0x8570 /* GL_COMBINE */: 5,
-  
-            // additional color and alpha combiners
-            0x84E7 /* GL_SUBTRACT */: 3,
-            0x8575 /* GL_INTERPOLATE */: 4,
-  
-            // color and alpha src
-            0x1702 /* GL_TEXTURE */: 0,
-            0x8576 /* GL_CONSTANT */: 1,
-            0x8577 /* GL_PRIMARY_COLOR */: 2,
-            0x8578 /* GL_PREVIOUS */: 3,
-  
-            // color and alpha op
-            0x300 /* GL_SRC_COLOR */: 0,
-            0x301 /* GL_ONE_MINUS_SRC_COLOR */: 1,
-            0x302 /* GL_SRC_ALPHA */: 2,
-            0x303 /* GL_ONE_MINUS_SRC_ALPHA */: 3
-          };
-  
-          // The tuple (key0,key1,key2) uniquely identifies the state of the variables in CTexEnv.
-          // -1 on key0 denotes 'the whole cached key is dirty'
-          this.key0 = -1;
-          this.key1 = 0;
-          this.key2 = 0;
-  
-          this.computeKey0 = function() {
-            var k = this.traverseKey;
-            var key = k[this.mode] * 1638400; // 6 distinct values.
-            key += k[this.colorCombiner] * 327680; // 5 distinct values.
-            key += k[this.alphaCombiner] * 65536; // 5 distinct values.
-            // The above three fields have 6*5*5=150 distinct values -> 8 bits.
-            key += (this.colorScale-1) * 16384; // 10 bits used.
-            key += (this.alphaScale-1) * 4096; // 12 bits used.
-            key += k[this.colorSrc[0]] * 1024; // 14
-            key += k[this.colorSrc[1]] * 256; // 16
-            key += k[this.colorSrc[2]] * 64; // 18
-            key += k[this.alphaSrc[0]] * 16; // 20
-            key += k[this.alphaSrc[1]] * 4; // 22
-            key += k[this.alphaSrc[2]]; // 24 bits used total.
-            return key;
-          }
-          this.computeKey1 = function() {
-            var k = this.traverseKey;
-            var key = k[this.colorOp[0]] * 4096;
-            key += k[this.colorOp[1]] * 1024;
-            key += k[this.colorOp[2]] * 256;
-            key += k[this.alphaOp[0]] * 16;
-            key += k[this.alphaOp[1]] * 4;
-            key += k[this.alphaOp[2]];
-            return key;
-          }
-          // TODO: remove this. The color should not be part of the key!
-          this.computeKey2 = function() {
-            return this.envColor[0] * 16777216 + this.envColor[1] * 65536 + this.envColor[2] * 256 + 1 + this.envColor[3];
-          }
-          this.recomputeKey = function() {
-            this.key0 = this.computeKey0();
-            this.key1 = this.computeKey1();
-            this.key2 = this.computeKey2();
-          }
-          this.invalidateKey = function() {
-            this.key0 = -1; // The key of this texture unit must be recomputed when rendering the next time.
-            GLImmediate.currentRenderer = null; // The currently used renderer must be re-evaluated at next render.
-          }
-        }
-  
-        /** @constructor */
-        function CTexUnit() {
-          this.env = new CTexEnv();
-          this.enabled_tex1D   = false;
-          this.enabled_tex2D   = false;
-          this.enabled_tex3D   = false;
-          this.enabled_texCube = false;
-          this.texTypesEnabled = 0; // A bitfield combination of the four flags above, used for fast access to operations.
-  
-          this.traverseState = function CTexUnit_traverseState(keyView) {
-            if (this.texTypesEnabled) {
-              if (this.env.key0 == -1) {
-                this.env.recomputeKey();
-              }
-              keyView.next(this.texTypesEnabled | (this.env.key0 << 4));
-              keyView.next(this.env.key1);
-              keyView.next(this.env.key2);
-            } else {
-              // For correctness, must traverse a zero value, theoretically a subsequent integer key could collide with this value otherwise.
-              keyView.next(0);
-            }
-          };
-        };
-  
-        // Class impls:
-        CTexUnit.prototype.enabled = function CTexUnit_enabled() {
-          return this.texTypesEnabled;
-        }
-  
-        CTexUnit.prototype.genPassLines = function CTexUnit_genPassLines(passOutputVar, passInputVar, texUnitID) {
-          if (!this.enabled()) {
-            return ["vec4 " + passOutputVar + " = " + passInputVar + ";"];
-          }
-          var lines = this.env.genPassLines(passOutputVar, passInputVar, texUnitID).join('\n');
-  
-          var texLoadLines = '';
-          var texLoadRegex = /(texture.*?\(.*?\))/g;
-          var loadCounter = 0;
-          var load;
-  
-          // As an optimization, merge duplicate identical texture loads to one var.
-          while (load = texLoadRegex.exec(lines)) {
-            var texLoadExpr = load[1];
-            var secondOccurrence = lines.slice(load.index+1).indexOf(texLoadExpr);
-            if (secondOccurrence != -1) { // And also has a second occurrence of same load expression..
-              // Create new var to store the common load.
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
-              var texLoadVar = prefix + 'texload' + loadCounter++;
-              var texLoadLine = 'vec4 ' + texLoadVar + ' = ' + texLoadExpr + ';\n';
-              texLoadLines += texLoadLine + '\n'; // Store the generated texture load statements in a temp string to not confuse regex search in progress.
-              lines = lines.split(texLoadExpr).join(texLoadVar);
-              // Reset regex search, since we modified the string.
-              texLoadRegex = /(texture.*\(.*\))/g;
-            }
-          }
-          return [texLoadLines + lines];
-        }
-  
-        CTexUnit.prototype.getTexType = function CTexUnit_getTexType() {
-          if (this.enabled_texCube) {
-            return GL_TEXTURE_CUBE_MAP;
-          } else if (this.enabled_tex3D) {
-            return GL_TEXTURE_3D;
-          } else if (this.enabled_tex2D) {
-            return GL_TEXTURE_2D;
-          } else if (this.enabled_tex1D) {
-            return GL_TEXTURE_1D;
-          }
-          return 0;
-        }
-  
-        CTexEnv.prototype.genPassLines = function CTexEnv_genPassLines(passOutputVar, passInputVar, texUnitID) {
-          switch (this.mode) {
-            case GL_REPLACE: {
-              /* RGB:
-               * Cv = Cs
-               * Av = Ap // Note how this is different, and that we'll
-               *            need to track the bound texture internalFormat
-               *            to get this right.
-               *
-               * RGBA:
-               * Cv = Cs
-               * Av = As
-               */
-              return [
-                "vec4 " + passOutputVar + " = " + genTexUnitSampleExpr(texUnitID) + ";",
-              ];
-            }
-            case GL_ADD: {
-              /* RGBA:
-               * Cv = Cp + Cs
-               * Av = ApAs
-               */
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
-              var texVar = prefix + "tex";
-              var colorVar = prefix + "color";
-              var alphaVar = prefix + "alpha";
-  
-              return [
-                "vec4 " + texVar + " = " + genTexUnitSampleExpr(texUnitID) + ";",
-                "vec3 " + colorVar + " = " + passInputVar + ".rgb + " + texVar + ".rgb;",
-                "float " + alphaVar + " = " + passInputVar + ".a * " + texVar + ".a;",
-                "vec4 " + passOutputVar + " = vec4(" + colorVar + ", " + alphaVar + ");",
-              ];
-            }
-            case GL_MODULATE: {
-              /* RGBA:
-               * Cv = CpCs
-               * Av = ApAs
-               */
-              var line = [
-                "vec4 " + passOutputVar,
-                " = ",
-                  passInputVar,
-                  " * ",
-                  genTexUnitSampleExpr(texUnitID),
-                ";",
-              ];
-              return [line.join("")];
-            }
-            case GL_DECAL: {
-              /* RGBA:
-               * Cv = Cp(1 - As) + CsAs
-               * Av = Ap
-               */
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
-              var texVar = prefix + "tex";
-              var colorVar = prefix + "color";
-              var alphaVar = prefix + "alpha";
-  
-              return [
-                "vec4 " + texVar + " = " + genTexUnitSampleExpr(texUnitID) + ";",
-                [
-                  "vec3 " + colorVar + " = ",
-                    passInputVar + ".rgb * (1.0 - " + texVar + ".a)",
-                      " + ",
-                    texVar + ".rgb * " + texVar + ".a",
-                  ";"
-                ].join(""),
-                "float " + alphaVar + " = " + passInputVar + ".a;",
-                "vec4 " + passOutputVar + " = vec4(" + colorVar + ", " + alphaVar + ");",
-              ];
-            }
-            case GL_BLEND: {
-              /* RGBA:
-               * Cv = Cp(1 - Cs) + CcCs
-               * Av = As
-               */
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
-              var texVar = prefix + "tex";
-              var colorVar = prefix + "color";
-              var alphaVar = prefix + "alpha";
-  
-              return [
-                "vec4 " + texVar + " = " + genTexUnitSampleExpr(texUnitID) + ";",
-                [
-                  "vec3 " + colorVar + " = ",
-                    passInputVar + ".rgb * (1.0 - " + texVar + ".rgb)",
-                      " + ",
-                    PRIM_COLOR_VARYING + ".rgb * " + texVar + ".rgb",
-                  ";"
-                ].join(""),
-                "float " + alphaVar + " = " + texVar + ".a;",
-                "vec4 " + passOutputVar + " = vec4(" + colorVar + ", " + alphaVar + ");",
-              ];
-            }
-            case GL_COMBINE: {
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
-              var colorVar = prefix + "color";
-              var alphaVar = prefix + "alpha";
-              var colorLines = this.genCombinerLines(true, colorVar,
-                                                     passInputVar, texUnitID,
-                                                     this.colorCombiner, this.colorSrc, this.colorOp);
-              var alphaLines = this.genCombinerLines(false, alphaVar,
-                                                     passInputVar, texUnitID,
-                                                     this.alphaCombiner, this.alphaSrc, this.alphaOp);
-  
-              // Generate scale, but avoid generating an identity op that multiplies by one.
-              var scaledColor = (this.colorScale == 1) ? colorVar : (colorVar + " * " + valToFloatLiteral(this.colorScale));
-              var scaledAlpha = (this.alphaScale == 1) ? alphaVar : (alphaVar + " * " + valToFloatLiteral(this.alphaScale));
-  
-              var line = [
-                "vec4 " + passOutputVar,
-                " = ",
-                  "vec4(",
-                      scaledColor,
-                      ", ",
-                      scaledAlpha,
-                  ")",
-                ";",
-              ].join("");
-              return [].concat(colorLines, alphaLines, [line]);
-            }
-          }
-  
-          return abort_noSupport("Unsupported TexEnv mode: 0x" + this.mode.toString(16));
-        }
-  
-        CTexEnv.prototype.genCombinerLines = function CTexEnv_getCombinerLines(isColor, outputVar,
-                                                                               passInputVar, texUnitID,
-                                                                               combiner, srcArr, opArr)
-        {
-          var argsNeeded = null;
-          switch (combiner) {
-            case GL_REPLACE:
-              argsNeeded = 1;
-              break;
-  
-            case GL_MODULATE:
-            case GL_ADD:
-            case GL_SUBTRACT:
-              argsNeeded = 2;
-              break;
-  
-            case GL_INTERPOLATE:
-              argsNeeded = 3;
-              break;
-  
-            default:
-              return abort_noSupport("Unsupported combiner: 0x" + combiner.toString(16));
-          }
-  
-          var constantExpr = [
-            "vec4(",
-              valToFloatLiteral(this.envColor[0]),
-              ", ",
-              valToFloatLiteral(this.envColor[1]),
-              ", ",
-              valToFloatLiteral(this.envColor[2]),
-              ", ",
-              valToFloatLiteral(this.envColor[3]),
-            ")",
-          ].join("");
-          var src0Expr = (argsNeeded >= 1) ? genCombinerSourceExpr(texUnitID, constantExpr, passInputVar, srcArr[0], opArr[0])
-                                           : null;
-          var src1Expr = (argsNeeded >= 2) ? genCombinerSourceExpr(texUnitID, constantExpr, passInputVar, srcArr[1], opArr[1])
-                                           : null;
-          var src2Expr = (argsNeeded >= 3) ? genCombinerSourceExpr(texUnitID, constantExpr, passInputVar, srcArr[2], opArr[2])
-                                           : null;
-  
-          var outputType = isColor ? "vec3" : "float";
-          var lines = null;
-          switch (combiner) {
-            case GL_REPLACE: {
-              var line = [
-                outputType + " " + outputVar,
-                " = ",
-                  src0Expr,
-                ";",
-              ];
-              lines = [line.join("")];
-              break;
-            }
-            case GL_MODULATE: {
-              var line = [
-                outputType + " " + outputVar + " = ",
-                  src0Expr + " * " + src1Expr,
-                ";",
-              ];
-              lines = [line.join("")];
-              break;
-            }
-            case GL_ADD: {
-              var line = [
-                outputType + " " + outputVar + " = ",
-                  src0Expr + " + " + src1Expr,
-                ";",
-              ];
-              lines = [line.join("")];
-              break;
-            }
-            case GL_SUBTRACT: {
-              var line = [
-                outputType + " " + outputVar + " = ",
-                  src0Expr + " - " + src1Expr,
-                ";",
-              ];
-              lines = [line.join("")];
-              break;
-            }
-            case GL_INTERPOLATE: {
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
-              var arg2Var = prefix + "colorSrc2";
-              var arg2Line = getTypeFromCombineOp(this.colorOp[2]) + " " + arg2Var + " = " + src2Expr + ";";
-  
-              var line = [
-                outputType + " " + outputVar,
-                " = ",
-                  src0Expr + " * " + arg2Var,
-                  " + ",
-                  src1Expr + " * (1.0 - " + arg2Var + ")",
-                ";",
-              ];
-              lines = [
-                arg2Line,
-                line.join(""),
-              ];
-              break;
-            }
-  
-            default:
-              return abort_sanity("Unmatched TexEnv.colorCombiner?");
-          }
-  
-          return lines;
-        }
-  
-        return {
-          // Exports:
-          init: function(gl, specifiedMaxTextureImageUnits) {
-            var maxTexUnits = 0;
-            if (specifiedMaxTextureImageUnits) {
-              maxTexUnits = specifiedMaxTextureImageUnits;
-            } else if (gl) {
-              maxTexUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
-            }
-            assert(maxTexUnits > 0);
-            s_texUnits = [];
-            for (var i = 0; i < maxTexUnits; i++) {
-              s_texUnits.push(new CTexUnit());
-            }
-          },
-  
-          setGLSLVars: function(uTexUnitPrefix, vTexCoordPrefix, vPrimColor, uTexMatrixPrefix) {
-            TEX_UNIT_UNIFORM_PREFIX   = uTexUnitPrefix;
-            TEX_COORD_VARYING_PREFIX  = vTexCoordPrefix;
-            PRIM_COLOR_VARYING        = vPrimColor;
-            TEX_MATRIX_UNIFORM_PREFIX = uTexMatrixPrefix;
-          },
-  
-          genAllPassLines: function(resultDest, indentSize = 0) {
-            s_requiredTexUnitsForPass.length = 0; // Clear the list.
-            var lines = [];
-            var lastPassVar = PRIM_COLOR_VARYING;
-            for (var i = 0; i < s_texUnits.length; i++) {
-              if (!s_texUnits[i].enabled()) continue;
-  
-              s_requiredTexUnitsForPass.push(i);
-  
-              var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + i + "_";
-              var passOutputVar = prefix + "result";
-  
-              var newLines = s_texUnits[i].genPassLines(passOutputVar, lastPassVar, i);
-              lines = lines.concat(newLines, [""]);
-  
-              lastPassVar = passOutputVar;
-            }
-            lines.push(resultDest + " = " + lastPassVar + ";");
-  
-            var indent = "";
-            for (var i = 0; i < indentSize; i++) indent += " ";
-  
-            var output = indent + lines.join("\n" + indent);
-  
-            return output;
-          },
-  
-          getUsedTexUnitList: function() {
-            return s_requiredTexUnitsForPass;
-          },
-  
-          getActiveTexture: function () {
-            return s_activeTexture;
-          },
-  
-          traverseState: function(keyView) {
-            for (var i = 0; i < s_texUnits.length; i++) {
-              s_texUnits[i].traverseState(keyView);
-            }
-          },
-  
-          getTexUnitType: function(texUnitID) {
-            assert(texUnitID >= 0 &&
-                   texUnitID < s_texUnits.length);
-            return s_texUnits[texUnitID].getTexType();
-          },
-  
-          // Hooks:
-          hook_activeTexture: function(texture) {
-            s_activeTexture = texture - GL_TEXTURE0;
-            // Check if the current matrix mode is GL_TEXTURE.
-            if (GLImmediate.currentMatrix >= 2) {
-              // Switch to the corresponding texture matrix stack.
-              GLImmediate.currentMatrix = 2 + s_activeTexture;
-            }
-          },
-  
-          hook_enable: function(cap) {
-            var cur = getCurTexUnit();
-            switch (cap) {
-              case GL_TEXTURE_1D:
-                if (!cur.enabled_tex1D) {
-                  GLImmediate.currentRenderer = null; // Renderer state changed, and must be recreated or looked up again.
-                  cur.enabled_tex1D = true;
-                  cur.texTypesEnabled |= 1;
-                }
-                break;
-              case GL_TEXTURE_2D:
-                if (!cur.enabled_tex2D) {
-                  GLImmediate.currentRenderer = null;
-                  cur.enabled_tex2D = true;
-                  cur.texTypesEnabled |= 2;
-                }
-                break;
-              case GL_TEXTURE_3D:
-                if (!cur.enabled_tex3D) {
-                  GLImmediate.currentRenderer = null;
-                  cur.enabled_tex3D = true;
-                  cur.texTypesEnabled |= 4;
-                }
-                break;
-              case GL_TEXTURE_CUBE_MAP:
-                if (!cur.enabled_texCube) {
-                  GLImmediate.currentRenderer = null;
-                  cur.enabled_texCube = true;
-                  cur.texTypesEnabled |= 8;
-                }
-                break;
-            }
-          },
-  
-          hook_disable: function(cap) {
-            var cur = getCurTexUnit();
-            switch (cap) {
-              case GL_TEXTURE_1D:
-                if (cur.enabled_tex1D) {
-                  GLImmediate.currentRenderer = null; // Renderer state changed, and must be recreated or looked up again.
-                  cur.enabled_tex1D = false;
-                  cur.texTypesEnabled &= ~1;
-                }
-                break;
-              case GL_TEXTURE_2D:
-                if (cur.enabled_tex2D) {
-                  GLImmediate.currentRenderer = null;
-                  cur.enabled_tex2D = false;
-                  cur.texTypesEnabled &= ~2;
-                }
-                break;
-              case GL_TEXTURE_3D:
-                if (cur.enabled_tex3D) {
-                  GLImmediate.currentRenderer = null;
-                  cur.enabled_tex3D = false;
-                  cur.texTypesEnabled &= ~4;
-                }
-                break;
-              case GL_TEXTURE_CUBE_MAP:
-                if (cur.enabled_texCube) {
-                  GLImmediate.currentRenderer = null;
-                  cur.enabled_texCube = false;
-                  cur.texTypesEnabled &= ~8;
-                }
-                break;
-            }
-          },
-  
-          hook_texEnvf: function(target, pname, param) {
-            if (target != GL_TEXTURE_ENV)
-              return;
-  
-            var env = getCurTexUnit().env;
-            switch (pname) {
-              case GL_RGB_SCALE:
-                if (env.colorScale != param) {
-                  env.invalidateKey(); // We changed FFP emulation renderer state.
-                  env.colorScale = param;
-                }
-                break;
-              case GL_ALPHA_SCALE:
-                if (env.alphaScale != param) {
-                  env.invalidateKey();
-                  env.alphaScale = param;
-                }
-                break;
-  
-              default:
-                err('WARNING: Unhandled `pname` in call to `glTexEnvf`.');
-            }
-          },
-  
-          hook_texEnvi: function(target, pname, param) {
-            if (target != GL_TEXTURE_ENV)
-              return;
-  
-            var env = getCurTexUnit().env;
-            switch (pname) {
-              case GL_TEXTURE_ENV_MODE:
-                if (env.mode != param) {
-                  env.invalidateKey(); // We changed FFP emulation renderer state.
-                  env.mode = param;
-                }
-                break;
-  
-              case GL_COMBINE_RGB:
-                if (env.colorCombiner != param) {
-                  env.invalidateKey();
-                  env.colorCombiner = param;
-                }
-                break;
-              case GL_COMBINE_ALPHA:
-                if (env.alphaCombiner != param) {
-                  env.invalidateKey();
-                  env.alphaCombiner = param;
-                }
-                break;
-  
-              case GL_SRC0_RGB:
-                if (env.colorSrc[0] != param) {
-                  env.invalidateKey();
-                  env.colorSrc[0] = param;
-                }
-                break;
-              case GL_SRC1_RGB:
-                if (env.colorSrc[1] != param) {
-                  env.invalidateKey();
-                  env.colorSrc[1] = param;
-                }
-                break;
-              case GL_SRC2_RGB:
-                if (env.colorSrc[2] != param) {
-                  env.invalidateKey();
-                  env.colorSrc[2] = param;
-                }
-                break;
-  
-              case GL_SRC0_ALPHA:
-                if (env.alphaSrc[0] != param) {
-                  env.invalidateKey();
-                  env.alphaSrc[0] = param;
-                }
-                break;
-              case GL_SRC1_ALPHA:
-                if (env.alphaSrc[1] != param) {
-                  env.invalidateKey();
-                  env.alphaSrc[1] = param;
-                }
-                break;
-              case GL_SRC2_ALPHA:
-                if (env.alphaSrc[2] != param) {
-                  env.invalidateKey();
-                  env.alphaSrc[2] = param;
-                }
-                break;
-  
-              case GL_OPERAND0_RGB:
-                if (env.colorOp[0] != param) {
-                  env.invalidateKey();
-                  env.colorOp[0] = param;
-                }
-                break;
-              case GL_OPERAND1_RGB:
-                if (env.colorOp[1] != param) {
-                  env.invalidateKey();
-                  env.colorOp[1] = param;
-                }
-                break;
-              case GL_OPERAND2_RGB:
-                if (env.colorOp[2] != param) {
-                  env.invalidateKey();
-                  env.colorOp[2] = param;
-                }
-                break;
-  
-              case GL_OPERAND0_ALPHA:
-                if (env.alphaOp[0] != param) {
-                  env.invalidateKey();
-                  env.alphaOp[0] = param;
-                }
-                break;
-              case GL_OPERAND1_ALPHA:
-                if (env.alphaOp[1] != param) {
-                  env.invalidateKey();
-                  env.alphaOp[1] = param;
-                }
-                break;
-              case GL_OPERAND2_ALPHA:
-                if (env.alphaOp[2] != param) {
-                  env.invalidateKey();
-                  env.alphaOp[2] = param;
-                }
-                break;
-  
-              case GL_RGB_SCALE:
-                if (env.colorScale != param) {
-                  env.invalidateKey();
-                  env.colorScale = param;
-                }
-                break;
-              case GL_ALPHA_SCALE:
-                if (env.alphaScale != param) {
-                  env.invalidateKey();
-                  env.alphaScale = param;
-                }
-                break;
-  
-              default:
-                err('WARNING: Unhandled `pname` in call to `glTexEnvi`.');
-            }
-          },
-  
-          hook_texEnvfv: function(target, pname, params) {
-            if (target != GL_TEXTURE_ENV) return;
-  
-            var env = getCurTexUnit().env;
-            switch (pname) {
-              case GL_TEXTURE_ENV_COLOR: {
-                for (var i = 0; i < 4; i++) {
-                  var param = HEAPF32[(((params)+(i*4))>>2)];
-                  if (env.envColor[i] != param) {
-                    env.invalidateKey(); // We changed FFP emulation renderer state.
-                    env.envColor[i] = param;
-                  }
-                }
-                break
-              }
-              default:
-                err('WARNING: Unhandled `pname` in call to `glTexEnvfv`.');
-            }
-          },
-  
-          hook_getTexEnviv: function(target, pname, param) {
-            if (target != GL_TEXTURE_ENV)
-              return;
-  
-            var env = getCurTexUnit().env;
-            switch (pname) {
-              case GL_TEXTURE_ENV_MODE:
-                HEAP32[((param)>>2)] = env.mode;
-                return;
-  
-              case GL_TEXTURE_ENV_COLOR:
-                HEAP32[((param)>>2)] = Math.max(Math.min(env.envColor[0]*255, 255, -255));
-                HEAP32[(((param)+(1))>>2)] = Math.max(Math.min(env.envColor[1]*255, 255, -255));
-                HEAP32[(((param)+(2))>>2)] = Math.max(Math.min(env.envColor[2]*255, 255, -255));
-                HEAP32[(((param)+(3))>>2)] = Math.max(Math.min(env.envColor[3]*255, 255, -255));
-                return;
-  
-              case GL_COMBINE_RGB:
-                HEAP32[((param)>>2)] = env.colorCombiner;
-                return;
-  
-              case GL_COMBINE_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaCombiner;
-                return;
-  
-              case GL_SRC0_RGB:
-                HEAP32[((param)>>2)] = env.colorSrc[0];
-                return;
-  
-              case GL_SRC1_RGB:
-                HEAP32[((param)>>2)] = env.colorSrc[1];
-                return;
-  
-              case GL_SRC2_RGB:
-                HEAP32[((param)>>2)] = env.colorSrc[2];
-                return;
-  
-              case GL_SRC0_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaSrc[0];
-                return;
-  
-              case GL_SRC1_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaSrc[1];
-                return;
-  
-              case GL_SRC2_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaSrc[2];
-                return;
-  
-              case GL_OPERAND0_RGB:
-                HEAP32[((param)>>2)] = env.colorOp[0];
-                return;
-  
-              case GL_OPERAND1_RGB:
-                HEAP32[((param)>>2)] = env.colorOp[1];
-                return;
-  
-              case GL_OPERAND2_RGB:
-                HEAP32[((param)>>2)] = env.colorOp[2];
-                return;
-  
-              case GL_OPERAND0_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaOp[0];
-                return;
-  
-              case GL_OPERAND1_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaOp[1];
-                return;
-  
-              case GL_OPERAND2_ALPHA:
-                HEAP32[((param)>>2)] = env.alphaOp[2];
-                return;
-  
-              case GL_RGB_SCALE:
-                HEAP32[((param)>>2)] = env.colorScale;
-                return;
-  
-              case GL_ALPHA_SCALE:
-                HEAP32[((param)>>2)] = env.alphaScale;
-                return;
-  
-              default:
-                err('WARNING: Unhandled `pname` in call to `glGetTexEnvi`.');
-            }
-          },
-  
-          hook_getTexEnvfv: function(target, pname, param) {
-            if (target != GL_TEXTURE_ENV)
-              return;
-  
-            var env = getCurTexUnit().env;
-            switch (pname) {
-              case GL_TEXTURE_ENV_COLOR:
-                HEAPF32[((param)>>2)] = env.envColor[0];
-                HEAPF32[(((param)+(4))>>2)] = env.envColor[1];
-                HEAPF32[(((param)+(8))>>2)] = env.envColor[2];
-                HEAPF32[(((param)+(12))>>2)] = env.envColor[3];
-                return;
-            }
-          }
-        };
-      },vertexData:null,vertexDataU8:null,tempData:null,indexData:null,vertexCounter:0,mode:-1,rendererCache:null,rendererComponents:[],rendererComponentPointer:0,lastRenderer:null,lastArrayBuffer:null,lastProgram:null,lastStride:-1,matrix:[],matrixStack:[],currentMatrix:0,tempMatrix:null,matricesModified:false,useTextureMatrix:false,VERTEX:0,NORMAL:1,COLOR:2,TEXTURE0:3,NUM_ATTRIBUTES:-1,MAX_TEXTURES:-1,totalEnabledClientAttributes:0,enabledClientAttributes:[0,0],clientAttributes:[],liveClientAttributes:[],currentRenderer:null,modifiedClientAttributes:false,clientActiveTexture:0,clientColor:null,usedTexUnitList:[],fixedFunctionProgram:null,setClientAttribute:function setClientAttribute(name, size, type, stride, pointer) {
-        var attrib = GLImmediate.clientAttributes[name];
-        if (!attrib) {
-          for (var i = 0; i <= name; i++) { // keep flat
-            if (!GLImmediate.clientAttributes[i]) {
-              GLImmediate.clientAttributes[i] = {
-                name: name,
-                size: size,
-                type: type,
-                stride: stride,
-                pointer: pointer,
-                offset: 0
-              };
-            }
-          }
-        } else {
-          attrib.name = name;
-          attrib.size = size;
-          attrib.type = type;
-          attrib.stride = stride;
-          attrib.pointer = pointer;
-          attrib.offset = 0;
-        }
-        GLImmediate.modifiedClientAttributes = true;
-      },addRendererComponent:function addRendererComponent(name, size, type) {
-        if (!GLImmediate.rendererComponents[name]) {
-          GLImmediate.rendererComponents[name] = 1;
-          if (GLImmediate.enabledClientAttributes[name]) {
-            out("Warning: glTexCoord used after EnableClientState for TEXTURE_COORD_ARRAY for TEXTURE0. Disabling TEXTURE_COORD_ARRAY...");
-          }
-          GLImmediate.enabledClientAttributes[name] = true;
-          GLImmediate.setClientAttribute(name, size, type, 0, GLImmediate.rendererComponentPointer);
-          GLImmediate.rendererComponentPointer += size * GL.byteSizeByType[type - GL.byteSizeByTypeRoot];
-        } else {
-          GLImmediate.rendererComponents[name]++;
-        }
-      },disableBeginEndClientAttributes:function disableBeginEndClientAttributes() {
-        for (var i = 0; i < GLImmediate.NUM_ATTRIBUTES; i++) {
-          if (GLImmediate.rendererComponents[i]) GLImmediate.enabledClientAttributes[i] = false;
-        }
-      },getRenderer:function getRenderer() {
-        // If no FFP state has changed that would have forced to re-evaluate which FFP emulation shader to use,
-        // we have the currently used renderer in cache, and can immediately return that.
-        if (GLImmediate.currentRenderer) {
-          return GLImmediate.currentRenderer;
-        }
-        // return a renderer object given the liveClientAttributes
-        // we maintain a cache of renderers, optimized to not generate garbage
-        var attributes = GLImmediate.liveClientAttributes;
-        var cacheMap = GLImmediate.rendererCache;
-        var keyView = cacheMap.getStaticKeyView().reset();
-  
-        // By attrib state:
-        var enabledAttributesKey = 0;
-        for (var i = 0; i < attributes.length; i++) {
-          enabledAttributesKey |= 1 << attributes[i].name;
-        }
-  
-        // To prevent using more than 31 bits add another level to the maptree
-        // and reset the enabledAttributesKey for the next glemulation state bits
-        keyView.next(enabledAttributesKey);
-        enabledAttributesKey = 0;
-  
-        // By fog state:
-        var fogParam = 0;
-        if (GLEmulation.fogEnabled) {
-          switch (GLEmulation.fogMode) {
-            case 0x801: // GL_EXP2
-              fogParam = 1;
-              break;
-            case 0x2601: // GL_LINEAR
-              fogParam = 2;
-              break;
-            default: // default to GL_EXP
-              fogParam = 3;
-              break;
-          }
-        }
-        enabledAttributesKey = (enabledAttributesKey << 2) | fogParam;
-  
-        // By clip plane mode
-        for (var clipPlaneId = 0; clipPlaneId < GLEmulation.MAX_CLIP_PLANES; clipPlaneId++) {
-          enabledAttributesKey = (enabledAttributesKey << 1) | GLEmulation.clipPlaneEnabled[clipPlaneId];
-        }
-  
-        // By lighting mode and enabled lights
-        enabledAttributesKey = (enabledAttributesKey << 1) | GLEmulation.lightingEnabled;
-        for (var lightId = 0; lightId < GLEmulation.MAX_LIGHTS; lightId++) {
-          enabledAttributesKey = (enabledAttributesKey << 1) | (GLEmulation.lightingEnabled ? GLEmulation.lightEnabled[lightId] : 0);
-        }
-  
-        // By alpha testing mode
-        enabledAttributesKey = (enabledAttributesKey << 3) | (GLEmulation.alphaTestEnabled ? (GLEmulation.alphaTestFunc - 0x200) : 0x7);
-  
-        // By drawing mode:
-        enabledAttributesKey = (enabledAttributesKey << 1) | (GLImmediate.mode == GLctx.POINTS ? 1 : 0);
-  
-        keyView.next(enabledAttributesKey);
-  
-        // By cur program:
-        keyView.next(GL.currProgram);
-        if (!GL.currProgram) {
-          GLImmediate.TexEnvJIT.traverseState(keyView);
-        }
-  
-        // If we don't already have it, create it.
-        var renderer = keyView.get();
-        if (!renderer) {
-          renderer = GLImmediate.createRenderer();
-          GLImmediate.currentRenderer = renderer;
-          keyView.set(renderer);
-          return renderer;
-        }
-        GLImmediate.currentRenderer = renderer; // Cache the currently used renderer, so later lookups without state changes can get this fast.
-        return renderer;
-      },createRenderer:function createRenderer(renderer) {
-        var useCurrProgram = !!GL.currProgram;
-        var hasTextures = false;
-        for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-          var texAttribName = GLImmediate.TEXTURE0 + i;
-          if (!GLImmediate.enabledClientAttributes[texAttribName])
-            continue;
-  
-          if (!useCurrProgram) {
-            if (GLImmediate.TexEnvJIT.getTexUnitType(i) == 0) {
-               warnOnce("GL_TEXTURE" + i + " coords are supplied, but that texture unit is disabled in the fixed-function pipeline.");
-            }
-          }
-  
-          hasTextures = true;
-        }
-  
-        /** @constructor */
-        function Renderer() {
-          this.init = function() {
-            // For fixed-function shader generation.
-            var uTexUnitPrefix = 'u_texUnit';
-            var aTexCoordPrefix = 'a_texCoord';
-            var vTexCoordPrefix = 'v_texCoord';
-            var vPrimColor = 'v_color';
-            var uTexMatrixPrefix = GLImmediate.useTextureMatrix ? 'u_textureMatrix' : null;
-  
-            if (useCurrProgram) {
-              if (GL.shaderInfos[GL.programShaders[GL.currProgram][0]].type == GLctx.VERTEX_SHADER) {
-                this.vertexShader = GL.shaders[GL.programShaders[GL.currProgram][0]];
-                this.fragmentShader = GL.shaders[GL.programShaders[GL.currProgram][1]];
-              } else {
-                this.vertexShader = GL.shaders[GL.programShaders[GL.currProgram][1]];
-                this.fragmentShader = GL.shaders[GL.programShaders[GL.currProgram][0]];
-              }
-              this.program = GL.programs[GL.currProgram];
-              this.usedTexUnitList = [];
-            } else {
-              // IMPORTANT NOTE: If you parameterize the shader source based on any runtime values
-              // in order to create the least expensive shader possible based on the features being
-              // used, you should also update the code in the beginning of getRenderer to make sure
-              // that you cache the renderer based on the said parameters.
-              if (GLEmulation.fogEnabled) {
-                switch (GLEmulation.fogMode) {
-                  case 0x801: // GL_EXP2
-                    // fog = exp(-(gl_Fog.density * gl_FogFragCoord)^2)
-                    var fogFormula = '  float fog = exp(-u_fogDensity * u_fogDensity * ecDistance * ecDistance); \n';
-                    break;
-                  case 0x2601: // GL_LINEAR
-                    // fog = (gl_Fog.end - gl_FogFragCoord) * gl_fog.scale
-                    var fogFormula = '  float fog = (u_fogEnd - ecDistance) * u_fogScale; \n';
-                    break;
-                  default: // default to GL_EXP
-                    // fog = exp(-gl_Fog.density * gl_FogFragCoord)
-                    var fogFormula = '  float fog = exp(-u_fogDensity * ecDistance); \n';
-                    break;
-                }
-              }
-  
-              GLImmediate.TexEnvJIT.setGLSLVars(uTexUnitPrefix, vTexCoordPrefix, vPrimColor, uTexMatrixPrefix);
-              var fsTexEnvPass = GLImmediate.TexEnvJIT.genAllPassLines('gl_FragColor', 2);
-  
-              var texUnitAttribList = '';
-              var texUnitVaryingList = '';
-              var texUnitUniformList = '';
-              var vsTexCoordInits = '';
-              this.usedTexUnitList = GLImmediate.TexEnvJIT.getUsedTexUnitList();
-              for (var i = 0; i < this.usedTexUnitList.length; i++) {
-                var texUnit = this.usedTexUnitList[i];
-                texUnitAttribList += 'attribute vec4 ' + aTexCoordPrefix + texUnit + ';\n';
-                texUnitVaryingList += 'varying vec4 ' + vTexCoordPrefix + texUnit + ';\n';
-                texUnitUniformList += 'uniform sampler2D ' + uTexUnitPrefix + texUnit + ';\n';
-                vsTexCoordInits += '  ' + vTexCoordPrefix + texUnit + ' = ' + aTexCoordPrefix + texUnit + ';\n';
-  
-                if (GLImmediate.useTextureMatrix) {
-                  texUnitUniformList += 'uniform mat4 ' + uTexMatrixPrefix + texUnit + ';\n';
-                }
-              }
-  
-              var vsFogVaryingInit = null;
-              if (GLEmulation.fogEnabled) {
-                vsFogVaryingInit = '  v_fogFragCoord = abs(ecPosition.z);\n';
-              }
-  
-              var vsPointSizeDefs = null;
-              var vsPointSizeInit = null;
-              if (GLImmediate.mode == GLctx.POINTS) {
-                vsPointSizeDefs = 'uniform float u_pointSize;\n';
-                vsPointSizeInit = '  gl_PointSize = u_pointSize;\n';
-              }
-  
-              var vsClipPlaneDefs = '';
-              var vsClipPlaneInit = '';
-              var fsClipPlaneDefs = '';
-              var fsClipPlanePass = '';
-              for (var clipPlaneId = 0; clipPlaneId < GLEmulation.MAX_CLIP_PLANES; clipPlaneId++) {
-                if (GLEmulation.clipPlaneEnabled[clipPlaneId]) {
-                  vsClipPlaneDefs += 'uniform vec4 u_clipPlaneEquation' + clipPlaneId + ';';
-                  vsClipPlaneDefs += 'varying float v_clipDistance' + clipPlaneId + ';';
-                  vsClipPlaneInit += '  v_clipDistance' + clipPlaneId + ' = dot(ecPosition, u_clipPlaneEquation' + clipPlaneId + ');';
-                  fsClipPlaneDefs += 'varying float v_clipDistance' + clipPlaneId + ';';
-                  fsClipPlanePass += '  if(v_clipDistance' + clipPlaneId + ' < 0.0) discard;';
-                }
-              }
-  
-              var vsLightingDefs = '';
-              var vsLightingPass = '';
-              if (GLEmulation.lightingEnabled) {
-                vsLightingDefs += 'attribute vec3 a_normal;';
-                vsLightingDefs += 'uniform mat3 u_normalMatrix;';
-                vsLightingDefs += 'uniform vec4 u_lightModelAmbient;';
-                vsLightingDefs += 'uniform vec4 u_materialAmbient;';
-                vsLightingDefs += 'uniform vec4 u_materialDiffuse;';
-                vsLightingDefs += 'uniform vec4 u_materialSpecular;';
-                vsLightingDefs += 'uniform float u_materialShininess;';
-                vsLightingDefs += 'uniform vec4 u_materialEmission;';
-  
-                vsLightingPass += '  vec3 ecNormal = normalize(u_normalMatrix * a_normal);';
-                vsLightingPass += '  v_color.w = u_materialDiffuse.w;';
-                vsLightingPass += '  v_color.xyz = u_materialEmission.xyz;';
-                vsLightingPass += '  v_color.xyz += u_lightModelAmbient.xyz * u_materialAmbient.xyz;';
-  
-                for (var lightId = 0; lightId < GLEmulation.MAX_LIGHTS; lightId++) {
-                  if (GLEmulation.lightEnabled[lightId]) {
-                    vsLightingDefs += 'uniform vec4 u_lightAmbient' + lightId + ';';
-                    vsLightingDefs += 'uniform vec4 u_lightDiffuse' + lightId + ';';
-                    vsLightingDefs += 'uniform vec4 u_lightSpecular' + lightId + ';';
-                    vsLightingDefs += 'uniform vec4 u_lightPosition' + lightId + ';';
-  
-                    vsLightingPass += '  {';
-                    vsLightingPass += '    vec3 lightDirection = normalize(u_lightPosition' + lightId + ').xyz;';
-                    vsLightingPass += '    vec3 halfVector = normalize(lightDirection + vec3(0,0,1));';
-                    vsLightingPass += '    vec3 ambient = u_lightAmbient' + lightId + '.xyz * u_materialAmbient.xyz;';
-                    vsLightingPass += '    float diffuseI = max(dot(ecNormal, lightDirection), 0.0);';
-                    vsLightingPass += '    float specularI = max(dot(ecNormal, halfVector), 0.0);';
-                    vsLightingPass += '    vec3 diffuse = diffuseI * u_lightDiffuse' + lightId + '.xyz * u_materialDiffuse.xyz;';
-                    vsLightingPass += '    specularI = (diffuseI > 0.0 && specularI > 0.0) ? exp(u_materialShininess * log(specularI)) : 0.0;';
-                    vsLightingPass += '    vec3 specular = specularI * u_lightSpecular' + lightId + '.xyz * u_materialSpecular.xyz;';
-                    vsLightingPass += '    v_color.xyz += ambient + diffuse + specular;';
-                    vsLightingPass += '  }';
-                  }
-                }
-                vsLightingPass += '  v_color = clamp(v_color, 0.0, 1.0);';
-              }
-  
-              var vsSource = [
-                'attribute vec4 a_position;',
-                'attribute vec4 a_color;',
-                'varying vec4 v_color;',
-                texUnitAttribList,
-                texUnitVaryingList,
-                (GLEmulation.fogEnabled ? 'varying float v_fogFragCoord;' : null),
-                'uniform mat4 u_modelView;',
-                'uniform mat4 u_projection;',
-                vsPointSizeDefs,
-                vsClipPlaneDefs,
-                vsLightingDefs,
-                'void main()',
-                '{',
-                '  vec4 ecPosition = u_modelView * a_position;', // eye-coordinate position
-                '  gl_Position = u_projection * ecPosition;',
-                '  v_color = a_color;',
-                vsTexCoordInits,
-                vsFogVaryingInit,
-                vsPointSizeInit,
-                vsClipPlaneInit,
-                vsLightingPass,
-                '}',
-                ''
-              ].join('\n').replace(/\n\n+/g, '\n');
-  
-              this.vertexShader = GLctx.createShader(GLctx.VERTEX_SHADER);
-              GLctx.shaderSource(this.vertexShader, vsSource);
-              GLctx.compileShader(this.vertexShader);
-  
-              var fogHeaderIfNeeded = null;
-              if (GLEmulation.fogEnabled) {
-                fogHeaderIfNeeded = [
-                  '',
-                  'varying float v_fogFragCoord; ',
-                  'uniform vec4 u_fogColor;      ',
-                  'uniform float u_fogEnd;       ',
-                  'uniform float u_fogScale;     ',
-                  'uniform float u_fogDensity;   ',
-                  'float ffog(in float ecDistance) { ',
-                  fogFormula,
-                  '  fog = clamp(fog, 0.0, 1.0); ',
-                  '  return fog;                 ',
-                  '}',
-                  '',
-                ].join("\n");
-              }
-  
-              var fogPass = null;
-              if (GLEmulation.fogEnabled) {
-                fogPass = 'gl_FragColor = vec4(mix(u_fogColor.rgb, gl_FragColor.rgb, ffog(v_fogFragCoord)), gl_FragColor.a);\n';
-              }
-  
-              var fsAlphaTestDefs = '';
-              var fsAlphaTestPass = '';
-              if (GLEmulation.alphaTestEnabled) {
-                fsAlphaTestDefs = 'uniform float u_alphaTestRef;';
-                switch (GLEmulation.alphaTestFunc) {
-                  case 0x200: // GL_NEVER
-                    fsAlphaTestPass = 'discard;';
-                    break;
-                  case 0x201: // GL_LESS
-                    fsAlphaTestPass = 'if( !(gl_FragColor.a < u_alphaTestRef) ) { discard; }';
-                    break;
-                  case 0x202: // GL_EQUAL
-                    fsAlphaTestPass = 'if( !(gl_FragColor.a == u_alphaTestRef) ) { discard; }';
-                    break;
-                  case 0x203: // GL_LEQUAL
-                    fsAlphaTestPass = 'if( !(gl_FragColor.a <= u_alphaTestRef) ) { discard; }';
-                    break;
-                  case 0x204: // GL_GREATER
-                    fsAlphaTestPass = 'if( !(gl_FragColor.a > u_alphaTestRef) ) { discard; }';
-                    break;
-                  case 0x205: // GL_NOTEQUAL
-                    fsAlphaTestPass = 'if( !(gl_FragColor.a != u_alphaTestRef) ) { discard; }';
-                    break;
-                  case 0x206: // GL_GEQUAL
-                    fsAlphaTestPass = 'if( !(gl_FragColor.a >= u_alphaTestRef) ) { discard; }';
-                    break;
-                  case 0x207: // GL_ALWAYS
-                    fsAlphaTestPass = '';
-                    break;
-                }
-              }
-  
-              var fsSource = [
-                'precision mediump float;',
-                texUnitVaryingList,
-                texUnitUniformList,
-                'varying vec4 v_color;',
-                fogHeaderIfNeeded,
-                fsClipPlaneDefs,
-                fsAlphaTestDefs,
-                'void main()',
-                '{',
-                fsClipPlanePass,
-                fsTexEnvPass,
-                fogPass,
-                fsAlphaTestPass,
-                '}',
-                ''
-              ].join("\n").replace(/\n\n+/g, '\n');
-  
-              this.fragmentShader = GLctx.createShader(GLctx.FRAGMENT_SHADER);
-              GLctx.shaderSource(this.fragmentShader, fsSource);
-              GLctx.compileShader(this.fragmentShader);
-  
-              this.program = GLctx.createProgram();
-              GLctx.attachShader(this.program, this.vertexShader);
-              GLctx.attachShader(this.program, this.fragmentShader);
-  
-              // As optimization, bind all attributes to prespecified locations, so that the FFP emulation
-              // code can submit attributes to any generated FFP shader without having to examine each shader in turn.
-              // These prespecified locations are only assumed if GL_FFP_ONLY is specified, since user could also create their
-              // own shaders that didn't have attributes in the same locations.
-              GLctx.bindAttribLocation(this.program, GLImmediate.VERTEX, 'a_position');
-              GLctx.bindAttribLocation(this.program, GLImmediate.COLOR, 'a_color');
-              GLctx.bindAttribLocation(this.program, GLImmediate.NORMAL, 'a_normal');
-              var maxVertexAttribs = GLctx.getParameter(GLctx.MAX_VERTEX_ATTRIBS);
-              for (var i = 0; i < GLImmediate.MAX_TEXTURES && GLImmediate.TEXTURE0 + i < maxVertexAttribs; i++) {
-                GLctx.bindAttribLocation(this.program, GLImmediate.TEXTURE0 + i, 'a_texCoord'+i);
-                GLctx.bindAttribLocation(this.program, GLImmediate.TEXTURE0 + i, aTexCoordPrefix+i);
-              }
-              GLctx.linkProgram(this.program);
-            }
-  
-            // Stores an array that remembers which matrix uniforms are up-to-date in this FFP renderer, so they don't need to be resubmitted
-            // each time we render with this program.
-            this.textureMatrixVersion = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
-  
-            this.positionLocation = GLctx.getAttribLocation(this.program, 'a_position');
-  
-            this.texCoordLocations = [];
-  
-            for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-              if (!GLImmediate.enabledClientAttributes[GLImmediate.TEXTURE0 + i]) {
-                this.texCoordLocations[i] = -1;
-                continue;
-              }
-  
-              if (useCurrProgram) {
-                this.texCoordLocations[i] = GLctx.getAttribLocation(this.program, 'a_texCoord' + i);
-              } else {
-                this.texCoordLocations[i] = GLctx.getAttribLocation(this.program, aTexCoordPrefix + i);
-              }
-            }
-            this.colorLocation = GLctx.getAttribLocation(this.program, 'a_color');
-            if (!useCurrProgram) {
-              // Temporarily switch to the program so we can set our sampler uniforms early.
-              var prevBoundProg = GLctx.getParameter(GLctx.CURRENT_PROGRAM);
-              GLctx.useProgram(this.program);
-              {
-                for (var i = 0; i < this.usedTexUnitList.length; i++) {
-                  var texUnitID = this.usedTexUnitList[i];
-                  var texSamplerLoc = GLctx.getUniformLocation(this.program, uTexUnitPrefix + texUnitID);
-                  GLctx.uniform1i(texSamplerLoc, texUnitID);
-                }
-              }
-              // The default color attribute value is not the same as the default for all other attribute streams (0,0,0,1) but (1,1,1,1),
-              // so explicitly set it right at start.
-              GLctx.vertexAttrib4fv(this.colorLocation, [1,1,1,1]);
-              GLctx.useProgram(prevBoundProg);
-            }
-  
-            this.textureMatrixLocations = [];
-            for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-              this.textureMatrixLocations[i] = GLctx.getUniformLocation(this.program, 'u_textureMatrix' + i);
-            }
-            this.normalLocation = GLctx.getAttribLocation(this.program, 'a_normal');
-  
-            this.modelViewLocation = GLctx.getUniformLocation(this.program, 'u_modelView');
-            this.projectionLocation = GLctx.getUniformLocation(this.program, 'u_projection');
-            this.normalMatrixLocation = GLctx.getUniformLocation(this.program, 'u_normalMatrix');
-  
-            this.hasTextures = hasTextures;
-            this.hasNormal = GLImmediate.enabledClientAttributes[GLImmediate.NORMAL] &&
-                             GLImmediate.clientAttributes[GLImmediate.NORMAL].size > 0 &&
-                             this.normalLocation >= 0;
-            this.hasColor = (this.colorLocation === 0) || this.colorLocation > 0;
-  
-            this.floatType = GLctx.FLOAT; // minor optimization
-  
-            this.fogColorLocation = GLctx.getUniformLocation(this.program, 'u_fogColor');
-            this.fogEndLocation = GLctx.getUniformLocation(this.program, 'u_fogEnd');
-            this.fogScaleLocation = GLctx.getUniformLocation(this.program, 'u_fogScale');
-            this.fogDensityLocation = GLctx.getUniformLocation(this.program, 'u_fogDensity');
-            this.hasFog = !!(this.fogColorLocation || this.fogEndLocation ||
-                             this.fogScaleLocation || this.fogDensityLocation);
-  
-            this.pointSizeLocation = GLctx.getUniformLocation(this.program, 'u_pointSize');
-  
-            this.hasClipPlane = false;
-            this.clipPlaneEquationLocation = [];
-            for (var clipPlaneId = 0; clipPlaneId < GLEmulation.MAX_CLIP_PLANES; clipPlaneId++) {
-              this.clipPlaneEquationLocation[clipPlaneId] = GLctx.getUniformLocation(this.program, 'u_clipPlaneEquation' + clipPlaneId);
-              this.hasClipPlane = (this.hasClipPlane || this.clipPlaneEquationLocation[clipPlaneId]);
-            }
-  
-            this.hasLighting = GLEmulation.lightingEnabled;
-            this.lightModelAmbientLocation = GLctx.getUniformLocation(this.program, 'u_lightModelAmbient');
-            this.materialAmbientLocation = GLctx.getUniformLocation(this.program, 'u_materialAmbient');
-            this.materialDiffuseLocation = GLctx.getUniformLocation(this.program, 'u_materialDiffuse');
-            this.materialSpecularLocation = GLctx.getUniformLocation(this.program, 'u_materialSpecular');
-            this.materialShininessLocation = GLctx.getUniformLocation(this.program, 'u_materialShininess');
-            this.materialEmissionLocation = GLctx.getUniformLocation(this.program, 'u_materialEmission');
-            this.lightAmbientLocation = []
-            this.lightDiffuseLocation = []
-            this.lightSpecularLocation = []
-            this.lightPositionLocation = []
-            for (var lightId = 0; lightId < GLEmulation.MAX_LIGHTS; lightId++) {
-              this.lightAmbientLocation[lightId] = GLctx.getUniformLocation(this.program, 'u_lightAmbient' + lightId);
-              this.lightDiffuseLocation[lightId] = GLctx.getUniformLocation(this.program, 'u_lightDiffuse' + lightId);
-              this.lightSpecularLocation[lightId] = GLctx.getUniformLocation(this.program, 'u_lightSpecular' + lightId);
-              this.lightPositionLocation[lightId] = GLctx.getUniformLocation(this.program, 'u_lightPosition' + lightId);
-            }
-  
-            this.hasAlphaTest = GLEmulation.alphaTestEnabled;
-            this.alphaTestRefLocation = GLctx.getUniformLocation(this.program, 'u_alphaTestRef');
-  
-          };
-  
-          this.prepare = function() {
-            // Calculate the array buffer
-            var arrayBuffer;
-            if (!GLctx.currentArrayBufferBinding) {
-              var start = GLImmediate.firstVertex*GLImmediate.stride;
-              var end = GLImmediate.lastVertex*GLImmediate.stride;
-              assert(end <= GL.MAX_TEMP_BUFFER_SIZE, 'too much vertex data');
-              arrayBuffer = GL.getTempVertexBuffer(end);
-              // TODO: consider using the last buffer we bound, if it was larger. downside is larger buffer, but we might avoid rebinding and preparing
-            } else {
-              arrayBuffer = GLctx.currentArrayBufferBinding;
-            }
-  
-            // If the array buffer is unchanged and the renderer as well, then we can avoid all the work here
-            // XXX We use some heuristics here, and this may not work in all cases. Try disabling GL_UNSAFE_OPTS if you
-            // have odd glitches
-            var lastRenderer = GLImmediate.lastRenderer;
-            var canSkip = this == lastRenderer &&
-                          arrayBuffer == GLImmediate.lastArrayBuffer &&
-                          (GL.currProgram || this.program) == GLImmediate.lastProgram &&
-                          GLImmediate.stride == GLImmediate.lastStride &&
-                          !GLImmediate.matricesModified;
-            if (!canSkip && lastRenderer) lastRenderer.cleanup();
-            if (!GLctx.currentArrayBufferBinding) {
-              // Bind the array buffer and upload data after cleaning up the previous renderer
-  
-              if (arrayBuffer != GLImmediate.lastArrayBuffer) {
-                GLctx.bindBuffer(GLctx.ARRAY_BUFFER, arrayBuffer);
-                GLImmediate.lastArrayBuffer = arrayBuffer;
-              }
-  
-              GLctx.bufferSubData(GLctx.ARRAY_BUFFER, start, GLImmediate.vertexData.subarray(start >> 2, end >> 2));
-            }
-            if (canSkip) return;
-            GLImmediate.lastRenderer = this;
-            GLImmediate.lastProgram = GL.currProgram || this.program;
-            GLImmediate.lastStride = GLImmediate.stride;
-            GLImmediate.matricesModified = false;
-  
-            if (!GL.currProgram) {
-              if (GLImmediate.fixedFunctionProgram != this.program) {
-                GLctx.useProgram(this.program);
-                GLImmediate.fixedFunctionProgram = this.program;
-              }
-            }
-  
-            if (this.modelViewLocation && this.modelViewMatrixVersion != GLImmediate.matrixVersion[0/*m*/]) {
-              this.modelViewMatrixVersion = GLImmediate.matrixVersion[0/*m*/];
-              GLctx.uniformMatrix4fv(this.modelViewLocation, false, GLImmediate.matrix[0/*m*/]);
-  
-              // set normal matrix to the upper 3x3 of the inverse transposed current modelview matrix
-              if (GLEmulation.lightEnabled) {
-                var tmpMVinv = GLImmediate.matrixLib.mat4.create(GLImmediate.matrix[0]);
-                GLImmediate.matrixLib.mat4.inverse(tmpMVinv);
-                GLImmediate.matrixLib.mat4.transpose(tmpMVinv);
-                GLctx.uniformMatrix3fv(this.normalMatrixLocation, false, GLImmediate.matrixLib.mat4.toMat3(tmpMVinv));
-              }
-            }
-            if (this.projectionLocation && this.projectionMatrixVersion != GLImmediate.matrixVersion[1/*p*/]) {
-              this.projectionMatrixVersion = GLImmediate.matrixVersion[1/*p*/];
-              GLctx.uniformMatrix4fv(this.projectionLocation, false, GLImmediate.matrix[1/*p*/]);
-            }
-  
-            var clientAttributes = GLImmediate.clientAttributes;
-            var posAttr = clientAttributes[GLImmediate.VERTEX];
-  
-            GLctx.vertexAttribPointer(this.positionLocation, posAttr.size, posAttr.type, false, GLImmediate.stride, posAttr.offset);
-            GLctx.enableVertexAttribArray(this.positionLocation);
-            if (this.hasNormal) {
-              var normalAttr = clientAttributes[GLImmediate.NORMAL];
-              GLctx.vertexAttribPointer(this.normalLocation, normalAttr.size, normalAttr.type, true, GLImmediate.stride, normalAttr.offset);
-              GLctx.enableVertexAttribArray(this.normalLocation);
-            }
-            if (this.hasTextures) {
-              for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-                var attribLoc = this.texCoordLocations[i];
-                if (attribLoc === undefined || attribLoc < 0) continue;
-                var texAttr = clientAttributes[GLImmediate.TEXTURE0+i];
-  
-                if (texAttr.size) {
-                  GLctx.vertexAttribPointer(attribLoc, texAttr.size, texAttr.type, false, GLImmediate.stride, texAttr.offset);
-                  GLctx.enableVertexAttribArray(attribLoc);
-                } else {
-                  // These two might be dangerous, but let's try them.
-                  GLctx.vertexAttrib4f(attribLoc, 0, 0, 0, 1);
-                  GLctx.disableVertexAttribArray(attribLoc);
-                }
-                var t = 2/*t*/+i;
-                if (this.textureMatrixLocations[i] && this.textureMatrixVersion[t] != GLImmediate.matrixVersion[t]) { // XXX might we need this even without the condition we are currently in?
-                  this.textureMatrixVersion[t] = GLImmediate.matrixVersion[t];
-                  GLctx.uniformMatrix4fv(this.textureMatrixLocations[i], false, GLImmediate.matrix[t]);
-                }
-              }
-            }
-            if (GLImmediate.enabledClientAttributes[GLImmediate.COLOR]) {
-              var colorAttr = clientAttributes[GLImmediate.COLOR];
-              GLctx.vertexAttribPointer(this.colorLocation, colorAttr.size, colorAttr.type, true, GLImmediate.stride, colorAttr.offset);
-              GLctx.enableVertexAttribArray(this.colorLocation);
-            }
-            else if (this.hasColor) {
-              GLctx.disableVertexAttribArray(this.colorLocation);
-              GLctx.vertexAttrib4fv(this.colorLocation, GLImmediate.clientColor);
-            }
-            if (this.hasFog) {
-              if (this.fogColorLocation) GLctx.uniform4fv(this.fogColorLocation, GLEmulation.fogColor);
-              if (this.fogEndLocation) GLctx.uniform1f(this.fogEndLocation, GLEmulation.fogEnd);
-              if (this.fogScaleLocation) GLctx.uniform1f(this.fogScaleLocation, 1/(GLEmulation.fogEnd - GLEmulation.fogStart));
-              if (this.fogDensityLocation) GLctx.uniform1f(this.fogDensityLocation, GLEmulation.fogDensity);
-            }
-  
-            if (this.hasClipPlane) {
-              for (var clipPlaneId = 0; clipPlaneId < GLEmulation.MAX_CLIP_PLANES; clipPlaneId++) {
-                if (this.clipPlaneEquationLocation[clipPlaneId]) GLctx.uniform4fv(this.clipPlaneEquationLocation[clipPlaneId], GLEmulation.clipPlaneEquation[clipPlaneId]);
-              }
-            }
-  
-            if (this.hasLighting) {
-              if (this.lightModelAmbientLocation) GLctx.uniform4fv(this.lightModelAmbientLocation, GLEmulation.lightModelAmbient);
-              if (this.materialAmbientLocation) GLctx.uniform4fv(this.materialAmbientLocation, GLEmulation.materialAmbient);
-              if (this.materialDiffuseLocation) GLctx.uniform4fv(this.materialDiffuseLocation, GLEmulation.materialDiffuse);
-              if (this.materialSpecularLocation) GLctx.uniform4fv(this.materialSpecularLocation, GLEmulation.materialSpecular);
-              if (this.materialShininessLocation) GLctx.uniform1f(this.materialShininessLocation, GLEmulation.materialShininess[0]);
-              if (this.materialEmissionLocation) GLctx.uniform4fv(this.materialEmissionLocation, GLEmulation.materialEmission);
-              for (var lightId = 0; lightId < GLEmulation.MAX_LIGHTS; lightId++) {
-                if (this.lightAmbientLocation[lightId]) GLctx.uniform4fv(this.lightAmbientLocation[lightId], GLEmulation.lightAmbient[lightId]);
-                if (this.lightDiffuseLocation[lightId]) GLctx.uniform4fv(this.lightDiffuseLocation[lightId], GLEmulation.lightDiffuse[lightId]);
-                if (this.lightSpecularLocation[lightId]) GLctx.uniform4fv(this.lightSpecularLocation[lightId], GLEmulation.lightSpecular[lightId]);
-                if (this.lightPositionLocation[lightId]) GLctx.uniform4fv(this.lightPositionLocation[lightId], GLEmulation.lightPosition[lightId]);
-              }
-            }
-  
-            if (this.hasAlphaTest) {
-              if (this.alphaTestRefLocation) GLctx.uniform1f(this.alphaTestRefLocation, GLEmulation.alphaTestRef);
-            }
-  
-            if (GLImmediate.mode == GLctx.POINTS) {
-              if (this.pointSizeLocation) {
-                GLctx.uniform1f(this.pointSizeLocation, GLEmulation.pointSize);
-              }
-            }
-          };
-  
-          this.cleanup = function() {
-            GLctx.disableVertexAttribArray(this.positionLocation);
-            if (this.hasTextures) {
-              for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
-                if (GLImmediate.enabledClientAttributes[GLImmediate.TEXTURE0+i] && this.texCoordLocations[i] >= 0) {
-                  GLctx.disableVertexAttribArray(this.texCoordLocations[i]);
-                }
-              }
-            }
-            if (this.hasColor) {
-              GLctx.disableVertexAttribArray(this.colorLocation);
-            }
-            if (this.hasNormal) {
-              GLctx.disableVertexAttribArray(this.normalLocation);
-            }
-            if (!GL.currProgram) {
-              GLctx.useProgram(null);
-              GLImmediate.fixedFunctionProgram = 0;
-            }
-            if (!GLctx.currentArrayBufferBinding) {
-              GLctx.bindBuffer(GLctx.ARRAY_BUFFER, null);
-              GLImmediate.lastArrayBuffer = null;
-            }
-  
-            GLImmediate.lastRenderer = null;
-            GLImmediate.lastProgram = null;
-            GLImmediate.matricesModified = true;
-          }
-  
-          this.init();
-        }
-        return new Renderer();
-      },setupFuncs:function() {
-        // TexEnv stuff needs to be prepared early, so do it here.
-        // init() is too late for -O2, since it freezes the GL functions
-        // by that point.
-        GLImmediate.MapTreeLib = GLImmediate.spawnMapTreeLib();
-        GLImmediate.spawnMapTreeLib = null;
-  
-        GLImmediate.TexEnvJIT = GLImmediate.spawnTexEnvJIT();
-        GLImmediate.spawnTexEnvJIT = null;
-  
-        GLImmediate.setupHooks();
-      },setupHooks:function() {
-        if (!GLEmulation.hasRunInit) {
-          GLEmulation.init();
-        }
-  
-        var glActiveTexture = _glActiveTexture;
-        _glActiveTexture = _emscripten_glActiveTexture = (texture) => {
-          GLImmediate.TexEnvJIT.hook_activeTexture(texture);
-          glActiveTexture(texture);
-        };
-        
-  
-        var glEnable = _glEnable;
-        _glEnable = _emscripten_glEnable = (cap) => {
-          GLImmediate.TexEnvJIT.hook_enable(cap);
-          glEnable(cap);
-        };
-        
-  
-        var glDisable = _glDisable;
-        _glDisable = _emscripten_glDisable = (cap) => {
-          GLImmediate.TexEnvJIT.hook_disable(cap);
-          glDisable(cap);
-        };
-        
-  
-        var glTexEnvf = (typeof _glTexEnvf != 'undefined') ? _glTexEnvf : () => {};
-        /** @suppress {checkTypes} */
-        _glTexEnvf = _emscripten_glTexEnvf = (target, pname, param) => {
-          GLImmediate.TexEnvJIT.hook_texEnvf(target, pname, param);
-          // Don't call old func, since we are the implementor.
-          //glTexEnvf(target, pname, param);
-        };
-        
-  
-        var glTexEnvi = (typeof _glTexEnvi != 'undefined') ? _glTexEnvi : () => {};
-        /** @suppress {checkTypes} */
-        _glTexEnvi = _emscripten_glTexEnvi = (target, pname, param) => {
-          GLImmediate.TexEnvJIT.hook_texEnvi(target, pname, param);
-          // Don't call old func, since we are the implementor.
-          //glTexEnvi(target, pname, param);
-        };
-        
-  
-        var glTexEnvfv = (typeof _glTexEnvfv != 'undefined') ? _glTexEnvfv : () => {};
-        /** @suppress {checkTypes} */
-        _glTexEnvfv = _emscripten_glTexEnvfv = (target, pname, param) => {
-          GLImmediate.TexEnvJIT.hook_texEnvfv(target, pname, param);
-          // Don't call old func, since we are the implementor.
-          //glTexEnvfv(target, pname, param);
-        };
-        
-  
-        _glGetTexEnviv = (target, pname, param) => {
-          GLImmediate.TexEnvJIT.hook_getTexEnviv(target, pname, param);
-        };
-        
-  
-        _glGetTexEnvfv = (target, pname, param) => {
-          GLImmediate.TexEnvJIT.hook_getTexEnvfv(target, pname, param);
-        };
-        
-  
-        var glGetIntegerv = _glGetIntegerv;
-        _glGetIntegerv = _emscripten_glGetIntegerv = (pname, params) => {
-          switch (pname) {
-            case 0x8B8D: { // GL_CURRENT_PROGRAM
-              // Just query directly so we're working with WebGL objects.
-              var cur = GLctx.getParameter(GLctx.CURRENT_PROGRAM);
-              if (cur == GLImmediate.fixedFunctionProgram) {
-                // Pretend we're not using a program.
-                HEAP32[((params)>>2)] = 0;
-                return;
-              }
-              break;
-            }
-          }
-          glGetIntegerv(pname, params);
-        };
-        
-      },initted:false,init:function() {
-        err('WARNING: using emscripten GL immediate mode emulation. This is very limited in what it supports');
-        GLImmediate.initted = true;
-  
-        if (!Module.useWebGL) return; // a 2D canvas may be currently used TODO: make sure we are actually called in that case
-  
-        // User can override the maximum number of texture units that we emulate. Using fewer texture units increases runtime performance
-        // slightly, so it is advantageous to choose as small value as needed.
-        // Limit to a maximum of 28 to not overflow the state bits used for renderer caching (31 bits = 3 attributes + 28 texture units).
-        GLImmediate.MAX_TEXTURES = Math.min(Module['GL_MAX_TEXTURE_IMAGE_UNITS'] || GLctx.getParameter(GLctx.MAX_TEXTURE_IMAGE_UNITS), 28);
-  
-        GLImmediate.TexEnvJIT.init(GLctx, GLImmediate.MAX_TEXTURES);
-  
-        GLImmediate.NUM_ATTRIBUTES = 3 /*pos+normal+color attributes*/ + GLImmediate.MAX_TEXTURES;
-        GLImmediate.clientAttributes = [];
-        GLEmulation.enabledClientAttribIndices = [];
-        for (var i = 0; i < GLImmediate.NUM_ATTRIBUTES; i++) {
-          GLImmediate.clientAttributes.push({});
-          GLEmulation.enabledClientAttribIndices.push(false);
-        }
-  
-        // Initialize matrix library
-        // When user sets a matrix, increment a 'version number' on the new data, and when rendering, submit
-        // the matrices to the shader program only if they have an old version of the data.
-        GLImmediate.matrix = [];
-        GLImmediate.matrixStack = [];
-        GLImmediate.matrixVersion = [];
-        for (var i = 0; i < 2 + GLImmediate.MAX_TEXTURES; i++) { // Modelview, Projection, plus one matrix for each texture coordinate.
-          GLImmediate.matrixStack.push([]);
-          GLImmediate.matrixVersion.push(0);
-          GLImmediate.matrix.push(GLImmediate.matrixLib.mat4.create());
-          GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[i]);
-        }
-  
-        // Renderer cache
-        GLImmediate.rendererCache = GLImmediate.MapTreeLib.create();
-  
-        // Buffers for data
-        GLImmediate.tempData = new Float32Array(GL.MAX_TEMP_BUFFER_SIZE >> 2);
-        GLImmediate.indexData = new Uint16Array(GL.MAX_TEMP_BUFFER_SIZE >> 1);
-  
-        GLImmediate.vertexDataU8 = new Uint8Array(GLImmediate.tempData.buffer);
-  
-        GL.generateTempBuffers(true, GL.currentContext);
-  
-        GLImmediate.clientColor = new Float32Array([1, 1, 1, 1]);
-      },prepareClientAttributes:function prepareClientAttributes(count, beginEnd) {
-        // If no client attributes were modified since we were last called, do nothing. Note that this
-        // does not work for glBegin/End, where we generate renderer components dynamically and then
-        // disable them ourselves, but it does help with glDrawElements/Arrays.
-        if (!GLImmediate.modifiedClientAttributes) {
-          GLImmediate.vertexCounter = (GLImmediate.stride * count) / 4; // XXX assuming float
-          return;
-        }
-        GLImmediate.modifiedClientAttributes = false;
-  
-        // The role of prepareClientAttributes is to examine the set of client-side vertex attribute buffers
-        // that user code has submitted, and to prepare them to be uploaded to a VBO in GPU memory
-        // (since WebGL does not support client-side rendering, i.e. rendering from vertex data in CPU memory)
-        // User can submit vertex data generally in three different configurations:
-        // 1. Fully planar: all attributes are in their own separate tightly-packed arrays in CPU memory.
-        // 2. Fully interleaved: all attributes share a single array where data is interleaved something like (pos,uv,normal), (pos,uv,normal), ...
-        // 3. Complex hybrid: Multiple separate arrays that either are sparsely strided, and/or partially interleave vertex attributes.
-  
-        // For simplicity, we support the case (2) as the fast case. For (1) and (3), we do a memory copy of the
-        // vertex data here to prepare a relayouted buffer that is of the structure in case (2). The reason
-        // for this is that it allows the emulation code to get away with using just one VBO buffer for rendering,
-        // and not have to maintain multiple ones. Therefore cases (1) and (3) will be very slow, and case (2) is fast.
-  
-        // Detect which case we are in by using a quick heuristic by examining the strides of the buffers. If all the buffers have identical
-        // stride, we assume we have case (2), otherwise we have something more complex.
-        var clientStartPointer = 0x7FFFFFFF;
-        var bytes = 0; // Total number of bytes taken up by a single vertex.
-        var minStride = 0x7FFFFFFF;
-        var maxStride = 0;
-        var attributes = GLImmediate.liveClientAttributes;
-        attributes.length = 0;
-        for (var i = 0; i < 3+GLImmediate.MAX_TEXTURES; i++) {
-          if (GLImmediate.enabledClientAttributes[i]) {
-            var attr = GLImmediate.clientAttributes[i];
-            attributes.push(attr);
-            clientStartPointer = Math.min(clientStartPointer, attr.pointer);
-            attr.sizeBytes = attr.size * GL.byteSizeByType[attr.type - GL.byteSizeByTypeRoot];
-            bytes += attr.sizeBytes;
-            minStride = Math.min(minStride, attr.stride);
-            maxStride = Math.max(maxStride, attr.stride);
-          }
-        }
-  
-        if ((minStride != maxStride || maxStride < bytes) && !beginEnd) {
-          // We are in cases (1) or (3): slow path, shuffle the data around into a single interleaved vertex buffer.
-          // The immediate-mode glBegin()/glEnd() vertex submission gets automatically generated in appropriate layout,
-          // so never need to come down this path if that was used.
-          if (!GLImmediate.restrideBuffer) GLImmediate.restrideBuffer = _malloc(GL.MAX_TEMP_BUFFER_SIZE);
-          var start = GLImmediate.restrideBuffer;
-          bytes = 0;
-          // calculate restrided offsets and total size
-          for (var i = 0; i < attributes.length; i++) {
-            var attr = attributes[i];
-            var size = attr.sizeBytes;
-            if (size % 4 != 0) size += 4 - (size % 4); // align everything
-            attr.offset = bytes;
-            bytes += size;
-          }
-          // copy out the data (we need to know the stride for that, and define attr.pointer)
-          for (var i = 0; i < attributes.length; i++) {
-            var attr = attributes[i];
-            var srcStride = Math.max(attr.sizeBytes, attr.stride);
-            if ((srcStride & 3) == 0 && (attr.sizeBytes & 3) == 0) {
-              var size4 = attr.sizeBytes>>2;
-              var srcStride4 = Math.max(attr.sizeBytes, attr.stride)>>2;
-              for (var j = 0; j < count; j++) {
-                for (var k = 0; k < size4; k++) { // copy in chunks of 4 bytes, our alignment makes this possible
-                  HEAP32[((start + attr.offset + bytes*j)>>2) + k] = HEAP32[(attr.pointer>>2) + j*srcStride4 + k];
-                }
-              }
-            } else {
-              for (var j = 0; j < count; j++) {
-                for (var k = 0; k < attr.sizeBytes; k++) { // source data was not aligned to multiples of 4, must copy byte by byte.
-                  HEAP8[start + attr.offset + bytes*j + k] = HEAP8[attr.pointer + j*srcStride + k];
-                }
-              }
-            }
-            attr.pointer = start + attr.offset;
-          }
-          GLImmediate.stride = bytes;
-          GLImmediate.vertexPointer = start;
-        } else {
-          // case (2): fast path, all data is interleaved to a single vertex array so we can get away with a single VBO upload.
-          if (GLctx.currentArrayBufferBinding) {
-            GLImmediate.vertexPointer = 0;
-          } else {
-            GLImmediate.vertexPointer = clientStartPointer;
-          }
-          for (var i = 0; i < attributes.length; i++) {
-            var attr = attributes[i];
-            attr.offset = attr.pointer - GLImmediate.vertexPointer; // Compute what will be the offset of this attribute in the VBO after we upload.
-          }
-          GLImmediate.stride = Math.max(maxStride, bytes);
-        }
-        if (!beginEnd) {
-          GLImmediate.vertexCounter = (GLImmediate.stride * count) / 4; // XXX assuming float
-        }
-      },flush:function flush(numProvidedIndexes, startIndex, ptr) {
-        assert(numProvidedIndexes >= 0 || !numProvidedIndexes);
-        startIndex = startIndex || 0;
-        ptr = ptr || 0;
-  
-        var renderer = GLImmediate.getRenderer();
-  
-        // Generate index data in a format suitable for GLES 2.0/WebGL
-        var numVertexes = 4 * GLImmediate.vertexCounter / GLImmediate.stride;
-        if (!numVertexes) return;
-        assert(numVertexes % 1 == 0, "`numVertexes` must be an integer.");
-        var emulatedElementArrayBuffer = false;
-        var numIndexes = 0;
-        if (numProvidedIndexes) {
-          numIndexes = numProvidedIndexes;
-          if (!GLctx.currentArrayBufferBinding && GLImmediate.firstVertex > GLImmediate.lastVertex) {
-            // Figure out the first and last vertex from the index data
-            // If we are going to upload array buffer data, we need to find which range to
-            // upload based on the indices. If they are in a buffer on the GPU, that is very
-            // inconvenient! So if you do not have an array buffer, you should also not have
-            // an element array buffer. But best is to use both buffers!
-            assert(!GLctx.currentElementArrayBufferBinding);
-            for (var i = 0; i < numProvidedIndexes; i++) {
-              var currIndex = HEAPU16[(((ptr)+(i*2))>>1)];
-              GLImmediate.firstVertex = Math.min(GLImmediate.firstVertex, currIndex);
-              GLImmediate.lastVertex = Math.max(GLImmediate.lastVertex, currIndex+1);
-            }
-          }
-          if (!GLctx.currentElementArrayBufferBinding) {
-            // If no element array buffer is bound, then indices is a literal pointer to clientside data
-            assert(numProvidedIndexes << 1 <= GL.MAX_TEMP_BUFFER_SIZE, 'too many immediate mode indexes (a)');
-            var indexBuffer = GL.getTempIndexBuffer(numProvidedIndexes << 1);
-            GLctx.bindBuffer(GLctx.ELEMENT_ARRAY_BUFFER, indexBuffer);
-            GLctx.bufferSubData(GLctx.ELEMENT_ARRAY_BUFFER, 0, HEAPU16.subarray((ptr)>>1, (ptr + (numProvidedIndexes << 1))>>1));
-            ptr = 0;
-            emulatedElementArrayBuffer = true;
-          }
-        } else if (GLImmediate.mode > 6) { // above GL_TRIANGLE_FAN are the non-GL ES modes
-          if (GLImmediate.mode != 7) throw 'unsupported immediate mode ' + GLImmediate.mode; // GL_QUADS
-          // GLImmediate.firstVertex is the first vertex we want. Quad indexes are in the pattern
-          // 0 1 2, 0 2 3, 4 5 6, 4 6 7, so we need to look at index firstVertex * 1.5 to see it.
-          // Then since indexes are 2 bytes each, that means 3
-          assert(GLImmediate.firstVertex % 4 == 0);
-          ptr = GLImmediate.firstVertex*3;
-          var numQuads = numVertexes / 4;
-          numIndexes = numQuads * 6; // 0 1 2, 0 2 3 pattern
-          assert(ptr + (numIndexes << 1) <= GL.MAX_TEMP_BUFFER_SIZE, 'too many immediate mode indexes (b)');
-          GLctx.bindBuffer(GLctx.ELEMENT_ARRAY_BUFFER, GL.currentContext.tempQuadIndexBuffer);
-          emulatedElementArrayBuffer = true;
-          GLImmediate.mode = GLctx.TRIANGLES;
-        }
-  
-        renderer.prepare();
-  
-        if (numIndexes) {
-          GLctx.drawElements(GLImmediate.mode, numIndexes, GLctx.UNSIGNED_SHORT, ptr);
-        } else {
-          GLctx.drawArrays(GLImmediate.mode, startIndex, numVertexes);
-        }
-  
-        if (emulatedElementArrayBuffer) {
-          GLctx.bindBuffer(GLctx.ELEMENT_ARRAY_BUFFER, GL.buffers[GLctx.currentElementArrayBufferBinding] || null);
-        }
-  
-      }};
-  Module["GLImmediate"] = GLImmediate;
-  GLImmediate.matrixLib = (function() {
-  
-  /**
-   * @fileoverview gl-matrix - High performance matrix and vector operations for WebGL
-   * @author Brandon Jones
-   * @version 1.2.4
-   */
-  
-  // Modifed for emscripten:
-  // - Global scoping etc.
-  // - Disabled some non-closure-compatible javadoc comments.
-  
-  /*
-   * Copyright (c) 2011 Brandon Jones
-   *
-   * This software is provided 'as-is', without any express or implied
-   * warranty. In no event will the authors be held liable for any damages
-   * arising from the use of this software.
-   *
-   * Permission is granted to anyone to use this software for any purpose,
-   * including commercial applications, and to alter it and redistribute it
-   * freely, subject to the following restrictions:
-   *
-   *    1. The origin of this software must not be misrepresented; you must not
-   *    claim that you wrote the original software. If you use this software
-   *    in a product, an acknowledgment in the product documentation would be
-   *    appreciated but is not required.
-   *
-   *    2. Altered source versions must be plainly marked as such, and must not
-   *    be misrepresented as being the original software.
-   *
-   *    3. This notice may not be removed or altered from any source
-   *    distribution.
-   */
-  
-  
-  /**
-   * @class 3 Dimensional Vector
-   * @name vec3
-   */
-  var vec3 = {};
-  
-  /**
-   * @class 3x3 Matrix
-   * @name mat3
-   */
-  var mat3 = {};
-  
-  /**
-   * @class 4x4 Matrix
-   * @name mat4
-   */
-  var mat4 = {};
-  
-  /**
-   * @class Quaternion
-   * @name quat4
-   */
-  var quat4 = {};
-  
-  var MatrixArray = Float32Array;
-  
-  /*
-   * vec3
-   */
-  
-  /**
-   * Creates a new instance of a vec3 using the default array type
-   * Any javascript array-like objects containing at least 3 numeric elements can serve as a vec3
-   *
-   * _param {vec3} [vec] vec3 containing values to initialize with
-   *
-   * _returns {vec3} New vec3
-   */
-  vec3.create = function (vec) {
-      var dest = new MatrixArray(3);
-  
-      if (vec) {
-          dest[0] = vec[0];
-          dest[1] = vec[1];
-          dest[2] = vec[2];
-      } else {
-          dest[0] = dest[1] = dest[2] = 0;
-      }
-  
-      return dest;
-  };
-  
-  /**
-   * Copies the values of one vec3 to another
-   *
-   * _param {vec3} vec vec3 containing values to copy
-   * _param {vec3} dest vec3 receiving copied values
-   *
-   * _returns {vec3} dest
-   */
-  vec3.set = function (vec, dest) {
-      dest[0] = vec[0];
-      dest[1] = vec[1];
-      dest[2] = vec[2];
-  
-      return dest;
-  };
-  
-  /**
-   * Performs a vector addition
-   *
-   * _param {vec3} vec First operand
-   * _param {vec3} vec2 Second operand
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.add = function (vec, vec2, dest) {
-      if (!dest || vec === dest) {
-          vec[0] += vec2[0];
-          vec[1] += vec2[1];
-          vec[2] += vec2[2];
-          return vec;
-      }
-  
-      dest[0] = vec[0] + vec2[0];
-      dest[1] = vec[1] + vec2[1];
-      dest[2] = vec[2] + vec2[2];
-      return dest;
-  };
-  
-  /**
-   * Performs a vector subtraction
-   *
-   * _param {vec3} vec First operand
-   * _param {vec3} vec2 Second operand
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.subtract = function (vec, vec2, dest) {
-      if (!dest || vec === dest) {
-          vec[0] -= vec2[0];
-          vec[1] -= vec2[1];
-          vec[2] -= vec2[2];
-          return vec;
-      }
-  
-      dest[0] = vec[0] - vec2[0];
-      dest[1] = vec[1] - vec2[1];
-      dest[2] = vec[2] - vec2[2];
-      return dest;
-  };
-  
-  /**
-   * Performs a vector multiplication
-   *
-   * _param {vec3} vec First operand
-   * _param {vec3} vec2 Second operand
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.multiply = function (vec, vec2, dest) {
-      if (!dest || vec === dest) {
-          vec[0] *= vec2[0];
-          vec[1] *= vec2[1];
-          vec[2] *= vec2[2];
-          return vec;
-      }
-  
-      dest[0] = vec[0] * vec2[0];
-      dest[1] = vec[1] * vec2[1];
-      dest[2] = vec[2] * vec2[2];
-      return dest;
-  };
-  
-  /**
-   * Negates the components of a vec3
-   *
-   * _param {vec3} vec vec3 to negate
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.negate = function (vec, dest) {
-      if (!dest) { dest = vec; }
-  
-      dest[0] = -vec[0];
-      dest[1] = -vec[1];
-      dest[2] = -vec[2];
-      return dest;
-  };
-  
-  /**
-   * Multiplies the components of a vec3 by a scalar value
-   *
-   * _param {vec3} vec vec3 to scale
-   * _param {number} val Value to scale by
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.scale = function (vec, val, dest) {
-      if (!dest || vec === dest) {
-          vec[0] *= val;
-          vec[1] *= val;
-          vec[2] *= val;
-          return vec;
-      }
-  
-      dest[0] = vec[0] * val;
-      dest[1] = vec[1] * val;
-      dest[2] = vec[2] * val;
-      return dest;
-  };
-  
-  /**
-   * Generates a unit vector of the same direction as the provided vec3
-   * If vector length is 0, returns [0, 0, 0]
-   *
-   * _param {vec3} vec vec3 to normalize
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.normalize = function (vec, dest) {
-      if (!dest) { dest = vec; }
-  
-      var x = vec[0], y = vec[1], z = vec[2],
-          len = Math.sqrt(x * x + y * y + z * z);
-  
-      if (!len) {
-          dest[0] = 0;
-          dest[1] = 0;
-          dest[2] = 0;
-          return dest;
-      } else if (len === 1) {
-          dest[0] = x;
-          dest[1] = y;
-          dest[2] = z;
-          return dest;
-      }
-  
-      len = 1 / len;
-      dest[0] = x * len;
-      dest[1] = y * len;
-      dest[2] = z * len;
-      return dest;
-  };
-  
-  /**
-   * Generates the cross product of two vec3s
-   *
-   * _param {vec3} vec First operand
-   * _param {vec3} vec2 Second operand
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.cross = function (vec, vec2, dest) {
-      if (!dest) { dest = vec; }
-  
-      var x = vec[0], y = vec[1], z = vec[2],
-          x2 = vec2[0], y2 = vec2[1], z2 = vec2[2];
-  
-      dest[0] = y * z2 - z * y2;
-      dest[1] = z * x2 - x * z2;
-      dest[2] = x * y2 - y * x2;
-      return dest;
-  };
-  
-  /**
-   * Caclulates the length of a vec3
-   *
-   * _param {vec3} vec vec3 to calculate length of
-   *
-   * _returns {number} Length of vec
-   */
-  vec3.length = function (vec) {
-      var x = vec[0], y = vec[1], z = vec[2];
-      return Math.sqrt(x * x + y * y + z * z);
-  };
-  
-  /**
-   * Caclulates the dot product of two vec3s
-   *
-   * _param {vec3} vec First operand
-   * _param {vec3} vec2 Second operand
-   *
-   * _returns {number} Dot product of vec and vec2
-   */
-  vec3.dot = function (vec, vec2) {
-      return vec[0] * vec2[0] + vec[1] * vec2[1] + vec[2] * vec2[2];
-  };
-  
-  /**
-   * Generates a unit vector pointing from one vector to another
-   *
-   * _param {vec3} vec Origin vec3
-   * _param {vec3} vec2 vec3 to point to
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.direction = function (vec, vec2, dest) {
-      if (!dest) { dest = vec; }
-  
-      var x = vec[0] - vec2[0],
-          y = vec[1] - vec2[1],
-          z = vec[2] - vec2[2],
-          len = Math.sqrt(x * x + y * y + z * z);
-  
-      if (!len) {
-          dest[0] = 0;
-          dest[1] = 0;
-          dest[2] = 0;
-          return dest;
-      }
-  
-      len = 1 / len;
-      dest[0] = x * len;
-      dest[1] = y * len;
-      dest[2] = z * len;
-      return dest;
-  };
-  
-  /**
-   * Performs a linear interpolation between two vec3
-   *
-   * _param {vec3} vec First vector
-   * _param {vec3} vec2 Second vector
-   * _param {number} lerp Interpolation amount between the two inputs
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.lerp = function (vec, vec2, lerp, dest) {
-      if (!dest) { dest = vec; }
-  
-      dest[0] = vec[0] + lerp * (vec2[0] - vec[0]);
-      dest[1] = vec[1] + lerp * (vec2[1] - vec[1]);
-      dest[2] = vec[2] + lerp * (vec2[2] - vec[2]);
-  
-      return dest;
-  };
-  
-  /**
-   * Calculates the euclidian distance between two vec3
-   *
-   * Params:
-   * _param {vec3} vec First vector
-   * _param {vec3} vec2 Second vector
-   *
-   * _returns {number} Distance between vec and vec2
-   */
-  vec3.dist = function (vec, vec2) {
-      var x = vec2[0] - vec[0],
-          y = vec2[1] - vec[1],
-          z = vec2[2] - vec[2];
-  
-      return Math.sqrt(x*x + y*y + z*z);
-  };
-  
-  /**
-   * Projects the specified vec3 from screen space into object space
-   * Based on the <a href="http://webcvs.freedesktop.org/mesa/Mesa/src/glu/mesa/project.c?revision=1.4&view=markup">Mesa gluUnProject implementation</a>
-   *
-   * _param {vec3} vec Screen-space vector to project
-   * _param {mat4} view View matrix
-   * _param {mat4} proj Projection matrix
-   * _param {vec4} viewport Viewport as given to gl.viewport [x, y, width, height]
-   * _param {vec3} [dest] vec3 receiving unprojected result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  vec3.unproject = function (vec, view, proj, viewport, dest) {
-      if (!dest) { dest = vec; }
-  
-      var m = mat4.create();
-      var v = new MatrixArray(4);
-  
-      v[0] = (vec[0] - viewport[0]) * 2.0 / viewport[2] - 1.0;
-      v[1] = (vec[1] - viewport[1]) * 2.0 / viewport[3] - 1.0;
-      v[2] = 2.0 * vec[2] - 1.0;
-      v[3] = 1.0;
-  
-      mat4.multiply(proj, view, m);
-      if(!mat4.inverse(m)) { return null; }
-  
-      mat4.multiplyVec4(m, v);
-      if(v[3] === 0.0) { return null; }
-  
-      dest[0] = v[0] / v[3];
-      dest[1] = v[1] / v[3];
-      dest[2] = v[2] / v[3];
-  
-      return dest;
-  };
-  
-  /**
-   * Returns a string representation of a vector
-   *
-   * _param {vec3} vec Vector to represent as a string
-   *
-   * _returns {string} String representation of vec
-   */
-  vec3.str = function (vec) {
-      return '[' + vec[0] + ', ' + vec[1] + ', ' + vec[2] + ']';
-  };
-  
-  /*
-   * mat3
-   */
-  
-  /**
-   * Creates a new instance of a mat3 using the default array type
-   * Any javascript array-like object containing at least 9 numeric elements can serve as a mat3
-   *
-   * _param {mat3} [mat] mat3 containing values to initialize with
-   *
-   * _returns {mat3} New mat3
-   *
-   * @param {Object=} mat
-   */
-  mat3.create = function (mat) {
-      var dest = new MatrixArray(9);
-  
-      if (mat) {
-          dest[0] = mat[0];
-          dest[1] = mat[1];
-          dest[2] = mat[2];
-          dest[3] = mat[3];
-          dest[4] = mat[4];
-          dest[5] = mat[5];
-          dest[6] = mat[6];
-          dest[7] = mat[7];
-          dest[8] = mat[8];
-      }
-  
-      return dest;
-  };
-  
-  /**
-   * Copies the values of one mat3 to another
-   *
-   * _param {mat3} mat mat3 containing values to copy
-   * _param {mat3} dest mat3 receiving copied values
-   *
-   * _returns {mat3} dest
-   */
-  mat3.set = function (mat, dest) {
-      dest[0] = mat[0];
-      dest[1] = mat[1];
-      dest[2] = mat[2];
-      dest[3] = mat[3];
-      dest[4] = mat[4];
-      dest[5] = mat[5];
-      dest[6] = mat[6];
-      dest[7] = mat[7];
-      dest[8] = mat[8];
-      return dest;
-  };
-  
-  /**
-   * Sets a mat3 to an identity matrix
-   *
-   * _param {mat3} dest mat3 to set
-   *
-   * _returns dest if specified, otherwise a new mat3
-   */
-  mat3.identity = function (dest) {
-      if (!dest) { dest = mat3.create(); }
-      dest[0] = 1;
-      dest[1] = 0;
-      dest[2] = 0;
-      dest[3] = 0;
-      dest[4] = 1;
-      dest[5] = 0;
-      dest[6] = 0;
-      dest[7] = 0;
-      dest[8] = 1;
-      return dest;
-  };
-  
-  /**
-   * Transposes a mat3 (flips the values over the diagonal)
-   *
-   * Params:
-   * _param {mat3} mat mat3 to transpose
-   * _param {mat3} [dest] mat3 receiving transposed values. If not specified result is written to mat
-   */
-  mat3.transpose = function (mat, dest) {
-      // If we are transposing ourselves we can skip a few steps but have to cache some values
-      if (!dest || mat === dest) {
-          var a01 = mat[1], a02 = mat[2],
-              a12 = mat[5];
-  
-          mat[1] = mat[3];
-          mat[2] = mat[6];
-          mat[3] = a01;
-          mat[5] = mat[7];
-          mat[6] = a02;
-          mat[7] = a12;
-          return mat;
-      }
-  
-      dest[0] = mat[0];
-      dest[1] = mat[3];
-      dest[2] = mat[6];
-      dest[3] = mat[1];
-      dest[4] = mat[4];
-      dest[5] = mat[7];
-      dest[6] = mat[2];
-      dest[7] = mat[5];
-      dest[8] = mat[8];
-      return dest;
-  };
-  
-  /**
-   * Copies the elements of a mat3 into the upper 3x3 elements of a mat4
-   *
-   * _param {mat3} mat mat3 containing values to copy
-   * _param {mat4} [dest] mat4 receiving copied values
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  mat3.toMat4 = function (mat, dest) {
-      if (!dest) { dest = mat4.create(); }
-  
-      dest[15] = 1;
-      dest[14] = 0;
-      dest[13] = 0;
-      dest[12] = 0;
-  
-      dest[11] = 0;
-      dest[10] = mat[8];
-      dest[9] = mat[7];
-      dest[8] = mat[6];
-  
-      dest[7] = 0;
-      dest[6] = mat[5];
-      dest[5] = mat[4];
-      dest[4] = mat[3];
-  
-      dest[3] = 0;
-      dest[2] = mat[2];
-      dest[1] = mat[1];
-      dest[0] = mat[0];
-  
-      return dest;
-  };
-  
-  /**
-   * Returns a string representation of a mat3
-   *
-   * _param {mat3} mat mat3 to represent as a string
-   *
-   * _param {string} String representation of mat
-   */
-  mat3.str = function (mat) {
-      return '[' + mat[0] + ', ' + mat[1] + ', ' + mat[2] +
-          ', ' + mat[3] + ', ' + mat[4] + ', ' + mat[5] +
-          ', ' + mat[6] + ', ' + mat[7] + ', ' + mat[8] + ']';
-  };
-  
-  /*
-   * mat4
-   */
-  
-  /**
-   * Creates a new instance of a mat4 using the default array type
-   * Any javascript array-like object containing at least 16 numeric elements can serve as a mat4
-   *
-   * _param {mat4} [mat] mat4 containing values to initialize with
-   *
-   * _returns {mat4} New mat4
-   *
-   * @param {Object=} mat
-   */
-  mat4.create = function (mat) {
-      var dest = new MatrixArray(16);
-  
-      if (mat) {
-          dest[0] = mat[0];
-          dest[1] = mat[1];
-          dest[2] = mat[2];
-          dest[3] = mat[3];
-          dest[4] = mat[4];
-          dest[5] = mat[5];
-          dest[6] = mat[6];
-          dest[7] = mat[7];
-          dest[8] = mat[8];
-          dest[9] = mat[9];
-          dest[10] = mat[10];
-          dest[11] = mat[11];
-          dest[12] = mat[12];
-          dest[13] = mat[13];
-          dest[14] = mat[14];
-          dest[15] = mat[15];
-      }
-  
-      return dest;
-  };
-  
-  /**
-   * Copies the values of one mat4 to another
-   *
-   * _param {mat4} mat mat4 containing values to copy
-   * _param {mat4} dest mat4 receiving copied values
-   *
-   * _returns {mat4} dest
-   */
-  mat4.set = function (mat, dest) {
-      dest[0] = mat[0];
-      dest[1] = mat[1];
-      dest[2] = mat[2];
-      dest[3] = mat[3];
-      dest[4] = mat[4];
-      dest[5] = mat[5];
-      dest[6] = mat[6];
-      dest[7] = mat[7];
-      dest[8] = mat[8];
-      dest[9] = mat[9];
-      dest[10] = mat[10];
-      dest[11] = mat[11];
-      dest[12] = mat[12];
-      dest[13] = mat[13];
-      dest[14] = mat[14];
-      dest[15] = mat[15];
-      return dest;
-  };
-  
-  /**
-   * Sets a mat4 to an identity matrix
-   *
-   * _param {mat4} dest mat4 to set
-   *
-   * _returns {mat4} dest
-   */
-  mat4.identity = function (dest) {
-      if (!dest) { dest = mat4.create(); }
-      dest[0] = 1;
-      dest[1] = 0;
-      dest[2] = 0;
-      dest[3] = 0;
-      dest[4] = 0;
-      dest[5] = 1;
-      dest[6] = 0;
-      dest[7] = 0;
-      dest[8] = 0;
-      dest[9] = 0;
-      dest[10] = 1;
-      dest[11] = 0;
-      dest[12] = 0;
-      dest[13] = 0;
-      dest[14] = 0;
-      dest[15] = 1;
-      return dest;
-  };
-  
-  /**
-   * Transposes a mat4 (flips the values over the diagonal)
-   *
-   * _param {mat4} mat mat4 to transpose
-   * _param {mat4} [dest] mat4 receiving transposed values. If not specified result is written to mat
-   */
-  mat4.transpose = function (mat, dest) {
-      // If we are transposing ourselves we can skip a few steps but have to cache some values
-      if (!dest || mat === dest) {
-          var a01 = mat[1], a02 = mat[2], a03 = mat[3],
-              a12 = mat[6], a13 = mat[7],
-              a23 = mat[11];
-  
-          mat[1] = mat[4];
-          mat[2] = mat[8];
-          mat[3] = mat[12];
-          mat[4] = a01;
-          mat[6] = mat[9];
-          mat[7] = mat[13];
-          mat[8] = a02;
-          mat[9] = a12;
-          mat[11] = mat[14];
-          mat[12] = a03;
-          mat[13] = a13;
-          mat[14] = a23;
-          return mat;
-      }
-  
-      dest[0] = mat[0];
-      dest[1] = mat[4];
-      dest[2] = mat[8];
-      dest[3] = mat[12];
-      dest[4] = mat[1];
-      dest[5] = mat[5];
-      dest[6] = mat[9];
-      dest[7] = mat[13];
-      dest[8] = mat[2];
-      dest[9] = mat[6];
-      dest[10] = mat[10];
-      dest[11] = mat[14];
-      dest[12] = mat[3];
-      dest[13] = mat[7];
-      dest[14] = mat[11];
-      dest[15] = mat[15];
-      return dest;
-  };
-  
-  /**
-   * Calculates the determinant of a mat4
-   *
-   * _param {mat4} mat mat4 to calculate determinant of
-   *
-   * _returns {number} determinant of mat
-   */
-  mat4.determinant = function (mat) {
-      // Cache the matrix values (makes for huge speed increases!)
-      var a00 = mat[0], a01 = mat[1], a02 = mat[2], a03 = mat[3],
-          a10 = mat[4], a11 = mat[5], a12 = mat[6], a13 = mat[7],
-          a20 = mat[8], a21 = mat[9], a22 = mat[10], a23 = mat[11],
-          a30 = mat[12], a31 = mat[13], a32 = mat[14], a33 = mat[15];
-  
-      return (a30 * a21 * a12 * a03 - a20 * a31 * a12 * a03 - a30 * a11 * a22 * a03 + a10 * a31 * a22 * a03 +
-              a20 * a11 * a32 * a03 - a10 * a21 * a32 * a03 - a30 * a21 * a02 * a13 + a20 * a31 * a02 * a13 +
-              a30 * a01 * a22 * a13 - a00 * a31 * a22 * a13 - a20 * a01 * a32 * a13 + a00 * a21 * a32 * a13 +
-              a30 * a11 * a02 * a23 - a10 * a31 * a02 * a23 - a30 * a01 * a12 * a23 + a00 * a31 * a12 * a23 +
-              a10 * a01 * a32 * a23 - a00 * a11 * a32 * a23 - a20 * a11 * a02 * a33 + a10 * a21 * a02 * a33 +
-              a20 * a01 * a12 * a33 - a00 * a21 * a12 * a33 - a10 * a01 * a22 * a33 + a00 * a11 * a22 * a33);
-  };
-  
-  /**
-   * Calculates the inverse matrix of a mat4
-   *
-   * _param {mat4} mat mat4 to calculate inverse of
-   * _param {mat4} [dest] mat4 receiving inverse matrix. If not specified result is written to mat, null if matrix cannot be inverted
-   *
-   * @param {Object=} dest
-   */
-  mat4.inverse = function (mat, dest) {
-      if (!dest) { dest = mat; }
-  
-      // Cache the matrix values (makes for huge speed increases!)
-      var a00 = mat[0], a01 = mat[1], a02 = mat[2], a03 = mat[3],
-          a10 = mat[4], a11 = mat[5], a12 = mat[6], a13 = mat[7],
-          a20 = mat[8], a21 = mat[9], a22 = mat[10], a23 = mat[11],
-          a30 = mat[12], a31 = mat[13], a32 = mat[14], a33 = mat[15],
-  
-          b00 = a00 * a11 - a01 * a10,
-          b01 = a00 * a12 - a02 * a10,
-          b02 = a00 * a13 - a03 * a10,
-          b03 = a01 * a12 - a02 * a11,
-          b04 = a01 * a13 - a03 * a11,
-          b05 = a02 * a13 - a03 * a12,
-          b06 = a20 * a31 - a21 * a30,
-          b07 = a20 * a32 - a22 * a30,
-          b08 = a20 * a33 - a23 * a30,
-          b09 = a21 * a32 - a22 * a31,
-          b10 = a21 * a33 - a23 * a31,
-          b11 = a22 * a33 - a23 * a32,
-  
-          d = (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06),
-          invDet;
-  
-          // Calculate the determinant
-          if (!d) { return null; }
-          invDet = 1 / d;
-  
-      dest[0] = (a11 * b11 - a12 * b10 + a13 * b09) * invDet;
-      dest[1] = (-a01 * b11 + a02 * b10 - a03 * b09) * invDet;
-      dest[2] = (a31 * b05 - a32 * b04 + a33 * b03) * invDet;
-      dest[3] = (-a21 * b05 + a22 * b04 - a23 * b03) * invDet;
-      dest[4] = (-a10 * b11 + a12 * b08 - a13 * b07) * invDet;
-      dest[5] = (a00 * b11 - a02 * b08 + a03 * b07) * invDet;
-      dest[6] = (-a30 * b05 + a32 * b02 - a33 * b01) * invDet;
-      dest[7] = (a20 * b05 - a22 * b02 + a23 * b01) * invDet;
-      dest[8] = (a10 * b10 - a11 * b08 + a13 * b06) * invDet;
-      dest[9] = (-a00 * b10 + a01 * b08 - a03 * b06) * invDet;
-      dest[10] = (a30 * b04 - a31 * b02 + a33 * b00) * invDet;
-      dest[11] = (-a20 * b04 + a21 * b02 - a23 * b00) * invDet;
-      dest[12] = (-a10 * b09 + a11 * b07 - a12 * b06) * invDet;
-      dest[13] = (a00 * b09 - a01 * b07 + a02 * b06) * invDet;
-      dest[14] = (-a30 * b03 + a31 * b01 - a32 * b00) * invDet;
-      dest[15] = (a20 * b03 - a21 * b01 + a22 * b00) * invDet;
-  
-      return dest;
-  };
-  
-  /**
-   * Copies the upper 3x3 elements of a mat4 into another mat4
-   *
-   * _param {mat4} mat mat4 containing values to copy
-   * _param {mat4} [dest] mat4 receiving copied values
-   *
-   * _returns {mat4} dest is specified, a new mat4 otherwise
-   */
-  mat4.toRotationMat = function (mat, dest) {
-      if (!dest) { dest = mat4.create(); }
-  
-      dest[0] = mat[0];
-      dest[1] = mat[1];
-      dest[2] = mat[2];
-      dest[3] = mat[3];
-      dest[4] = mat[4];
-      dest[5] = mat[5];
-      dest[6] = mat[6];
-      dest[7] = mat[7];
-      dest[8] = mat[8];
-      dest[9] = mat[9];
-      dest[10] = mat[10];
-      dest[11] = mat[11];
-      dest[12] = 0;
-      dest[13] = 0;
-      dest[14] = 0;
-      dest[15] = 1;
-  
-      return dest;
-  };
-  
-  /**
-   * Copies the upper 3x3 elements of a mat4 into a mat3
-   *
-   * _param {mat4} mat mat4 containing values to copy
-   * _param {mat3} [dest] mat3 receiving copied values
-   *
-   * _returns {mat3} dest is specified, a new mat3 otherwise
-   */
-  mat4.toMat3 = function (mat, dest) {
-      if (!dest) { dest = mat3.create(); }
-  
-      dest[0] = mat[0];
-      dest[1] = mat[1];
-      dest[2] = mat[2];
-      dest[3] = mat[4];
-      dest[4] = mat[5];
-      dest[5] = mat[6];
-      dest[6] = mat[8];
-      dest[7] = mat[9];
-      dest[8] = mat[10];
-  
-      return dest;
-  };
-  
-  /**
-   * Calculates the inverse of the upper 3x3 elements of a mat4 and copies the result into a mat3
-   * The resulting matrix is useful for calculating transformed normals
-   *
-   * Params:
-   * _param {mat4} mat mat4 containing values to invert and copy
-   * _param {mat3} [dest] mat3 receiving values
-   *
-   * _returns {mat3} dest is specified, a new mat3 otherwise, null if the matrix cannot be inverted
-   */
-  mat4.toInverseMat3 = function (mat, dest) {
-      // Cache the matrix values (makes for huge speed increases!)
-      var a00 = mat[0], a01 = mat[1], a02 = mat[2],
-          a10 = mat[4], a11 = mat[5], a12 = mat[6],
-          a20 = mat[8], a21 = mat[9], a22 = mat[10],
-  
-          b01 = a22 * a11 - a12 * a21,
-          b11 = -a22 * a10 + a12 * a20,
-          b21 = a21 * a10 - a11 * a20,
-  
-          d = a00 * b01 + a01 * b11 + a02 * b21,
-          id;
-  
-      if (!d) { return null; }
-      id = 1 / d;
-  
-      if (!dest) { dest = mat3.create(); }
-  
-      dest[0] = b01 * id;
-      dest[1] = (-a22 * a01 + a02 * a21) * id;
-      dest[2] = (a12 * a01 - a02 * a11) * id;
-      dest[3] = b11 * id;
-      dest[4] = (a22 * a00 - a02 * a20) * id;
-      dest[5] = (-a12 * a00 + a02 * a10) * id;
-      dest[6] = b21 * id;
-      dest[7] = (-a21 * a00 + a01 * a20) * id;
-      dest[8] = (a11 * a00 - a01 * a10) * id;
-  
-      return dest;
-  };
-  
-  /**
-   * Performs a matrix multiplication
-   *
-   * _param {mat4} mat First operand
-   * _param {mat4} mat2 Second operand
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.multiply = function (mat, mat2, dest) {
-      if (!dest) { dest = mat; }
-  
-      // Cache the matrix values (makes for huge speed increases!)
-      var a00 = mat[0], a01 = mat[1], a02 = mat[2], a03 = mat[3],
-          a10 = mat[4], a11 = mat[5], a12 = mat[6], a13 = mat[7],
-          a20 = mat[8], a21 = mat[9], a22 = mat[10], a23 = mat[11],
-          a30 = mat[12], a31 = mat[13], a32 = mat[14], a33 = mat[15],
-  
-          b00 = mat2[0], b01 = mat2[1], b02 = mat2[2], b03 = mat2[3],
-          b10 = mat2[4], b11 = mat2[5], b12 = mat2[6], b13 = mat2[7],
-          b20 = mat2[8], b21 = mat2[9], b22 = mat2[10], b23 = mat2[11],
-          b30 = mat2[12], b31 = mat2[13], b32 = mat2[14], b33 = mat2[15];
-  
-      dest[0] = b00 * a00 + b01 * a10 + b02 * a20 + b03 * a30;
-      dest[1] = b00 * a01 + b01 * a11 + b02 * a21 + b03 * a31;
-      dest[2] = b00 * a02 + b01 * a12 + b02 * a22 + b03 * a32;
-      dest[3] = b00 * a03 + b01 * a13 + b02 * a23 + b03 * a33;
-      dest[4] = b10 * a00 + b11 * a10 + b12 * a20 + b13 * a30;
-      dest[5] = b10 * a01 + b11 * a11 + b12 * a21 + b13 * a31;
-      dest[6] = b10 * a02 + b11 * a12 + b12 * a22 + b13 * a32;
-      dest[7] = b10 * a03 + b11 * a13 + b12 * a23 + b13 * a33;
-      dest[8] = b20 * a00 + b21 * a10 + b22 * a20 + b23 * a30;
-      dest[9] = b20 * a01 + b21 * a11 + b22 * a21 + b23 * a31;
-      dest[10] = b20 * a02 + b21 * a12 + b22 * a22 + b23 * a32;
-      dest[11] = b20 * a03 + b21 * a13 + b22 * a23 + b23 * a33;
-      dest[12] = b30 * a00 + b31 * a10 + b32 * a20 + b33 * a30;
-      dest[13] = b30 * a01 + b31 * a11 + b32 * a21 + b33 * a31;
-      dest[14] = b30 * a02 + b31 * a12 + b32 * a22 + b33 * a32;
-      dest[15] = b30 * a03 + b31 * a13 + b32 * a23 + b33 * a33;
-  
-      return dest;
-  };
-  
-  /**
-   * Transforms a vec3 with the given matrix
-   * 4th vector component is implicitly '1'
-   *
-   * _param {mat4} mat mat4 to transform the vector with
-   * _param {vec3} vec vec3 to transform
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec3} dest if specified, vec otherwise
-   */
-  mat4.multiplyVec3 = function (mat, vec, dest) {
-      if (!dest) { dest = vec; }
-  
-      var x = vec[0], y = vec[1], z = vec[2];
-  
-      dest[0] = mat[0] * x + mat[4] * y + mat[8] * z + mat[12];
-      dest[1] = mat[1] * x + mat[5] * y + mat[9] * z + mat[13];
-      dest[2] = mat[2] * x + mat[6] * y + mat[10] * z + mat[14];
-  
-      return dest;
-  };
-  
-  /**
-   * Transforms a vec4 with the given matrix
-   *
-   * _param {mat4} mat mat4 to transform the vector with
-   * _param {vec4} vec vec4 to transform
-   * _param {vec4} [dest] vec4 receiving operation result. If not specified result is written to vec
-   *
-   * _returns {vec4} dest if specified, vec otherwise
-   *
-   * @param {Object=} dest
-   */
-  mat4.multiplyVec4 = function (mat, vec, dest) {
-      if (!dest) { dest = vec; }
-  
-      var x = vec[0], y = vec[1], z = vec[2], w = vec[3];
-  
-      dest[0] = mat[0] * x + mat[4] * y + mat[8] * z + mat[12] * w;
-      dest[1] = mat[1] * x + mat[5] * y + mat[9] * z + mat[13] * w;
-      dest[2] = mat[2] * x + mat[6] * y + mat[10] * z + mat[14] * w;
-      dest[3] = mat[3] * x + mat[7] * y + mat[11] * z + mat[15] * w;
-  
-      return dest;
-  };
-  
-  /**
-   * Translates a matrix by the given vector
-   *
-   * _param {mat4} mat mat4 to translate
-   * _param {vec3} vec vec3 specifying the translation
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.translate = function (mat, vec, dest) {
-      var x = vec[0], y = vec[1], z = vec[2],
-          a00, a01, a02, a03,
-          a10, a11, a12, a13,
-          a20, a21, a22, a23;
-  
-      if (!dest || mat === dest) {
-          mat[12] = mat[0] * x + mat[4] * y + mat[8] * z + mat[12];
-          mat[13] = mat[1] * x + mat[5] * y + mat[9] * z + mat[13];
-          mat[14] = mat[2] * x + mat[6] * y + mat[10] * z + mat[14];
-          mat[15] = mat[3] * x + mat[7] * y + mat[11] * z + mat[15];
-          return mat;
-      }
-  
-      a00 = mat[0]; a01 = mat[1]; a02 = mat[2]; a03 = mat[3];
-      a10 = mat[4]; a11 = mat[5]; a12 = mat[6]; a13 = mat[7];
-      a20 = mat[8]; a21 = mat[9]; a22 = mat[10]; a23 = mat[11];
-  
-      dest[0] = a00; dest[1] = a01; dest[2] = a02; dest[3] = a03;
-      dest[4] = a10; dest[5] = a11; dest[6] = a12; dest[7] = a13;
-      dest[8] = a20; dest[9] = a21; dest[10] = a22; dest[11] = a23;
-  
-      dest[12] = a00 * x + a10 * y + a20 * z + mat[12];
-      dest[13] = a01 * x + a11 * y + a21 * z + mat[13];
-      dest[14] = a02 * x + a12 * y + a22 * z + mat[14];
-      dest[15] = a03 * x + a13 * y + a23 * z + mat[15];
-      return dest;
-  };
-  
-  /**
-   * Scales a matrix by the given vector
-   *
-   * _param {mat4} mat mat4 to scale
-   * _param {vec3} vec vec3 specifying the scale for each axis
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.scale = function (mat, vec, dest) {
-      var x = vec[0], y = vec[1], z = vec[2];
-  
-      if (!dest || mat === dest) {
-          mat[0] *= x;
-          mat[1] *= x;
-          mat[2] *= x;
-          mat[3] *= x;
-          mat[4] *= y;
-          mat[5] *= y;
-          mat[6] *= y;
-          mat[7] *= y;
-          mat[8] *= z;
-          mat[9] *= z;
-          mat[10] *= z;
-          mat[11] *= z;
-          return mat;
-      }
-  
-      dest[0] = mat[0] * x;
-      dest[1] = mat[1] * x;
-      dest[2] = mat[2] * x;
-      dest[3] = mat[3] * x;
-      dest[4] = mat[4] * y;
-      dest[5] = mat[5] * y;
-      dest[6] = mat[6] * y;
-      dest[7] = mat[7] * y;
-      dest[8] = mat[8] * z;
-      dest[9] = mat[9] * z;
-      dest[10] = mat[10] * z;
-      dest[11] = mat[11] * z;
-      dest[12] = mat[12];
-      dest[13] = mat[13];
-      dest[14] = mat[14];
-      dest[15] = mat[15];
-      return dest;
-  };
-  
-  /**
-   * Rotates a matrix by the given angle around the specified axis
-   * If rotating around a primary axis (X,Y,Z) one of the specialized rotation functions should be used instead for performance
-   *
-   * _param {mat4} mat mat4 to rotate
-   * _param {number} angle Angle (in radians) to rotate
-   * _param {vec3} axis vec3 representing the axis to rotate around
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.rotate = function (mat, angle, axis, dest) {
-      var x = axis[0], y = axis[1], z = axis[2],
-          len = Math.sqrt(x * x + y * y + z * z),
-          s, c, t,
-          a00, a01, a02, a03,
-          a10, a11, a12, a13,
-          a20, a21, a22, a23,
-          b00, b01, b02,
-          b10, b11, b12,
-          b20, b21, b22;
-  
-      if (!len) { return null; }
-      if (len !== 1) {
-          len = 1 / len;
-          x *= len;
-          y *= len;
-          z *= len;
-      }
-  
-      s = Math.sin(angle);
-      c = Math.cos(angle);
-      t = 1 - c;
-  
-      a00 = mat[0]; a01 = mat[1]; a02 = mat[2]; a03 = mat[3];
-      a10 = mat[4]; a11 = mat[5]; a12 = mat[6]; a13 = mat[7];
-      a20 = mat[8]; a21 = mat[9]; a22 = mat[10]; a23 = mat[11];
-  
-      // Construct the elements of the rotation matrix
-      b00 = x * x * t + c; b01 = y * x * t + z * s; b02 = z * x * t - y * s;
-      b10 = x * y * t - z * s; b11 = y * y * t + c; b12 = z * y * t + x * s;
-      b20 = x * z * t + y * s; b21 = y * z * t - x * s; b22 = z * z * t + c;
-  
-      if (!dest) {
-          dest = mat;
-      } else if (mat !== dest) { // If the source and destination differ, copy the unchanged last row
-          dest[12] = mat[12];
-          dest[13] = mat[13];
-          dest[14] = mat[14];
-          dest[15] = mat[15];
-      }
-  
-      // Perform rotation-specific matrix multiplication
-      dest[0] = a00 * b00 + a10 * b01 + a20 * b02;
-      dest[1] = a01 * b00 + a11 * b01 + a21 * b02;
-      dest[2] = a02 * b00 + a12 * b01 + a22 * b02;
-      dest[3] = a03 * b00 + a13 * b01 + a23 * b02;
-  
-      dest[4] = a00 * b10 + a10 * b11 + a20 * b12;
-      dest[5] = a01 * b10 + a11 * b11 + a21 * b12;
-      dest[6] = a02 * b10 + a12 * b11 + a22 * b12;
-      dest[7] = a03 * b10 + a13 * b11 + a23 * b12;
-  
-      dest[8] = a00 * b20 + a10 * b21 + a20 * b22;
-      dest[9] = a01 * b20 + a11 * b21 + a21 * b22;
-      dest[10] = a02 * b20 + a12 * b21 + a22 * b22;
-      dest[11] = a03 * b20 + a13 * b21 + a23 * b22;
-      return dest;
-  };
-  
-  /**
-   * Rotates a matrix by the given angle around the X axis
-   *
-   * _param {mat4} mat mat4 to rotate
-   * _param {number} angle Angle (in radians) to rotate
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.rotateX = function (mat, angle, dest) {
-      var s = Math.sin(angle),
-          c = Math.cos(angle),
-          a10 = mat[4],
-          a11 = mat[5],
-          a12 = mat[6],
-          a13 = mat[7],
-          a20 = mat[8],
-          a21 = mat[9],
-          a22 = mat[10],
-          a23 = mat[11];
-  
-      if (!dest) {
-          dest = mat;
-      } else if (mat !== dest) { // If the source and destination differ, copy the unchanged rows
-          dest[0] = mat[0];
-          dest[1] = mat[1];
-          dest[2] = mat[2];
-          dest[3] = mat[3];
-  
-          dest[12] = mat[12];
-          dest[13] = mat[13];
-          dest[14] = mat[14];
-          dest[15] = mat[15];
-      }
-  
-      // Perform axis-specific matrix multiplication
-      dest[4] = a10 * c + a20 * s;
-      dest[5] = a11 * c + a21 * s;
-      dest[6] = a12 * c + a22 * s;
-      dest[7] = a13 * c + a23 * s;
-  
-      dest[8] = a10 * -s + a20 * c;
-      dest[9] = a11 * -s + a21 * c;
-      dest[10] = a12 * -s + a22 * c;
-      dest[11] = a13 * -s + a23 * c;
-      return dest;
-  };
-  
-  /**
-   * Rotates a matrix by the given angle around the Y axis
-   *
-   * _param {mat4} mat mat4 to rotate
-   * _param {number} angle Angle (in radians) to rotate
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.rotateY = function (mat, angle, dest) {
-      var s = Math.sin(angle),
-          c = Math.cos(angle),
-          a00 = mat[0],
-          a01 = mat[1],
-          a02 = mat[2],
-          a03 = mat[3],
-          a20 = mat[8],
-          a21 = mat[9],
-          a22 = mat[10],
-          a23 = mat[11];
-  
-      if (!dest) {
-          dest = mat;
-      } else if (mat !== dest) { // If the source and destination differ, copy the unchanged rows
-          dest[4] = mat[4];
-          dest[5] = mat[5];
-          dest[6] = mat[6];
-          dest[7] = mat[7];
-  
-          dest[12] = mat[12];
-          dest[13] = mat[13];
-          dest[14] = mat[14];
-          dest[15] = mat[15];
-      }
-  
-      // Perform axis-specific matrix multiplication
-      dest[0] = a00 * c + a20 * -s;
-      dest[1] = a01 * c + a21 * -s;
-      dest[2] = a02 * c + a22 * -s;
-      dest[3] = a03 * c + a23 * -s;
-  
-      dest[8] = a00 * s + a20 * c;
-      dest[9] = a01 * s + a21 * c;
-      dest[10] = a02 * s + a22 * c;
-      dest[11] = a03 * s + a23 * c;
-      return dest;
-  };
-  
-  /**
-   * Rotates a matrix by the given angle around the Z axis
-   *
-   * _param {mat4} mat mat4 to rotate
-   * _param {number} angle Angle (in radians) to rotate
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to mat
-   */
-  mat4.rotateZ = function (mat, angle, dest) {
-      var s = Math.sin(angle),
-          c = Math.cos(angle),
-          a00 = mat[0],
-          a01 = mat[1],
-          a02 = mat[2],
-          a03 = mat[3],
-          a10 = mat[4],
-          a11 = mat[5],
-          a12 = mat[6],
-          a13 = mat[7];
-  
-      if (!dest) {
-          dest = mat;
-      } else if (mat !== dest) { // If the source and destination differ, copy the unchanged last row
-          dest[8] = mat[8];
-          dest[9] = mat[9];
-          dest[10] = mat[10];
-          dest[11] = mat[11];
-  
-          dest[12] = mat[12];
-          dest[13] = mat[13];
-          dest[14] = mat[14];
-          dest[15] = mat[15];
-      }
-  
-      // Perform axis-specific matrix multiplication
-      dest[0] = a00 * c + a10 * s;
-      dest[1] = a01 * c + a11 * s;
-      dest[2] = a02 * c + a12 * s;
-      dest[3] = a03 * c + a13 * s;
-  
-      dest[4] = a00 * -s + a10 * c;
-      dest[5] = a01 * -s + a11 * c;
-      dest[6] = a02 * -s + a12 * c;
-      dest[7] = a03 * -s + a13 * c;
-  
-      return dest;
-  };
-  
-  /**
-   * Generates a frustum matrix with the given bounds
-   *
-   * _param {number} left Left bound of the frustum
-   * _param {number} right Right bound of the frustum
-   * _param {number} bottom Bottom bound of the frustum
-   * _param {number} top Top bound of the frustum
-   * _param {number} near Near bound of the frustum
-   * _param {number} far Far bound of the frustum
-   * _param {mat4} [dest] mat4 frustum matrix will be written into
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  mat4.frustum = function (left, right, bottom, top, near, far, dest) {
-      if (!dest) { dest = mat4.create(); }
-      var rl = (right - left),
-          tb = (top - bottom),
-          fn = (far - near);
-      dest[0] = (near * 2) / rl;
-      dest[1] = 0;
-      dest[2] = 0;
-      dest[3] = 0;
-      dest[4] = 0;
-      dest[5] = (near * 2) / tb;
-      dest[6] = 0;
-      dest[7] = 0;
-      dest[8] = (right + left) / rl;
-      dest[9] = (top + bottom) / tb;
-      dest[10] = -(far + near) / fn;
-      dest[11] = -1;
-      dest[12] = 0;
-      dest[13] = 0;
-      dest[14] = -(far * near * 2) / fn;
-      dest[15] = 0;
-      return dest;
-  };
-  
-  /**
-   * Generates a perspective projection matrix with the given bounds
-   *
-   * _param {number} fovy Vertical field of view
-   * _param {number} aspect Aspect ratio. typically viewport width/height
-   * _param {number} near Near bound of the frustum
-   * _param {number} far Far bound of the frustum
-   * _param {mat4} [dest] mat4 frustum matrix will be written into
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  mat4.perspective = function (fovy, aspect, near, far, dest) {
-      var top = near * Math.tan(fovy * Math.PI / 360.0),
-          right = top * aspect;
-      return mat4.frustum(-right, right, -top, top, near, far, dest);
-  };
-  
-  /**
-   * Generates a orthogonal projection matrix with the given bounds
-   *
-   * _param {number} left Left bound of the frustum
-   * _param {number} right Right bound of the frustum
-   * _param {number} bottom Bottom bound of the frustum
-   * _param {number} top Top bound of the frustum
-   * _param {number} near Near bound of the frustum
-   * _param {number} far Far bound of the frustum
-   * _param {mat4} [dest] mat4 frustum matrix will be written into
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  mat4.ortho = function (left, right, bottom, top, near, far, dest) {
-      if (!dest) { dest = mat4.create(); }
-      var rl = (right - left),
-          tb = (top - bottom),
-          fn = (far - near);
-      dest[0] = 2 / rl;
-      dest[1] = 0;
-      dest[2] = 0;
-      dest[3] = 0;
-      dest[4] = 0;
-      dest[5] = 2 / tb;
-      dest[6] = 0;
-      dest[7] = 0;
-      dest[8] = 0;
-      dest[9] = 0;
-      dest[10] = -2 / fn;
-      dest[11] = 0;
-      dest[12] = -(left + right) / rl;
-      dest[13] = -(top + bottom) / tb;
-      dest[14] = -(far + near) / fn;
-      dest[15] = 1;
-      return dest;
-  };
-  
-  /**
-   * Generates a look-at matrix with the given eye position, focal point, and up axis
-   *
-   * _param {vec3} eye Position of the viewer
-   * _param {vec3} center Point the viewer is looking at
-   * _param {vec3} up vec3 pointing "up"
-   * _param {mat4} [dest] mat4 frustum matrix will be written into
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  mat4.lookAt = function (eye, center, up, dest) {
-      if (!dest) { dest = mat4.create(); }
-  
-      var x0, x1, x2, y0, y1, y2, z0, z1, z2, len,
-          eyex = eye[0],
-          eyey = eye[1],
-          eyez = eye[2],
-          upx = up[0],
-          upy = up[1],
-          upz = up[2],
-          centerx = center[0],
-          centery = center[1],
-          centerz = center[2];
-  
-      if (eyex === centerx && eyey === centery && eyez === centerz) {
-          return mat4.identity(dest);
-      }
-  
-      //vec3.direction(eye, center, z);
-      z0 = eyex - centerx;
-      z1 = eyey - centery;
-      z2 = eyez - centerz;
-  
-      // normalize (no check needed for 0 because of early return)
-      len = 1 / Math.sqrt(z0 * z0 + z1 * z1 + z2 * z2);
-      z0 *= len;
-      z1 *= len;
-      z2 *= len;
-  
-      //vec3.normalize(vec3.cross(up, z, x));
-      x0 = upy * z2 - upz * z1;
-      x1 = upz * z0 - upx * z2;
-      x2 = upx * z1 - upy * z0;
-      len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
-      if (!len) {
-          x0 = 0;
-          x1 = 0;
-          x2 = 0;
-      } else {
-          len = 1 / len;
-          x0 *= len;
-          x1 *= len;
-          x2 *= len;
-      }
-  
-      //vec3.normalize(vec3.cross(z, x, y));
-      y0 = z1 * x2 - z2 * x1;
-      y1 = z2 * x0 - z0 * x2;
-      y2 = z0 * x1 - z1 * x0;
-  
-      len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
-      if (!len) {
-          y0 = 0;
-          y1 = 0;
-          y2 = 0;
-      } else {
-          len = 1 / len;
-          y0 *= len;
-          y1 *= len;
-          y2 *= len;
-      }
-  
-      dest[0] = x0;
-      dest[1] = y0;
-      dest[2] = z0;
-      dest[3] = 0;
-      dest[4] = x1;
-      dest[5] = y1;
-      dest[6] = z1;
-      dest[7] = 0;
-      dest[8] = x2;
-      dest[9] = y2;
-      dest[10] = z2;
-      dest[11] = 0;
-      dest[12] = -(x0 * eyex + x1 * eyey + x2 * eyez);
-      dest[13] = -(y0 * eyex + y1 * eyey + y2 * eyez);
-      dest[14] = -(z0 * eyex + z1 * eyey + z2 * eyez);
-      dest[15] = 1;
-  
-      return dest;
-  };
-  
-  /**
-   * Creates a matrix from a quaternion rotation and vector translation
-   * This is equivalent to (but much faster than):
-   *
-   *     mat4.identity(dest);
-   *     mat4.translate(dest, vec);
-   *     var quatMat = mat4.create();
-   *     quat4.toMat4(quat, quatMat);
-   *     mat4.multiply(dest, quatMat);
-   *
-   * _param {quat4} quat Rotation quaternion
-   * _param {vec3} vec Translation vector
-   * _param {mat4} [dest] mat4 receiving operation result. If not specified result is written to a new mat4
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  mat4.fromRotationTranslation = function (quat, vec, dest) {
-      if (!dest) { dest = mat4.create(); }
-  
-      // Quaternion math
-      var x = quat[0], y = quat[1], z = quat[2], w = quat[3],
-          x2 = x + x,
-          y2 = y + y,
-          z2 = z + z,
-  
-          xx = x * x2,
-          xy = x * y2,
-          xz = x * z2,
-          yy = y * y2,
-          yz = y * z2,
-          zz = z * z2,
-          wx = w * x2,
-          wy = w * y2,
-          wz = w * z2;
-  
-      dest[0] = 1 - (yy + zz);
-      dest[1] = xy + wz;
-      dest[2] = xz - wy;
-      dest[3] = 0;
-      dest[4] = xy - wz;
-      dest[5] = 1 - (xx + zz);
-      dest[6] = yz + wx;
-      dest[7] = 0;
-      dest[8] = xz + wy;
-      dest[9] = yz - wx;
-      dest[10] = 1 - (xx + yy);
-      dest[11] = 0;
-      dest[12] = vec[0];
-      dest[13] = vec[1];
-      dest[14] = vec[2];
-      dest[15] = 1;
-  
-      return dest;
-  };
-  
-  /**
-   * Returns a string representation of a mat4
-   *
-   * _param {mat4} mat mat4 to represent as a string
-   *
-   * _returns {string} String representation of mat
-   */
-  mat4.str = function (mat) {
-      return '[' + mat[0] + ', ' + mat[1] + ', ' + mat[2] + ', ' + mat[3] +
-          ', ' + mat[4] + ', ' + mat[5] + ', ' + mat[6] + ', ' + mat[7] +
-          ', ' + mat[8] + ', ' + mat[9] + ', ' + mat[10] + ', ' + mat[11] +
-          ', ' + mat[12] + ', ' + mat[13] + ', ' + mat[14] + ', ' + mat[15] + ']';
-  };
-  
-  /*
-   * quat4
-   */
-  
-  /**
-   * Creates a new instance of a quat4 using the default array type
-   * Any javascript array containing at least 4 numeric elements can serve as a quat4
-   *
-   * _param {quat4} [quat] quat4 containing values to initialize with
-   *
-   * _returns {quat4} New quat4
-   */
-  quat4.create = function (quat) {
-      var dest = new MatrixArray(4);
-  
-      if (quat) {
-          dest[0] = quat[0];
-          dest[1] = quat[1];
-          dest[2] = quat[2];
-          dest[3] = quat[3];
-      }
-  
-      return dest;
-  };
-  
-  /**
-   * Copies the values of one quat4 to another
-   *
-   * _param {quat4} quat quat4 containing values to copy
-   * _param {quat4} dest quat4 receiving copied values
-   *
-   * _returns {quat4} dest
-   */
-  quat4.set = function (quat, dest) {
-      dest[0] = quat[0];
-      dest[1] = quat[1];
-      dest[2] = quat[2];
-      dest[3] = quat[3];
-  
-      return dest;
-  };
-  
-  /**
-   * Calculates the W component of a quat4 from the X, Y, and Z components.
-   * Assumes that quaternion is 1 unit in length.
-   * Any existing W component will be ignored.
-   *
-   * _param {quat4} quat quat4 to calculate W component of
-   * _param {quat4} [dest] quat4 receiving calculated values. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.calculateW = function (quat, dest) {
-      var x = quat[0], y = quat[1], z = quat[2];
-  
-      if (!dest || quat === dest) {
-          quat[3] = -Math.sqrt(Math.abs(1.0 - x * x - y * y - z * z));
-          return quat;
-      }
-      dest[0] = x;
-      dest[1] = y;
-      dest[2] = z;
-      dest[3] = -Math.sqrt(Math.abs(1.0 - x * x - y * y - z * z));
-      return dest;
-  };
-  
-  /**
-   * Calculates the dot product of two quaternions
-   *
-   * _param {quat4} quat First operand
-   * _param {quat4} quat2 Second operand
-   *
-   * @return {number} Dot product of quat and quat2
-   */
-  quat4.dot = function(quat, quat2){
-      return quat[0]*quat2[0] + quat[1]*quat2[1] + quat[2]*quat2[2] + quat[3]*quat2[3];
-  };
-  
-  /**
-   * Calculates the inverse of a quat4
-   *
-   * _param {quat4} quat quat4 to calculate inverse of
-   * _param {quat4} [dest] quat4 receiving inverse values. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.inverse = function(quat, dest) {
-      var q0 = quat[0], q1 = quat[1], q2 = quat[2], q3 = quat[3],
-          dot = q0*q0 + q1*q1 + q2*q2 + q3*q3,
-          invDot = dot ? 1.0/dot : 0;
-  
-      // TODO: Would be faster to return [0,0,0,0] immediately if dot == 0
-  
-      if(!dest || quat === dest) {
-          quat[0] *= -invDot;
-          quat[1] *= -invDot;
-          quat[2] *= -invDot;
-          quat[3] *= invDot;
-          return quat;
-      }
-      dest[0] = -quat[0]*invDot;
-      dest[1] = -quat[1]*invDot;
-      dest[2] = -quat[2]*invDot;
-      dest[3] = quat[3]*invDot;
-      return dest;
-  };
-  
-  
-  /**
-   * Calculates the conjugate of a quat4
-   * If the quaternion is normalized, this function is faster than quat4.inverse and produces the same result.
-   *
-   * _param {quat4} quat quat4 to calculate conjugate of
-   * _param {quat4} [dest] quat4 receiving conjugate values. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.conjugate = function (quat, dest) {
-      if (!dest || quat === dest) {
-          quat[0] *= -1;
-          quat[1] *= -1;
-          quat[2] *= -1;
-          return quat;
-      }
-      dest[0] = -quat[0];
-      dest[1] = -quat[1];
-      dest[2] = -quat[2];
-      dest[3] = quat[3];
-      return dest;
-  };
-  
-  /**
-   * Calculates the length of a quat4
-   *
-   * Params:
-   * _param {quat4} quat quat4 to calculate length of
-   *
-   * _returns Length of quat
-   */
-  quat4.length = function (quat) {
-      var x = quat[0], y = quat[1], z = quat[2], w = quat[3];
-      return Math.sqrt(x * x + y * y + z * z + w * w);
-  };
-  
-  /**
-   * Generates a unit quaternion of the same direction as the provided quat4
-   * If quaternion length is 0, returns [0, 0, 0, 0]
-   *
-   * _param {quat4} quat quat4 to normalize
-   * _param {quat4} [dest] quat4 receiving operation result. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.normalize = function (quat, dest) {
-      if (!dest) { dest = quat; }
-  
-      var x = quat[0], y = quat[1], z = quat[2], w = quat[3],
-          len = Math.sqrt(x * x + y * y + z * z + w * w);
-      if (len === 0) {
-          dest[0] = 0;
-          dest[1] = 0;
-          dest[2] = 0;
-          dest[3] = 0;
-          return dest;
-      }
-      len = 1 / len;
-      dest[0] = x * len;
-      dest[1] = y * len;
-      dest[2] = z * len;
-      dest[3] = w * len;
-  
-      return dest;
-  };
-  
-  /**
-   * Performs quaternion addition
-   *
-   * _param {quat4} quat First operand
-   * _param {quat4} quat2 Second operand
-   * _param {quat4} [dest] quat4 receiving operation result. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.add = function (quat, quat2, dest) {
-      if(!dest || quat === dest) {
-          quat[0] += quat2[0];
-          quat[1] += quat2[1];
-          quat[2] += quat2[2];
-          quat[3] += quat2[3];
-          return quat;
-      }
-      dest[0] = quat[0]+quat2[0];
-      dest[1] = quat[1]+quat2[1];
-      dest[2] = quat[2]+quat2[2];
-      dest[3] = quat[3]+quat2[3];
-      return dest;
-  };
-  
-  /**
-   * Performs a quaternion multiplication
-   *
-   * _param {quat4} quat First operand
-   * _param {quat4} quat2 Second operand
-   * _param {quat4} [dest] quat4 receiving operation result. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.multiply = function (quat, quat2, dest) {
-      if (!dest) { dest = quat; }
-  
-      var qax = quat[0], qay = quat[1], qaz = quat[2], qaw = quat[3],
-          qbx = quat2[0], qby = quat2[1], qbz = quat2[2], qbw = quat2[3];
-  
-      dest[0] = qax * qbw + qaw * qbx + qay * qbz - qaz * qby;
-      dest[1] = qay * qbw + qaw * qby + qaz * qbx - qax * qbz;
-      dest[2] = qaz * qbw + qaw * qbz + qax * qby - qay * qbx;
-      dest[3] = qaw * qbw - qax * qbx - qay * qby - qaz * qbz;
-  
-      return dest;
-  };
-  
-  /**
-   * Transforms a vec3 with the given quaternion
-   *
-   * _param {quat4} quat quat4 to transform the vector with
-   * _param {vec3} vec vec3 to transform
-   * _param {vec3} [dest] vec3 receiving operation result. If not specified result is written to vec
-   *
-   * _returns dest if specified, vec otherwise
-   */
-  quat4.multiplyVec3 = function (quat, vec, dest) {
-      if (!dest) { dest = vec; }
-  
-      var x = vec[0], y = vec[1], z = vec[2],
-          qx = quat[0], qy = quat[1], qz = quat[2], qw = quat[3],
-  
-          // calculate quat * vec
-          ix = qw * x + qy * z - qz * y,
-          iy = qw * y + qz * x - qx * z,
-          iz = qw * z + qx * y - qy * x,
-          iw = -qx * x - qy * y - qz * z;
-  
-      // calculate result * inverse quat
-      dest[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
-      dest[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
-      dest[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
-  
-      return dest;
-  };
-  
-  /**
-   * Multiplies the components of a quaternion by a scalar value
-   *
-   * _param {quat4} quat to scale
-   * _param {number} val Value to scale by
-   * _param {quat4} [dest] quat4 receiving operation result. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.scale = function (quat, val, dest) {
-      if(!dest || quat === dest) {
-          quat[0] *= val;
-          quat[1] *= val;
-          quat[2] *= val;
-          quat[3] *= val;
-          return quat;
-      }
-      dest[0] = quat[0]*val;
-      dest[1] = quat[1]*val;
-      dest[2] = quat[2]*val;
-      dest[3] = quat[3]*val;
-      return dest;
-  };
-  
-  /**
-   * Calculates a 3x3 matrix from the given quat4
-   *
-   * _param {quat4} quat quat4 to create matrix from
-   * _param {mat3} [dest] mat3 receiving operation result
-   *
-   * _returns {mat3} dest if specified, a new mat3 otherwise
-   */
-  quat4.toMat3 = function (quat, dest) {
-      if (!dest) { dest = mat3.create(); }
-  
-      var x = quat[0], y = quat[1], z = quat[2], w = quat[3],
-          x2 = x + x,
-          y2 = y + y,
-          z2 = z + z,
-  
-          xx = x * x2,
-          xy = x * y2,
-          xz = x * z2,
-          yy = y * y2,
-          yz = y * z2,
-          zz = z * z2,
-          wx = w * x2,
-          wy = w * y2,
-          wz = w * z2;
-  
-      dest[0] = 1 - (yy + zz);
-      dest[1] = xy + wz;
-      dest[2] = xz - wy;
-  
-      dest[3] = xy - wz;
-      dest[4] = 1 - (xx + zz);
-      dest[5] = yz + wx;
-  
-      dest[6] = xz + wy;
-      dest[7] = yz - wx;
-      dest[8] = 1 - (xx + yy);
-  
-      return dest;
-  };
-  
-  /**
-   * Calculates a 4x4 matrix from the given quat4
-   *
-   * _param {quat4} quat quat4 to create matrix from
-   * _param {mat4} [dest] mat4 receiving operation result
-   *
-   * _returns {mat4} dest if specified, a new mat4 otherwise
-   */
-  quat4.toMat4 = function (quat, dest) {
-      if (!dest) { dest = mat4.create(); }
-  
-      var x = quat[0], y = quat[1], z = quat[2], w = quat[3],
-          x2 = x + x,
-          y2 = y + y,
-          z2 = z + z,
-  
-          xx = x * x2,
-          xy = x * y2,
-          xz = x * z2,
-          yy = y * y2,
-          yz = y * z2,
-          zz = z * z2,
-          wx = w * x2,
-          wy = w * y2,
-          wz = w * z2;
-  
-      dest[0] = 1 - (yy + zz);
-      dest[1] = xy + wz;
-      dest[2] = xz - wy;
-      dest[3] = 0;
-  
-      dest[4] = xy - wz;
-      dest[5] = 1 - (xx + zz);
-      dest[6] = yz + wx;
-      dest[7] = 0;
-  
-      dest[8] = xz + wy;
-      dest[9] = yz - wx;
-      dest[10] = 1 - (xx + yy);
-      dest[11] = 0;
-  
-      dest[12] = 0;
-      dest[13] = 0;
-      dest[14] = 0;
-      dest[15] = 1;
-  
-      return dest;
-  };
-  
-  /**
-   * Performs a spherical linear interpolation between two quat4
-   *
-   * _param {quat4} quat First quaternion
-   * _param {quat4} quat2 Second quaternion
-   * _param {number} slerp Interpolation amount between the two inputs
-   * _param {quat4} [dest] quat4 receiving operation result. If not specified result is written to quat
-   *
-   * _returns {quat4} dest if specified, quat otherwise
-   */
-  quat4.slerp = function (quat, quat2, slerp, dest) {
-      if (!dest) { dest = quat; }
-  
-      var cosHalfTheta = quat[0] * quat2[0] + quat[1] * quat2[1] + quat[2] * quat2[2] + quat[3] * quat2[3],
-          halfTheta,
-          sinHalfTheta,
-          ratioA,
-          ratioB;
-  
-      if (Math.abs(cosHalfTheta) >= 1.0) {
-          if (dest !== quat) {
-              dest[0] = quat[0];
-              dest[1] = quat[1];
-              dest[2] = quat[2];
-              dest[3] = quat[3];
-          }
-          return dest;
-      }
-  
-      halfTheta = Math.acos(cosHalfTheta);
-      sinHalfTheta = Math.sqrt(1.0 - cosHalfTheta * cosHalfTheta);
-  
-      if (Math.abs(sinHalfTheta) < 0.001) {
-          dest[0] = (quat[0] * 0.5 + quat2[0] * 0.5);
-          dest[1] = (quat[1] * 0.5 + quat2[1] * 0.5);
-          dest[2] = (quat[2] * 0.5 + quat2[2] * 0.5);
-          dest[3] = (quat[3] * 0.5 + quat2[3] * 0.5);
-          return dest;
-      }
-  
-      ratioA = Math.sin((1 - slerp) * halfTheta) / sinHalfTheta;
-      ratioB = Math.sin(slerp * halfTheta) / sinHalfTheta;
-  
-      dest[0] = (quat[0] * ratioA + quat2[0] * ratioB);
-      dest[1] = (quat[1] * ratioA + quat2[1] * ratioB);
-      dest[2] = (quat[2] * ratioA + quat2[2] * ratioB);
-      dest[3] = (quat[3] * ratioA + quat2[3] * ratioB);
-  
-      return dest;
-  };
-  
-  /**
-   * Returns a string representation of a quaternion
-   *
-   * _param {quat4} quat quat4 to represent as a string
-   *
-   * _returns {string} String representation of quat
-   */
-  quat4.str = function (quat) {
-      return '[' + quat[0] + ', ' + quat[1] + ', ' + quat[2] + ', ' + quat[3] + ']';
-  };
-  
-  
-  return {
-    vec3: vec3,
-    mat3: mat3,
-    mat4: mat4,
-    quat4: quat4
-  };
-  
-  })();
-  
-  ;
-  
-  var GLImmediateSetup = {};
-  Module["GLImmediateSetup"] = GLImmediateSetup;
-  function _emscripten_glBegin(mode) {
-      // Push the old state:
-      GLImmediate.enabledClientAttributes_preBegin = GLImmediate.enabledClientAttributes;
-      GLImmediate.enabledClientAttributes = [];
-  
-      GLImmediate.clientAttributes_preBegin = GLImmediate.clientAttributes;
-      GLImmediate.clientAttributes = []
-      for (var i = 0; i < GLImmediate.clientAttributes_preBegin.length; i++) {
-        GLImmediate.clientAttributes.push({});
-      }
-  
-      GLImmediate.mode = mode;
-      GLImmediate.vertexCounter = 0;
-      var components = GLImmediate.rendererComponents = [];
-      for (var i = 0; i < GLImmediate.NUM_ATTRIBUTES; i++) {
-        components[i] = 0;
-      }
-      GLImmediate.rendererComponentPointer = 0;
-      GLImmediate.vertexData = GLImmediate.tempData;
-    }
-  Module["_emscripten_glBegin"] = _emscripten_glBegin;
-
-  function _emscripten_glBeginQuery(target, id) {
-      GLctx['beginQuery'](target, GL.queries[id]);
-    }
-  Module["_emscripten_glBeginQuery"] = _emscripten_glBeginQuery;
-
-  function _emscripten_glBeginQueryEXT(target, id) {
-      GLctx.disjointTimerQueryExt['beginQueryEXT'](target, GL.queries[id]);
-    }
-  Module["_emscripten_glBeginQueryEXT"] = _emscripten_glBeginQueryEXT;
-
-  function _emscripten_glBeginTransformFeedback(x0) { GLctx['beginTransformFeedback'](x0) }
-  Module["_emscripten_glBeginTransformFeedback"] = _emscripten_glBeginTransformFeedback;
-
-  function _emscripten_glBindAttribLocation(program, index, name) {
-      GLctx.bindAttribLocation(GL.programs[program], index, UTF8ToString(name));
-    }
-  Module["_emscripten_glBindAttribLocation"] = _emscripten_glBindAttribLocation;
-
-  function _emscripten_glBindBuffer(target, buffer) {
-      if (target == 0x8892 /*GL_ARRAY_BUFFER*/) {
-        GLctx.currentArrayBufferBinding = buffer;
-        GLImmediate.lastArrayBuffer = buffer;
-      } else if (target == 0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/) {
-        GLctx.currentElementArrayBufferBinding = buffer;
-      }
-  
-      if (target == 0x88EB /*GL_PIXEL_PACK_BUFFER*/) {
-        // In WebGL 2 glReadPixels entry point, we need to use a different WebGL 2 API function call when a buffer is bound to
-        // GL_PIXEL_PACK_BUFFER_BINDING point, so must keep track whether that binding point is non-null to know what is
-        // the proper API function to call.
-        GLctx.currentPixelPackBufferBinding = buffer;
-      } else if (target == 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/) {
-        // In WebGL 2 gl(Compressed)Tex(Sub)Image[23]D entry points, we need to
-        // use a different WebGL 2 API function call when a buffer is bound to
-        // GL_PIXEL_UNPACK_BUFFER_BINDING point, so must keep track whether that
-        // binding point is non-null to know what is the proper API function to
-        // call.
-        GLctx.currentPixelUnpackBufferBinding = buffer;
-      }
-      GLctx.bindBuffer(target, GL.buffers[buffer]);
-    }
-  Module["_emscripten_glBindBuffer"] = _emscripten_glBindBuffer;
-
-  function _emscripten_glBindBufferBase(target, index, buffer) {
-      GLctx['bindBufferBase'](target, index, GL.buffers[buffer]);
-    }
-  Module["_emscripten_glBindBufferBase"] = _emscripten_glBindBufferBase;
-
-  function _emscripten_glBindBufferRange(target, index, buffer, offset, ptrsize) {
-      GLctx['bindBufferRange'](target, index, GL.buffers[buffer], offset, ptrsize);
-    }
-  Module["_emscripten_glBindBufferRange"] = _emscripten_glBindBufferRange;
-
-  function _emscripten_glBindFramebuffer(target, framebuffer) {
-  
-      GLctx.bindFramebuffer(target, GL.framebuffers[framebuffer]);
-  
-    }
-  Module["_emscripten_glBindFramebuffer"] = _emscripten_glBindFramebuffer;
-
-  function _emscripten_glBindProgram(type, id) {
-      assert(id == 0);
-    }
-  Module["_emscripten_glBindProgram"] = _emscripten_glBindProgram;
-
-  function _emscripten_glBindRenderbuffer(target, renderbuffer) {
-      GLctx.bindRenderbuffer(target, GL.renderbuffers[renderbuffer]);
-    }
-  Module["_emscripten_glBindRenderbuffer"] = _emscripten_glBindRenderbuffer;
-
-  function _emscripten_glBindSampler(unit, sampler) {
-      GLctx['bindSampler'](unit, GL.samplers[sampler]);
-    }
-  Module["_emscripten_glBindSampler"] = _emscripten_glBindSampler;
-
-  function _emscripten_glBindTexture(target, texture) {
-      GLctx.bindTexture(target, GL.textures[texture]);
-    }
-  Module["_emscripten_glBindTexture"] = _emscripten_glBindTexture;
-
-  function _emscripten_glBindTransformFeedback(target, id) {
-      GLctx['bindTransformFeedback'](target, GL.transformFeedbacks[id]);
-    }
-  Module["_emscripten_glBindTransformFeedback"] = _emscripten_glBindTransformFeedback;
-
-  function _glEnableClientState(cap) {
-      var attrib = GLEmulation.getAttributeFromCapability(cap);
-      if (attrib === null) {
-        err('WARNING: unhandled clientstate: ' + cap);
-        return;
-      }
-      if (!GLImmediate.enabledClientAttributes[attrib]) {
-        GLImmediate.enabledClientAttributes[attrib] = true;
-        GLImmediate.totalEnabledClientAttributes++;
-        GLImmediate.currentRenderer = null; // Will need to change current renderer, since the set of active vertex pointers changed.
-        if (GLEmulation.currentVao) GLEmulation.currentVao.enabledClientStates[cap] = 1;
-        GLImmediate.modifiedClientAttributes = true;
-      }
-    }
-  Module["_glEnableClientState"] = _glEnableClientState;
-  function _emulGlBindVertexArray(vao) {
-      // undo vao-related things, wipe the slate clean, both for vao of 0 or an actual vao
-      GLEmulation.currentVao = null; // make sure the commands we run here are not recorded
-      if (GLImmediate.lastRenderer) GLImmediate.lastRenderer.cleanup();
-      _glBindBuffer(GLctx.ARRAY_BUFFER, 0); // XXX if one was there before we were bound?
-      _glBindBuffer(GLctx.ELEMENT_ARRAY_BUFFER, 0);
-      for (var vaa in GLEmulation.enabledVertexAttribArrays) {
-        GLctx.disableVertexAttribArray(vaa);
-      }
-      GLEmulation.enabledVertexAttribArrays = {};
-      GLImmediate.enabledClientAttributes = [0, 0];
-      GLImmediate.totalEnabledClientAttributes = 0;
-      GLImmediate.modifiedClientAttributes = true;
-      if (vao) {
-        // replay vao
-        var info = GLEmulation.vaos[vao];
-        _glBindBuffer(GLctx.ARRAY_BUFFER, info.arrayBuffer); // XXX overwrite current binding?
-        _glBindBuffer(GLctx.ELEMENT_ARRAY_BUFFER, info.elementArrayBuffer);
-        for (var vaa in info.enabledVertexAttribArrays) {
-          _glEnableVertexAttribArray(vaa);
-        }
-        for (var vaa in info.vertexAttribPointers) {
-          _glVertexAttribPointer.apply(null, info.vertexAttribPointers[vaa]);
-        }
-        for (var attrib in info.enabledClientStates) {
-          _glEnableClientState(attrib|0);
-        }
-        GLEmulation.currentVao = info; // set currentVao last, so the commands we ran here were not recorded
-      }
-    }
-  Module["_emulGlBindVertexArray"] = _emulGlBindVertexArray;
-  function _emscripten_glBindVertexArray(vao) {
-      _emulGlBindVertexArray(vao);
-      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
-      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
-    }
-  Module["_emscripten_glBindVertexArray"] = _emscripten_glBindVertexArray;
-
-  function _emscripten_glBindVertexArrayOES(vao) {
-      _emulGlBindVertexArray(vao);
-      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
-      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
-    }
-  Module["_emscripten_glBindVertexArrayOES"] = _emscripten_glBindVertexArrayOES;
-
-  function _emscripten_glBlendColor(x0, x1, x2, x3) { GLctx['blendColor'](x0, x1, x2, x3) }
-  Module["_emscripten_glBlendColor"] = _emscripten_glBlendColor;
-
-  function _emscripten_glBlendEquation(x0) { GLctx['blendEquation'](x0) }
-  Module["_emscripten_glBlendEquation"] = _emscripten_glBlendEquation;
-
-  function _emscripten_glBlendEquationSeparate(x0, x1) { GLctx['blendEquationSeparate'](x0, x1) }
-  Module["_emscripten_glBlendEquationSeparate"] = _emscripten_glBlendEquationSeparate;
-
-  function _emscripten_glBlendFunc(x0, x1) { GLctx['blendFunc'](x0, x1) }
-  Module["_emscripten_glBlendFunc"] = _emscripten_glBlendFunc;
-
-  function _emscripten_glBlendFuncSeparate(x0, x1, x2, x3) { GLctx['blendFuncSeparate'](x0, x1, x2, x3) }
-  Module["_emscripten_glBlendFuncSeparate"] = _emscripten_glBlendFuncSeparate;
-
-  function _emscripten_glBlitFramebuffer(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) { GLctx['blitFramebuffer'](x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) }
-  Module["_emscripten_glBlitFramebuffer"] = _emscripten_glBlitFramebuffer;
-
-  function _emscripten_glBufferData(target, size, data, usage) {
-      switch (usage) { // fix usages, WebGL 1 only has *_DRAW
-        case 0x88E1: // GL_STREAM_READ
-        case 0x88E2: // GL_STREAM_COPY
-          usage = 0x88E0; // GL_STREAM_DRAW
-          break;
-        case 0x88E5: // GL_STATIC_READ
-        case 0x88E6: // GL_STATIC_COPY
-          usage = 0x88E4; // GL_STATIC_DRAW
-          break;
-        case 0x88E9: // GL_DYNAMIC_READ
-        case 0x88EA: // GL_DYNAMIC_COPY
-          usage = 0x88E8; // GL_DYNAMIC_DRAW
-          break;
-      }
-  
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        // If size is zero, WebGL would interpret uploading the whole input arraybuffer (starting from given offset), which would
-        // not make sense in WebAssembly, so avoid uploading if size is zero. However we must still call bufferData to establish a
-        // backing storage of zero bytes.
-        if (data && size) {
-          GLctx.bufferData(target, HEAPU8, usage, data, size);
-        } else {
-          GLctx.bufferData(target, size, usage);
-        }
-      } else {
-        // N.b. here first form specifies a heap subarray, second form an integer size, so the ?: code here is polymorphic. It is advised to avoid
-        // randomly mixing both uses in calling code, to avoid any potential JS engine JIT issues.
-        GLctx.bufferData(target, data ? HEAPU8.subarray(data, data+size) : size, usage);
-      }
-    }
-  Module["_emscripten_glBufferData"] = _emscripten_glBufferData;
-
-  function _emscripten_glBufferSubData(target, offset, size, data) {
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        size && GLctx.bufferSubData(target, offset, HEAPU8, data, size);
-        return;
-      }
-      GLctx.bufferSubData(target, offset, HEAPU8.subarray(data, data+size));
-    }
-  Module["_emscripten_glBufferSubData"] = _emscripten_glBufferSubData;
-
-  function _emscripten_glCheckFramebufferStatus(x0) { return GLctx['checkFramebufferStatus'](x0) }
-  Module["_emscripten_glCheckFramebufferStatus"] = _emscripten_glCheckFramebufferStatus;
-
-  function _emscripten_glClear(x0) { GLctx['clear'](x0) }
-  Module["_emscripten_glClear"] = _emscripten_glClear;
-
-  function _emscripten_glClearBufferfi(x0, x1, x2, x3) { GLctx['clearBufferfi'](x0, x1, x2, x3) }
-  Module["_emscripten_glClearBufferfi"] = _emscripten_glClearBufferfi;
-
-  function _emscripten_glClearBufferfv(buffer, drawbuffer, value) {
-  
-      GLctx['clearBufferfv'](buffer, drawbuffer, HEAPF32, value>>2);
-    }
-  Module["_emscripten_glClearBufferfv"] = _emscripten_glClearBufferfv;
-
-  function _emscripten_glClearBufferiv(buffer, drawbuffer, value) {
-  
-      GLctx['clearBufferiv'](buffer, drawbuffer, HEAP32, value>>2);
-    }
-  Module["_emscripten_glClearBufferiv"] = _emscripten_glClearBufferiv;
-
-  function _emscripten_glClearBufferuiv(buffer, drawbuffer, value) {
-  
-      GLctx['clearBufferuiv'](buffer, drawbuffer, HEAPU32, value>>2);
-    }
-  Module["_emscripten_glClearBufferuiv"] = _emscripten_glClearBufferuiv;
-
-  function _emscripten_glClearColor(x0, x1, x2, x3) { GLctx['clearColor'](x0, x1, x2, x3) }
-  Module["_emscripten_glClearColor"] = _emscripten_glClearColor;
-
-  function _emscripten_glClearDepthf(x0) { GLctx['clearDepth'](x0) }
-  Module["_emscripten_glClearDepthf"] = _emscripten_glClearDepthf;
-
-  function _emscripten_glClearStencil(x0) { GLctx['clearStencil'](x0) }
-  Module["_emscripten_glClearStencil"] = _emscripten_glClearStencil;
-
-  function _emscripten_glClientActiveTexture(texture) {
-      GLImmediate.clientActiveTexture = texture - 0x84C0; // GL_TEXTURE0
-    }
-  Module["_emscripten_glClientActiveTexture"] = _emscripten_glClientActiveTexture;
-
-  function convertI32PairToI53(lo, hi) {
-      // This function should not be getting called with too large unsigned numbers
-      // in high part (if hi >= 0x7FFFFFFFF, one should have been calling
-      // convertU32PairToI53())
-      assert(hi === (hi|0));
-      return (lo >>> 0) + hi * 4294967296;
-    }
-  Module["convertI32PairToI53"] = convertI32PairToI53;
-  function _emscripten_glClientWaitSync(sync, flags, timeoutLo, timeoutHi) {
-      // WebGL2 vs GLES3 differences: in GLES3, the timeout parameter is a uint64, where 0xFFFFFFFFFFFFFFFFULL means GL_TIMEOUT_IGNORED.
-      // In JS, there's no 64-bit value types, so instead timeout is taken to be signed, and GL_TIMEOUT_IGNORED is given value -1.
-      // Inherently the value accepted in the timeout is lossy, and can't take in arbitrary u64 bit pattern (but most likely doesn't matter)
-      // See https://www.khronos.org/registry/webgl/specs/latest/2.0/#5.15
-      return GLctx.clientWaitSync(GL.syncs[sync], flags, convertI32PairToI53(timeoutLo, timeoutHi));
-    }
-  Module["_emscripten_glClientWaitSync"] = _emscripten_glClientWaitSync;
-
-  function _emscripten_glClipPlane(pname, param) {
-      if ((pname >= 0x3000) && (pname < 0x3006)  /* GL_CLIP_PLANE0 to GL_CLIP_PLANE5 */) {
-        var clipPlaneId = pname - 0x3000;
-  
-        GLEmulation.clipPlaneEquation[clipPlaneId][0] = HEAPF64[((param)>>3)];
-        GLEmulation.clipPlaneEquation[clipPlaneId][1] = HEAPF64[(((param)+(8))>>3)];
-        GLEmulation.clipPlaneEquation[clipPlaneId][2] = HEAPF64[(((param)+(16))>>3)];
-        GLEmulation.clipPlaneEquation[clipPlaneId][3] = HEAPF64[(((param)+(24))>>3)];
-  
-        // apply inverse transposed current modelview matrix when setting clip plane
-        var tmpMV = GLImmediate.matrixLib.mat4.create(GLImmediate.matrix[0]);
-        GLImmediate.matrixLib.mat4.inverse(tmpMV);
-        GLImmediate.matrixLib.mat4.transpose(tmpMV);
-        GLImmediate.matrixLib.mat4.multiplyVec4(tmpMV, GLEmulation.clipPlaneEquation[clipPlaneId]);
-      }
-    }
-  Module["_emscripten_glClipPlane"] = _emscripten_glClipPlane;
-
-  function _emscripten_glColor4f(r, g, b, a) {
-      r = Math.max(Math.min(r, 1), 0);
-      g = Math.max(Math.min(g, 1), 0);
-      b = Math.max(Math.min(b, 1), 0);
-      a = Math.max(Math.min(a, 1), 0);
-  
-      // TODO: make ub the default, not f, save a few mathops
-      if (GLImmediate.mode >= 0) {
-        var start = GLImmediate.vertexCounter << 2;
-        GLImmediate.vertexDataU8[start + 0] = r * 255;
-        GLImmediate.vertexDataU8[start + 1] = g * 255;
-        GLImmediate.vertexDataU8[start + 2] = b * 255;
-        GLImmediate.vertexDataU8[start + 3] = a * 255;
-        GLImmediate.vertexCounter++;
-        GLImmediate.addRendererComponent(GLImmediate.COLOR, 4, GLctx.UNSIGNED_BYTE);
-      } else {
-        GLImmediate.clientColor[0] = r;
-        GLImmediate.clientColor[1] = g;
-        GLImmediate.clientColor[2] = b;
-        GLImmediate.clientColor[3] = a;
-      }
-    }
-  Module["_emscripten_glColor4f"] = _emscripten_glColor4f;
-  function _emscripten_glColor3d(r, g, b) {
-      _emscripten_glColor4f(r, g, b, 1);
-    }
-  Module["_emscripten_glColor3d"] = _emscripten_glColor3d;
-
-  function _emscripten_glColor3f(r, g, b) {
-      _emscripten_glColor4f(r, g, b, 1);
-    }
-  Module["_emscripten_glColor3f"] = _emscripten_glColor3f;
-
-  function _emscripten_glColor3fv(p) {
-      _emscripten_glColor3f(HEAPF32[((p)>>2)], HEAPF32[(((p)+(4))>>2)], HEAPF32[(((p)+(8))>>2)]);
-    }
-  Module["_emscripten_glColor3fv"] = _emscripten_glColor3fv;
-
-  function _emscripten_glColor4ub(r, g, b, a) {
-      _emscripten_glColor4f((r&255)/255, (g&255)/255, (b&255)/255, (a&255)/255);
-    }
-  Module["_emscripten_glColor4ub"] = _emscripten_glColor4ub;
-  function _emscripten_glColor3ub(r, g, b) {
-      _emscripten_glColor4ub(r, g, b, 255);
-    }
-  Module["_emscripten_glColor3ub"] = _emscripten_glColor3ub;
-
-  function _emscripten_glColor3ubv(p) {
-      _emscripten_glColor3ub(HEAP8[((p)>>0)], HEAP8[(((p)+(1))>>0)], HEAP8[(((p)+(2))>>0)]);
-    }
-  Module["_emscripten_glColor3ubv"] = _emscripten_glColor3ubv;
-
-  function _emscripten_glColor4ui(r, g, b, a) {
-      _emscripten_glColor4f((r>>>0)/4294967295, (g>>>0)/4294967295, (b>>>0)/4294967295, (a>>>0)/4294967295);
-    }
-  Module["_emscripten_glColor4ui"] = _emscripten_glColor4ui;
-  function _emscripten_glColor3ui(r, g, b) {
-      _emscripten_glColor4ui(r, g, b, 4294967295);
-    }
-  Module["_emscripten_glColor3ui"] = _emscripten_glColor3ui;
-
-  function _emscripten_glColor3uiv(p) {
-      _emscripten_glColor3ui(HEAP32[((p)>>2)], HEAP32[(((p)+(4))>>2)], HEAP32[(((p)+(8))>>2)]);
-    }
-  Module["_emscripten_glColor3uiv"] = _emscripten_glColor3uiv;
-
-  function _emscripten_glColor4us(r, g, b, a) {
-      _emscripten_glColor4f((r&65535)/65535, (g&65535)/65535, (b&65535)/65535, (a&65535)/65535);
-    }
-  Module["_emscripten_glColor4us"] = _emscripten_glColor4us;
-  function _emscripten_glColor3us(r, g, b) {
-      _emscripten_glColor4us(r, g, b, 65535);
-    }
-  Module["_emscripten_glColor3us"] = _emscripten_glColor3us;
-
-  function _emscripten_glColor3usv(p) {
-      _emscripten_glColor3us(HEAP16[((p)>>1)], HEAP16[(((p)+(2))>>1)], HEAP16[(((p)+(4))>>1)]);
-    }
-  Module["_emscripten_glColor3usv"] = _emscripten_glColor3usv;
-
-  function _emscripten_glColor4d(r, g, b, a) {
-      r = Math.max(Math.min(r, 1), 0);
-      g = Math.max(Math.min(g, 1), 0);
-      b = Math.max(Math.min(b, 1), 0);
-      a = Math.max(Math.min(a, 1), 0);
-  
-      // TODO: make ub the default, not f, save a few mathops
-      if (GLImmediate.mode >= 0) {
-        var start = GLImmediate.vertexCounter << 2;
-        GLImmediate.vertexDataU8[start + 0] = r * 255;
-        GLImmediate.vertexDataU8[start + 1] = g * 255;
-        GLImmediate.vertexDataU8[start + 2] = b * 255;
-        GLImmediate.vertexDataU8[start + 3] = a * 255;
-        GLImmediate.vertexCounter++;
-        GLImmediate.addRendererComponent(GLImmediate.COLOR, 4, GLctx.UNSIGNED_BYTE);
-      } else {
-        GLImmediate.clientColor[0] = r;
-        GLImmediate.clientColor[1] = g;
-        GLImmediate.clientColor[2] = b;
-        GLImmediate.clientColor[3] = a;
-      }
-    }
-  Module["_emscripten_glColor4d"] = _emscripten_glColor4d;
-
-
-  function _emscripten_glColor4fv(p) {
-      _emscripten_glColor4f(HEAPF32[((p)>>2)], HEAPF32[(((p)+(4))>>2)], HEAPF32[(((p)+(8))>>2)], HEAPF32[(((p)+(12))>>2)]);
-    }
-  Module["_emscripten_glColor4fv"] = _emscripten_glColor4fv;
-
-
-  function _emscripten_glColor4ubv(p) {
-      _emscripten_glColor4ub(HEAP8[((p)>>0)], HEAP8[(((p)+(1))>>0)], HEAP8[(((p)+(2))>>0)], HEAP8[(((p)+(3))>>0)]);
-    }
-  Module["_emscripten_glColor4ubv"] = _emscripten_glColor4ubv;
-
-
-
-  function _emscripten_glColorMask(red, green, blue, alpha) {
-      GLctx.colorMask(!!red, !!green, !!blue, !!alpha);
-    }
-  Module["_emscripten_glColorMask"] = _emscripten_glColorMask;
-
-  function _emscripten_glColorPointer(size, type, stride, pointer) {
-      GLImmediate.setClientAttribute(GLImmediate.COLOR, size, type, stride, pointer);
-    }
-  Module["_emscripten_glColorPointer"] = _emscripten_glColorPointer;
-
-  function _emscripten_glCompileShader(shader) {
-      GLctx.compileShader(GL.shaders[shader]);
-    }
-  Module["_emscripten_glCompileShader"] = _emscripten_glCompileShader;
-
-  function _emscripten_glCompressedTexImage2D(target, level, internalFormat, width, height, border, imageSize, data) {
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
-          GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, imageSize, data);
-        } else {
-          GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, HEAPU8, data, imageSize);
-        }
-        return;
-      }
-      GLctx['compressedTexImage2D'](target, level, internalFormat, width, height, border, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
-    }
-  Module["_emscripten_glCompressedTexImage2D"] = _emscripten_glCompressedTexImage2D;
-
-  function _emscripten_glCompressedTexImage3D(target, level, internalFormat, width, height, depth, border, imageSize, data) {
-      if (GLctx.currentPixelUnpackBufferBinding) {
-        GLctx['compressedTexImage3D'](target, level, internalFormat, width, height, depth, border, imageSize, data);
-      } else {
-        GLctx['compressedTexImage3D'](target, level, internalFormat, width, height, depth, border, HEAPU8, data, imageSize);
-      }
-    }
-  Module["_emscripten_glCompressedTexImage3D"] = _emscripten_glCompressedTexImage3D;
-
-  function _emscripten_glCompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data) {
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
-          GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, imageSize, data);
-        } else {
-          GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, HEAPU8, data, imageSize);
-        }
-        return;
-      }
-      GLctx['compressedTexSubImage2D'](target, level, xoffset, yoffset, width, height, format, data ? HEAPU8.subarray((data), (data+imageSize)) : null);
-    }
-  Module["_emscripten_glCompressedTexSubImage2D"] = _emscripten_glCompressedTexSubImage2D;
-
-  function _emscripten_glCompressedTexSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data) {
-      if (GLctx.currentPixelUnpackBufferBinding) {
-        GLctx['compressedTexSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, imageSize, data);
-      } else {
-        GLctx['compressedTexSubImage3D'](target, level, xoffset, yoffset, zoffset, width, height, depth, format, HEAPU8, data, imageSize);
-      }
-    }
-  Module["_emscripten_glCompressedTexSubImage3D"] = _emscripten_glCompressedTexSubImage3D;
-
-  function _emscripten_glCopyBufferSubData(x0, x1, x2, x3, x4) { GLctx['copyBufferSubData'](x0, x1, x2, x3, x4) }
-  Module["_emscripten_glCopyBufferSubData"] = _emscripten_glCopyBufferSubData;
-
-  function _emscripten_glCopyTexImage2D(x0, x1, x2, x3, x4, x5, x6, x7) { GLctx['copyTexImage2D'](x0, x1, x2, x3, x4, x5, x6, x7) }
-  Module["_emscripten_glCopyTexImage2D"] = _emscripten_glCopyTexImage2D;
-
-  function _emscripten_glCopyTexSubImage2D(x0, x1, x2, x3, x4, x5, x6, x7) { GLctx['copyTexSubImage2D'](x0, x1, x2, x3, x4, x5, x6, x7) }
-  Module["_emscripten_glCopyTexSubImage2D"] = _emscripten_glCopyTexSubImage2D;
-
-  function _emscripten_glCopyTexSubImage3D(x0, x1, x2, x3, x4, x5, x6, x7, x8) { GLctx['copyTexSubImage3D'](x0, x1, x2, x3, x4, x5, x6, x7, x8) }
-  Module["_emscripten_glCopyTexSubImage3D"] = _emscripten_glCopyTexSubImage3D;
-
-  function _emscripten_glCreateProgram() {
-      var id = GL.getNewId(GL.programs);
-      var program = GLctx.createProgram();
-      // Store additional information needed for each shader program:
-      program.name = id;
-      // Lazy cache results of glGetProgramiv(GL_ACTIVE_UNIFORM_MAX_LENGTH/GL_ACTIVE_ATTRIBUTE_MAX_LENGTH/GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH)
-      program.maxUniformLength = program.maxAttributeLength = program.maxUniformBlockNameLength = 0;
-      program.uniformIdCounter = 1;
-      GL.programs[id] = program;
-      return id;
-    }
-  Module["_emscripten_glCreateProgram"] = _emscripten_glCreateProgram;
-
-  function _emscripten_glCreateShader(shaderType) {
-      var id = GL.getNewId(GL.shaders);
-      GL.shaders[id] = GLctx.createShader(shaderType);
-  
-      return id;
-    }
-  Module["_emscripten_glCreateShader"] = _emscripten_glCreateShader;
-
-  function _emscripten_glCullFace(x0) { GLctx['cullFace'](x0) }
-  Module["_emscripten_glCullFace"] = _emscripten_glCullFace;
-
-  function _emscripten_glDeleteBuffers(n, buffers) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((buffers)+(i*4))>>2)];
-        var buffer = GL.buffers[id];
-  
-        // From spec: "glDeleteBuffers silently ignores 0's and names that do not
-        // correspond to existing buffer objects."
-        if (!buffer) continue;
-  
-        GLctx.deleteBuffer(buffer);
-        buffer.name = 0;
-        GL.buffers[id] = null;
-  
-        if (id == GLctx.currentArrayBufferBinding) GLctx.currentArrayBufferBinding = 0;
-        if (id == GLctx.currentElementArrayBufferBinding) GLctx.currentElementArrayBufferBinding = 0;
-        if (id == GLctx.currentPixelPackBufferBinding) GLctx.currentPixelPackBufferBinding = 0;
-        if (id == GLctx.currentPixelUnpackBufferBinding) GLctx.currentPixelUnpackBufferBinding = 0;
-      }
-    }
-  Module["_emscripten_glDeleteBuffers"] = _emscripten_glDeleteBuffers;
-
-  function _emscripten_glDeleteFramebuffers(n, framebuffers) {
-      for (var i = 0; i < n; ++i) {
-        var id = HEAP32[(((framebuffers)+(i*4))>>2)];
-        var framebuffer = GL.framebuffers[id];
-        if (!framebuffer) continue; // GL spec: "glDeleteFramebuffers silently ignores 0s and names that do not correspond to existing framebuffer objects".
-        GLctx.deleteFramebuffer(framebuffer);
-        framebuffer.name = 0;
-        GL.framebuffers[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteFramebuffers"] = _emscripten_glDeleteFramebuffers;
-
-  function _glDeleteShader(id) {
-      if (!id) return;
-      var shader = GL.shaders[id];
-      if (!shader) { // glDeleteShader actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      GLctx.deleteShader(shader);
-      GL.shaders[id] = null;
-    }
-  Module["_glDeleteShader"] = _glDeleteShader;
-  function _emscripten_glDeleteObject(id) {
-      if (GL.programs[id]) {
-        _glDeleteProgram(id);
-      } else if (GL.shaders[id]) {
-        _glDeleteShader(id);
-      } else {
-        err('WARNING: deleteObject received invalid id: ' + id);
-      }
-    }
-  Module["_emscripten_glDeleteObject"] = _emscripten_glDeleteObject;
-
-  function _emscripten_glDeleteProgram(id) {
-      if (!id) return;
-      var program = GL.programs[id];
-      if (!program) { // glDeleteProgram actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      GLctx.deleteProgram(program);
-      program.name = 0;
-      GL.programs[id] = null;
-    }
-  Module["_emscripten_glDeleteProgram"] = _emscripten_glDeleteProgram;
-
-  function _emscripten_glDeleteQueries(n, ids) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((ids)+(i*4))>>2)];
-        var query = GL.queries[id];
-        if (!query) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
-        GLctx['deleteQuery'](query);
-        GL.queries[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteQueries"] = _emscripten_glDeleteQueries;
-
-  function _emscripten_glDeleteQueriesEXT(n, ids) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((ids)+(i*4))>>2)];
-        var query = GL.queries[id];
-        if (!query) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
-        GLctx.disjointTimerQueryExt['deleteQueryEXT'](query);
-        GL.queries[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteQueriesEXT"] = _emscripten_glDeleteQueriesEXT;
-
-  function _emscripten_glDeleteRenderbuffers(n, renderbuffers) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((renderbuffers)+(i*4))>>2)];
-        var renderbuffer = GL.renderbuffers[id];
-        if (!renderbuffer) continue; // GL spec: "glDeleteRenderbuffers silently ignores 0s and names that do not correspond to existing renderbuffer objects".
-        GLctx.deleteRenderbuffer(renderbuffer);
-        renderbuffer.name = 0;
-        GL.renderbuffers[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteRenderbuffers"] = _emscripten_glDeleteRenderbuffers;
-
-  function _emscripten_glDeleteSamplers(n, samplers) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((samplers)+(i*4))>>2)];
-        var sampler = GL.samplers[id];
-        if (!sampler) continue;
-        GLctx['deleteSampler'](sampler);
-        sampler.name = 0;
-        GL.samplers[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteSamplers"] = _emscripten_glDeleteSamplers;
-
-  function _emscripten_glDeleteShader(id) {
-      if (!id) return;
-      var shader = GL.shaders[id];
-      if (!shader) { // glDeleteShader actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      GLctx.deleteShader(shader);
-      GL.shaders[id] = null;
-    }
-  Module["_emscripten_glDeleteShader"] = _emscripten_glDeleteShader;
-
-  function _emscripten_glDeleteSync(id) {
-      if (!id) return;
-      var sync = GL.syncs[id];
-      if (!sync) { // glDeleteSync signals an error when deleting a nonexisting object, unlike some other GL delete functions.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      GLctx.deleteSync(sync);
-      sync.name = 0;
-      GL.syncs[id] = null;
-    }
-  Module["_emscripten_glDeleteSync"] = _emscripten_glDeleteSync;
-
-  function _emscripten_glDeleteTextures(n, textures) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((textures)+(i*4))>>2)];
-        var texture = GL.textures[id];
-        if (!texture) continue; // GL spec: "glDeleteTextures silently ignores 0s and names that do not correspond to existing textures".
-        GLctx.deleteTexture(texture);
-        texture.name = 0;
-        GL.textures[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteTextures"] = _emscripten_glDeleteTextures;
-
-  function _emscripten_glDeleteTransformFeedbacks(n, ids) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((ids)+(i*4))>>2)];
-        var transformFeedback = GL.transformFeedbacks[id];
-        if (!transformFeedback) continue; // GL spec: "unused names in ids are ignored, as is the name zero."
-        GLctx['deleteTransformFeedback'](transformFeedback);
-        transformFeedback.name = 0;
-        GL.transformFeedbacks[id] = null;
-      }
-    }
-  Module["_emscripten_glDeleteTransformFeedbacks"] = _emscripten_glDeleteTransformFeedbacks;
-
-  function _emulGlDeleteVertexArrays(n, vaos) {
-      for (var i = 0; i < n; i++) {
-        var id = HEAP32[(((vaos)+(i*4))>>2)];
-        GLEmulation.vaos[id] = null;
-        if (GLEmulation.currentVao && GLEmulation.currentVao.id == id) GLEmulation.currentVao = null;
-      }
-    }
-  Module["_emulGlDeleteVertexArrays"] = _emulGlDeleteVertexArrays;
-  function _emscripten_glDeleteVertexArrays(n, vaos) {
-      _emulGlDeleteVertexArrays(n, vaos);
-    }
-  Module["_emscripten_glDeleteVertexArrays"] = _emscripten_glDeleteVertexArrays;
-
-  function _emscripten_glDeleteVertexArraysOES(n, vaos) {
-      _emulGlDeleteVertexArrays(n, vaos);
-    }
-  Module["_emscripten_glDeleteVertexArraysOES"] = _emscripten_glDeleteVertexArraysOES;
-
-  function _emscripten_glDepthFunc(x0) { GLctx['depthFunc'](x0) }
-  Module["_emscripten_glDepthFunc"] = _emscripten_glDepthFunc;
-
-  function _emscripten_glDepthMask(flag) {
-      GLctx.depthMask(!!flag);
-    }
-  Module["_emscripten_glDepthMask"] = _emscripten_glDepthMask;
-
-  function _emscripten_glDepthRangef(x0, x1) { GLctx['depthRange'](x0, x1) }
-  Module["_emscripten_glDepthRangef"] = _emscripten_glDepthRangef;
-
-  function _emscripten_glDetachShader(program, shader) {
-      GLctx.detachShader(GL.programs[program], GL.shaders[shader]);
-    }
-  Module["_emscripten_glDetachShader"] = _emscripten_glDetachShader;
-
-  function _emscripten_glDisable(x0) { GLctx['disable'](x0) }
-  Module["_emscripten_glDisable"] = _emscripten_glDisable;
-
-  function _emscripten_glDisableClientState(cap) {
-      var attrib = GLEmulation.getAttributeFromCapability(cap);
-      if (attrib === null) {
-        err('WARNING: unhandled clientstate: ' + cap);
-        return;
-      }
-      if (GLImmediate.enabledClientAttributes[attrib]) {
-        GLImmediate.enabledClientAttributes[attrib] = false;
-        GLImmediate.totalEnabledClientAttributes--;
-        GLImmediate.currentRenderer = null; // Will need to change current renderer, since the set of active vertex pointers changed.
-        if (GLEmulation.currentVao) delete GLEmulation.currentVao.enabledClientStates[cap];
-        GLImmediate.modifiedClientAttributes = true;
-      }
-    }
-  Module["_emscripten_glDisableClientState"] = _emscripten_glDisableClientState;
-
-  function _emscripten_glDisableVertexAttribArray(index) {
-      GLctx.disableVertexAttribArray(index);
-    }
-  Module["_emscripten_glDisableVertexAttribArray"] = _emscripten_glDisableVertexAttribArray;
-
-  function _emscripten_glDrawArrays(mode, first, count) {
-      if (GLImmediate.totalEnabledClientAttributes == 0 && mode <= 6) {
-        GLctx.drawArrays(mode, first, count);
-        return;
-      }
-      GLImmediate.prepareClientAttributes(count, false);
-      GLImmediate.mode = mode;
-      if (!GLctx.currentArrayBufferBinding) {
-        GLImmediate.vertexData = HEAPF32.subarray((GLImmediate.vertexPointer)>>2, (GLImmediate.vertexPointer + (first+count)*GLImmediate.stride)>>2); // XXX assuming float
-        GLImmediate.firstVertex = first;
-        GLImmediate.lastVertex = first + count;
-      }
-      GLImmediate.flush(null, first);
-      GLImmediate.mode = -1;
-    }
-  Module["_emscripten_glDrawArrays"] = _emscripten_glDrawArrays;
-
-  function _emscripten_glDrawArraysInstanced(mode, first, count, primcount) {
-      GLctx['drawArraysInstanced'](mode, first, count, primcount);
-    }
-  Module["_emscripten_glDrawArraysInstanced"] = _emscripten_glDrawArraysInstanced;
-
-  function _emscripten_glDrawArraysInstancedANGLE(mode, first, count, primcount) {
-      GLctx['drawArraysInstanced'](mode, first, count, primcount);
-    }
-  Module["_emscripten_glDrawArraysInstancedANGLE"] = _emscripten_glDrawArraysInstancedANGLE;
-
-  function _emscripten_glDrawArraysInstancedARB(mode, first, count, primcount) {
-      GLctx['drawArraysInstanced'](mode, first, count, primcount);
-    }
-  Module["_emscripten_glDrawArraysInstancedARB"] = _emscripten_glDrawArraysInstancedARB;
-
-  function _emscripten_glDrawArraysInstancedEXT(mode, first, count, primcount) {
-      GLctx['drawArraysInstanced'](mode, first, count, primcount);
-    }
-  Module["_emscripten_glDrawArraysInstancedEXT"] = _emscripten_glDrawArraysInstancedEXT;
-
-  function _emscripten_glDrawArraysInstancedNV(mode, first, count, primcount) {
-      GLctx['drawArraysInstanced'](mode, first, count, primcount);
-    }
-  Module["_emscripten_glDrawArraysInstancedNV"] = _emscripten_glDrawArraysInstancedNV;
-
-  function _emscripten_glDrawBuffer() { throw 'glDrawBuffer: TODO' }
-  Module["_emscripten_glDrawBuffer"] = _emscripten_glDrawBuffer;
-
-  var tempFixedLengthArray = [];
-  Module["tempFixedLengthArray"] = tempFixedLengthArray;
-  function _emscripten_glDrawBuffers(n, bufs) {
-  
-      var bufArray = tempFixedLengthArray[n];
-      for (var i = 0; i < n; i++) {
-        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
-      }
-  
-      GLctx['drawBuffers'](bufArray);
-    }
-  Module["_emscripten_glDrawBuffers"] = _emscripten_glDrawBuffers;
-
-  function _emscripten_glDrawBuffersEXT(n, bufs) {
-  
-      var bufArray = tempFixedLengthArray[n];
-      for (var i = 0; i < n; i++) {
-        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
-      }
-  
-      GLctx['drawBuffers'](bufArray);
-    }
-  Module["_emscripten_glDrawBuffersEXT"] = _emscripten_glDrawBuffersEXT;
-
-  function _emscripten_glDrawBuffersWEBGL(n, bufs) {
-  
-      var bufArray = tempFixedLengthArray[n];
-      for (var i = 0; i < n; i++) {
-        bufArray[i] = HEAP32[(((bufs)+(i*4))>>2)];
-      }
-  
-      GLctx['drawBuffers'](bufArray);
-    }
-  Module["_emscripten_glDrawBuffersWEBGL"] = _emscripten_glDrawBuffersWEBGL;
-
-  function _emscripten_glDrawElements(mode, count, type, indices, start, end) { // start, end are given if we come from glDrawRangeElements
-      if (GLImmediate.totalEnabledClientAttributes == 0 && mode <= 6 && GLctx.currentElementArrayBufferBinding) {
-        GLctx.drawElements(mode, count, type, indices);
-        return;
-      }
-      if (!GLctx.currentElementArrayBufferBinding) {
-        assert(type == GLctx.UNSIGNED_SHORT); // We can only emulate buffers of this kind, for now
-      }
-      out("DrawElements doesn't actually prepareClientAttributes properly.");
-      GLImmediate.prepareClientAttributes(count, false);
-      GLImmediate.mode = mode;
-      if (!GLctx.currentArrayBufferBinding) {
-        GLImmediate.firstVertex = end ? start : HEAP8.length; // if we don't know the start, set an invalid value and we will calculate it later from the indices
-        GLImmediate.lastVertex = end ? end+1 : 0;
-        GLImmediate.vertexData = HEAPF32.subarray(GLImmediate.vertexPointer >> 2, end ? (GLImmediate.vertexPointer + (end+1)*GLImmediate.stride) >> 2 : undefined); // XXX assuming float
-      }
-      GLImmediate.flush(count, 0, indices);
-      GLImmediate.mode = -1;
-    }
-  Module["_emscripten_glDrawElements"] = _emscripten_glDrawElements;
-
-  function _emscripten_glDrawElementsInstanced(mode, count, type, indices, primcount) {
-      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
-    }
-  Module["_emscripten_glDrawElementsInstanced"] = _emscripten_glDrawElementsInstanced;
-
-  function _emscripten_glDrawElementsInstancedANGLE(mode, count, type, indices, primcount) {
-      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
-    }
-  Module["_emscripten_glDrawElementsInstancedANGLE"] = _emscripten_glDrawElementsInstancedANGLE;
-
-  function _emscripten_glDrawElementsInstancedARB(mode, count, type, indices, primcount) {
-      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
-    }
-  Module["_emscripten_glDrawElementsInstancedARB"] = _emscripten_glDrawElementsInstancedARB;
-
-  function _emscripten_glDrawElementsInstancedEXT(mode, count, type, indices, primcount) {
-      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
-    }
-  Module["_emscripten_glDrawElementsInstancedEXT"] = _emscripten_glDrawElementsInstancedEXT;
-
-  function _emscripten_glDrawElementsInstancedNV(mode, count, type, indices, primcount) {
-      GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
-    }
-  Module["_emscripten_glDrawElementsInstancedNV"] = _emscripten_glDrawElementsInstancedNV;
-
-  function _emscripten_glDrawRangeElements(mode, start, end, count, type, indices) {
-      _emscripten_glDrawElements(mode, count, type, indices, start, end);
-    }
-  Module["_emscripten_glDrawRangeElements"] = _emscripten_glDrawRangeElements;
-
-  function _emscripten_glEnable(x0) { GLctx['enable'](x0) }
-  Module["_emscripten_glEnable"] = _emscripten_glEnable;
-
-  function _emscripten_glEnableClientState(cap) {
-      var attrib = GLEmulation.getAttributeFromCapability(cap);
-      if (attrib === null) {
-        err('WARNING: unhandled clientstate: ' + cap);
-        return;
-      }
-      if (!GLImmediate.enabledClientAttributes[attrib]) {
-        GLImmediate.enabledClientAttributes[attrib] = true;
-        GLImmediate.totalEnabledClientAttributes++;
-        GLImmediate.currentRenderer = null; // Will need to change current renderer, since the set of active vertex pointers changed.
-        if (GLEmulation.currentVao) GLEmulation.currentVao.enabledClientStates[cap] = 1;
-        GLImmediate.modifiedClientAttributes = true;
-      }
-    }
-  Module["_emscripten_glEnableClientState"] = _emscripten_glEnableClientState;
-
-  function _emscripten_glEnableVertexAttribArray(index) {
-      GLctx.enableVertexAttribArray(index);
-    }
-  Module["_emscripten_glEnableVertexAttribArray"] = _emscripten_glEnableVertexAttribArray;
-
-  function _emscripten_glEnd() {
-      GLImmediate.prepareClientAttributes(GLImmediate.rendererComponents[GLImmediate.VERTEX], true);
-      GLImmediate.firstVertex = 0;
-      GLImmediate.lastVertex = GLImmediate.vertexCounter / (GLImmediate.stride >> 2);
-      GLImmediate.flush();
-      GLImmediate.disableBeginEndClientAttributes();
-      GLImmediate.mode = -1;
-  
-      // Pop the old state:
-      GLImmediate.enabledClientAttributes = GLImmediate.enabledClientAttributes_preBegin;
-      GLImmediate.clientAttributes = GLImmediate.clientAttributes_preBegin;
-      GLImmediate.currentRenderer = null; // The set of active client attributes changed, we must re-lookup the renderer to use.
-      GLImmediate.modifiedClientAttributes = true;
-    }
-  Module["_emscripten_glEnd"] = _emscripten_glEnd;
-
-  function _emscripten_glEndQuery(x0) { GLctx['endQuery'](x0) }
-  Module["_emscripten_glEndQuery"] = _emscripten_glEndQuery;
-
-  function _emscripten_glEndQueryEXT(target) {
-      GLctx.disjointTimerQueryExt['endQueryEXT'](target);
-    }
-  Module["_emscripten_glEndQueryEXT"] = _emscripten_glEndQueryEXT;
-
-  function _emscripten_glEndTransformFeedback() { GLctx['endTransformFeedback']() }
-  Module["_emscripten_glEndTransformFeedback"] = _emscripten_glEndTransformFeedback;
-
-  function _emscripten_glFenceSync(condition, flags) {
-      var sync = GLctx.fenceSync(condition, flags);
-      if (sync) {
-        var id = GL.getNewId(GL.syncs);
-        sync.name = id;
-        GL.syncs[id] = sync;
-        return id;
-      }
-      return 0; // Failed to create a sync object
-    }
-  Module["_emscripten_glFenceSync"] = _emscripten_glFenceSync;
-
-  function _emscripten_glFinish() { GLctx['finish']() }
-  Module["_emscripten_glFinish"] = _emscripten_glFinish;
-
-  function _emscripten_glFlush() { GLctx['flush']() }
-  Module["_emscripten_glFlush"] = _emscripten_glFlush;
-
-  function _emscripten_glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer) {
-      GLctx.framebufferRenderbuffer(target, attachment, renderbuffertarget,
-                                         GL.renderbuffers[renderbuffer]);
-    }
-  Module["_emscripten_glFramebufferRenderbuffer"] = _emscripten_glFramebufferRenderbuffer;
-
-  function _emscripten_glFramebufferTexture2D(target, attachment, textarget, texture, level) {
-      GLctx.framebufferTexture2D(target, attachment, textarget,
-                                      GL.textures[texture], level);
-    }
-  Module["_emscripten_glFramebufferTexture2D"] = _emscripten_glFramebufferTexture2D;
-
-  function _emscripten_glFramebufferTextureLayer(target, attachment, texture, level, layer) {
-      GLctx.framebufferTextureLayer(target, attachment, GL.textures[texture], level, layer);
-    }
-  Module["_emscripten_glFramebufferTextureLayer"] = _emscripten_glFramebufferTextureLayer;
-
-  function _emscripten_glFrontFace(x0) { GLctx['frontFace'](x0) }
-  Module["_emscripten_glFrontFace"] = _emscripten_glFrontFace;
-
-  function _emscripten_glFrustum(left, right, bottom, top_, nearVal, farVal) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.multiply(GLImmediate.matrix[GLImmediate.currentMatrix],
-          GLImmediate.matrixLib.mat4.frustum(left, right, bottom, top_, nearVal, farVal));
-    }
-  Module["_emscripten_glFrustum"] = _emscripten_glFrustum;
-
-  function __glGenObject(n, buffers, createFunction, objectTable
-      ) {
-      for (var i = 0; i < n; i++) {
-        var buffer = GLctx[createFunction]();
-        var id = buffer && GL.getNewId(objectTable);
-        if (buffer) {
-          buffer.name = id;
-          objectTable[id] = buffer;
-        } else {
-          GL.recordError(0x502 /* GL_INVALID_OPERATION */);
-        }
-        HEAP32[(((buffers)+(i*4))>>2)] = id;
-      }
-    }
-  Module["__glGenObject"] = __glGenObject;
-  function _emscripten_glGenBuffers(n, buffers) {
-      __glGenObject(n, buffers, 'createBuffer', GL.buffers
-        );
-    }
-  Module["_emscripten_glGenBuffers"] = _emscripten_glGenBuffers;
-
-  function _emscripten_glGenFramebuffers(n, ids) {
-      __glGenObject(n, ids, 'createFramebuffer', GL.framebuffers
-        );
-    }
-  Module["_emscripten_glGenFramebuffers"] = _emscripten_glGenFramebuffers;
-
-  function _emscripten_glGenQueries(n, ids) {
-      __glGenObject(n, ids, 'createQuery', GL.queries
-        );
-    }
-  Module["_emscripten_glGenQueries"] = _emscripten_glGenQueries;
-
-  function _emscripten_glGenQueriesEXT(n, ids) {
-      for (var i = 0; i < n; i++) {
-        var query = GLctx.disjointTimerQueryExt['createQueryEXT']();
-        if (!query) {
-          GL.recordError(0x502 /* GL_INVALID_OPERATION */);
-          while (i < n) HEAP32[(((ids)+(i++*4))>>2)] = 0;
-          return;
-        }
-        var id = GL.getNewId(GL.queries);
-        query.name = id;
-        GL.queries[id] = query;
-        HEAP32[(((ids)+(i*4))>>2)] = id;
-      }
-    }
-  Module["_emscripten_glGenQueriesEXT"] = _emscripten_glGenQueriesEXT;
-
-  function _emscripten_glGenRenderbuffers(n, renderbuffers) {
-      __glGenObject(n, renderbuffers, 'createRenderbuffer', GL.renderbuffers
-        );
-    }
-  Module["_emscripten_glGenRenderbuffers"] = _emscripten_glGenRenderbuffers;
-
-  function _emscripten_glGenSamplers(n, samplers) {
-      __glGenObject(n, samplers, 'createSampler', GL.samplers
-        );
-    }
-  Module["_emscripten_glGenSamplers"] = _emscripten_glGenSamplers;
-
-  function _emscripten_glGenTextures(n, textures) {
-      __glGenObject(n, textures, 'createTexture', GL.textures
-        );
-    }
-  Module["_emscripten_glGenTextures"] = _emscripten_glGenTextures;
-
-  function _emscripten_glGenTransformFeedbacks(n, ids) {
-      __glGenObject(n, ids, 'createTransformFeedback', GL.transformFeedbacks
-        );
-    }
-  Module["_emscripten_glGenTransformFeedbacks"] = _emscripten_glGenTransformFeedbacks;
-
-  function _emulGlGenVertexArrays(n, vaos) {
-      for (var i = 0; i < n; i++) {
-        var id = GL.getNewId(GLEmulation.vaos);
-        GLEmulation.vaos[id] = {
-          id: id,
-          arrayBuffer: 0,
-          elementArrayBuffer: 0,
-          enabledVertexAttribArrays: {},
-          vertexAttribPointers: {},
-          enabledClientStates: {},
-        };
-        HEAP32[(((vaos)+(i*4))>>2)] = id;
-      }
-    }
-  Module["_emulGlGenVertexArrays"] = _emulGlGenVertexArrays;
-  function _emscripten_glGenVertexArrays(n, arrays) {
-      _emulGlGenVertexArrays(n, arrays);
-    }
-  Module["_emscripten_glGenVertexArrays"] = _emscripten_glGenVertexArrays;
-
-  function _emscripten_glGenVertexArraysOES(n, arrays) {
-      _emulGlGenVertexArrays(n, arrays);
-    }
-  Module["_emscripten_glGenVertexArraysOES"] = _emscripten_glGenVertexArraysOES;
-
-  function _emscripten_glGenerateMipmap(x0) { GLctx['generateMipmap'](x0) }
-  Module["_emscripten_glGenerateMipmap"] = _emscripten_glGenerateMipmap;
-
-  function __glGetActiveAttribOrUniform(funcName, program, index, bufSize, length, size, type, name) {
-      program = GL.programs[program];
-      var info = GLctx[funcName](program, index);
-      if (info) { // If an error occurs, nothing will be written to length, size and type and name.
-        var numBytesWrittenExclNull = name && stringToUTF8(info.name, name, bufSize);
-        if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
-        if (size) HEAP32[((size)>>2)] = info.size;
-        if (type) HEAP32[((type)>>2)] = info.type;
-      }
-    }
-  Module["__glGetActiveAttribOrUniform"] = __glGetActiveAttribOrUniform;
-  function _emscripten_glGetActiveAttrib(program, index, bufSize, length, size, type, name) {
-      __glGetActiveAttribOrUniform('getActiveAttrib', program, index, bufSize, length, size, type, name);
-    }
-  Module["_emscripten_glGetActiveAttrib"] = _emscripten_glGetActiveAttrib;
-
-  function _emscripten_glGetActiveUniform(program, index, bufSize, length, size, type, name) {
-      __glGetActiveAttribOrUniform('getActiveUniform', program, index, bufSize, length, size, type, name);
-    }
-  Module["_emscripten_glGetActiveUniform"] = _emscripten_glGetActiveUniform;
-
-  function _emscripten_glGetActiveUniformBlockName(program, uniformBlockIndex, bufSize, length, uniformBlockName) {
-      program = GL.programs[program];
-  
-      var result = GLctx['getActiveUniformBlockName'](program, uniformBlockIndex);
-      if (!result) return; // If an error occurs, nothing will be written to uniformBlockName or length.
-      if (uniformBlockName && bufSize > 0) {
-        var numBytesWrittenExclNull = stringToUTF8(result, uniformBlockName, bufSize);
-        if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
-      } else {
-        if (length) HEAP32[((length)>>2)] = 0;
-      }
-    }
-  Module["_emscripten_glGetActiveUniformBlockName"] = _emscripten_glGetActiveUniformBlockName;
-
-  function _emscripten_glGetActiveUniformBlockiv(program, uniformBlockIndex, pname, params) {
-      if (!params) {
-        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
-        // if params == null, issue a GL error to notify user about it.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      program = GL.programs[program];
-  
-      if (pname == 0x8A41 /* GL_UNIFORM_BLOCK_NAME_LENGTH */) {
-        var name = GLctx['getActiveUniformBlockName'](program, uniformBlockIndex);
-        HEAP32[((params)>>2)] = name.length+1;
-        return;
-      }
-  
-      var result = GLctx['getActiveUniformBlockParameter'](program, uniformBlockIndex, pname);
-      if (result === null) return; // If an error occurs, nothing should be written to params.
-      if (pname == 0x8A43 /*GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES*/) {
-        for (var i = 0; i < result.length; i++) {
-          HEAP32[(((params)+(i*4))>>2)] = result[i];
-        }
-      } else {
-        HEAP32[((params)>>2)] = result;
-      }
-    }
-  Module["_emscripten_glGetActiveUniformBlockiv"] = _emscripten_glGetActiveUniformBlockiv;
-
-  function _emscripten_glGetActiveUniformsiv(program, uniformCount, uniformIndices, pname, params) {
-      if (!params) {
-        // GLES2 specification does not specify how to behave if params is a null pointer. Since calling this function does not make sense
-        // if params == null, issue a GL error to notify user about it.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      if (uniformCount > 0 && uniformIndices == 0) {
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      program = GL.programs[program];
-      var ids = [];
-      for (var i = 0; i < uniformCount; i++) {
-        ids.push(HEAP32[(((uniformIndices)+(i*4))>>2)]);
-      }
-  
-      var result = GLctx['getActiveUniforms'](program, ids, pname);
-      if (!result) return; // GL spec: If an error is generated, nothing is written out to params.
-  
-      var len = result.length;
-      for (var i = 0; i < len; i++) {
-        HEAP32[(((params)+(i*4))>>2)] = result[i];
-      }
-    }
-  Module["_emscripten_glGetActiveUniformsiv"] = _emscripten_glGetActiveUniformsiv;
-
-  function _emscripten_glGetAttachedShaders(program, maxCount, count, shaders) {
-      var result = GLctx.getAttachedShaders(GL.programs[program]);
-      var len = result.length;
-      if (len > maxCount) {
-        len = maxCount;
-      }
-      HEAP32[((count)>>2)] = len;
-      for (var i = 0; i < len; ++i) {
-        var id = GL.shaders.indexOf(result[i]);
-        HEAP32[(((shaders)+(i*4))>>2)] = id;
-      }
-    }
-  Module["_emscripten_glGetAttachedShaders"] = _emscripten_glGetAttachedShaders;
-
-  function _emscripten_glGetAttribLocation(program, name) {
-      return GLctx.getAttribLocation(GL.programs[program], UTF8ToString(name));
-    }
-  Module["_emscripten_glGetAttribLocation"] = _emscripten_glGetAttribLocation;
-
   function _emscripten_glGetBooleanv(name_, p) {
       emscriptenWebGLGet(name_, p, 4);
     }
@@ -17486,6 +12376,21 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetBufferParameteriv"] = _emscripten_glGetBufferParameteriv;
 
+  function _emscripten_glGetBufferPointerv(target, pname, params) {
+      if (pname == 0x88BD/*GL_BUFFER_MAP_POINTER*/) {
+        var ptr = 0;
+        var mappedBuffer = GL.mappedBuffers[emscriptenWebGLGetBufferBinding(target)];
+        if (mappedBuffer) {
+          ptr = mappedBuffer.mem;
+        }
+        HEAP32[((params)>>2)] = ptr;
+      } else {
+        GL.recordError(0x500/*GL_INVALID_ENUM*/);
+        err('GL_INVALID_ENUM in glGetBufferPointerv');
+      }
+    }
+  Module["_emscripten_glGetBufferPointerv"] = _emscripten_glGetBufferPointerv;
+
   function _emscripten_glGetError() {
       var error = GLctx.getError() || GL.lastError;
       GL.lastError = 0/*GL_NO_ERROR*/;
@@ -17512,32 +12417,6 @@ var ASM_CONSTS = {
       HEAP32[((params)>>2)] = result;
     }
   Module["_emscripten_glGetFramebufferAttachmentParameteriv"] = _emscripten_glGetFramebufferAttachmentParameteriv;
-
-  function _glGetProgramInfoLog(program, maxLength, length, infoLog) {
-      var log = GLctx.getProgramInfoLog(GL.programs[program]);
-      if (log === null) log = '(unknown error)';
-      var numBytesWrittenExclNull = (maxLength > 0 && infoLog) ? stringToUTF8(log, infoLog, maxLength) : 0;
-      if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
-    }
-  Module["_glGetProgramInfoLog"] = _glGetProgramInfoLog;
-  
-  function _glGetShaderInfoLog(shader, maxLength, length, infoLog) {
-      var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
-      if (log === null) log = '(unknown error)';
-      var numBytesWrittenExclNull = (maxLength > 0 && infoLog) ? stringToUTF8(log, infoLog, maxLength) : 0;
-      if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
-    }
-  Module["_glGetShaderInfoLog"] = _glGetShaderInfoLog;
-  function _emscripten_glGetInfoLog(id, maxLength, length, infoLog) {
-      if (GL.programs[id]) {
-        _glGetProgramInfoLog(id, maxLength, length, infoLog);
-      } else if (GL.shaders[id]) {
-        _glGetShaderInfoLog(id, maxLength, length, infoLog);
-      } else {
-        err('WARNING: glGetInfoLog received invalid id: ' + id);
-      }
-    }
-  Module["_emscripten_glGetInfoLog"] = _emscripten_glGetInfoLog;
 
   function emscriptenWebGLGetIndexed(target, index, data, type) {
       if (!data) {
@@ -17626,124 +12505,6 @@ var ASM_CONSTS = {
       }
     }
   Module["_emscripten_glGetInternalformativ"] = _emscripten_glGetInternalformativ;
-
-  function _glGetProgramiv(program, pname, p) {
-      if (!p) {
-        // GLES2 specification does not specify how to behave if p is a null pointer. Since calling this function does not make sense
-        // if p == null, issue a GL error to notify user about it.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-  
-      if (program >= GL.counter) {
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-  
-      program = GL.programs[program];
-  
-      if (pname == 0x8B84) { // GL_INFO_LOG_LENGTH
-        var log = GLctx.getProgramInfoLog(program);
-        if (log === null) log = '(unknown error)';
-        HEAP32[((p)>>2)] = log.length + 1;
-      } else if (pname == 0x8B87 /* GL_ACTIVE_UNIFORM_MAX_LENGTH */) {
-        if (!program.maxUniformLength) {
-          for (var i = 0; i < GLctx.getProgramParameter(program, 0x8B86/*GL_ACTIVE_UNIFORMS*/); ++i) {
-            program.maxUniformLength = Math.max(program.maxUniformLength, GLctx.getActiveUniform(program, i).name.length+1);
-          }
-        }
-        HEAP32[((p)>>2)] = program.maxUniformLength;
-      } else if (pname == 0x8B8A /* GL_ACTIVE_ATTRIBUTE_MAX_LENGTH */) {
-        if (!program.maxAttributeLength) {
-          for (var i = 0; i < GLctx.getProgramParameter(program, 0x8B89/*GL_ACTIVE_ATTRIBUTES*/); ++i) {
-            program.maxAttributeLength = Math.max(program.maxAttributeLength, GLctx.getActiveAttrib(program, i).name.length+1);
-          }
-        }
-        HEAP32[((p)>>2)] = program.maxAttributeLength;
-      } else if (pname == 0x8A35 /* GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH */) {
-        if (!program.maxUniformBlockNameLength) {
-          for (var i = 0; i < GLctx.getProgramParameter(program, 0x8A36/*GL_ACTIVE_UNIFORM_BLOCKS*/); ++i) {
-            program.maxUniformBlockNameLength = Math.max(program.maxUniformBlockNameLength, GLctx.getActiveUniformBlockName(program, i).length+1);
-          }
-        }
-        HEAP32[((p)>>2)] = program.maxUniformBlockNameLength;
-      } else {
-        HEAP32[((p)>>2)] = GLctx.getProgramParameter(program, pname);
-      }
-    }
-  Module["_glGetProgramiv"] = _glGetProgramiv;
-  
-  function _glGetShaderiv(shader, pname, p) {
-      if (!p) {
-        // GLES2 specification does not specify how to behave if p is a null pointer. Since calling this function does not make sense
-        // if p == null, issue a GL error to notify user about it.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      if (pname == 0x8B84) { // GL_INFO_LOG_LENGTH
-        var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
-        if (log === null) log = '(unknown error)';
-        // The GLES2 specification says that if the shader has an empty info log,
-        // a value of 0 is returned. Otherwise the log has a null char appended.
-        // (An empty string is falsey, so we can just check that instead of
-        // looking at log.length.)
-        var logLength = log ? log.length + 1 : 0;
-        HEAP32[((p)>>2)] = logLength;
-      } else if (pname == 0x8B88) { // GL_SHADER_SOURCE_LENGTH
-        var source = GLctx.getShaderSource(GL.shaders[shader]);
-        // source may be a null, or the empty string, both of which are falsey
-        // values that we report a 0 length for.
-        var sourceLength = source ? source.length + 1 : 0;
-        HEAP32[((p)>>2)] = sourceLength;
-      } else {
-        HEAP32[((p)>>2)] = GLctx.getShaderParameter(GL.shaders[shader], pname);
-      }
-    }
-  Module["_glGetShaderiv"] = _glGetShaderiv;
-  function _emscripten_glGetObjectParameteriv(id, type, result) {
-      if (GL.programs[id]) {
-        if (type == 0x8B84) { // GL_OBJECT_INFO_LOG_LENGTH_ARB
-          var log = GLctx.getProgramInfoLog(GL.programs[id]);
-          if (log === null) log = '(unknown error)';
-          HEAP32[((result)>>2)] = log.length;
-          return;
-        }
-        _glGetProgramiv(id, type, result);
-      } else if (GL.shaders[id]) {
-        if (type == 0x8B84) { // GL_OBJECT_INFO_LOG_LENGTH_ARB
-          var log = GLctx.getShaderInfoLog(GL.shaders[id]);
-          if (log === null) log = '(unknown error)';
-          HEAP32[((result)>>2)] = log.length;
-          return;
-        } else if (type == 0x8B88) { // GL_OBJECT_SHADER_SOURCE_LENGTH_ARB
-          var source = GLctx.getShaderSource(GL.shaders[id]);
-          if (source === null) return; // If an error occurs, nothing will be written to result
-          HEAP32[((result)>>2)] = source.length;
-          return;
-        }
-        _glGetShaderiv(id, type, result);
-      } else {
-        err('WARNING: getObjectParameteriv received invalid id: ' + id);
-      }
-    }
-  Module["_emscripten_glGetObjectParameteriv"] = _emscripten_glGetObjectParameteriv;
-
-  function _emscripten_glGetPointerv(name, p) {
-      var attribute;
-      switch (name) {
-        case 0x808E: // GL_VERTEX_ARRAY_POINTER
-          attribute = GLImmediate.clientAttributes[GLImmediate.VERTEX]; break;
-        case 0x8090: // GL_COLOR_ARRAY_POINTER
-          attribute = GLImmediate.clientAttributes[GLImmediate.COLOR]; break;
-        case 0x8092: // GL_TEXTURE_COORD_ARRAY_POINTER
-          attribute = GLImmediate.clientAttributes[GLImmediate.TEXTURE0 + GLImmediate.clientActiveTexture]; break;
-        default:
-          GL.recordError(0x500/*GL_INVALID_ENUM*/);
-          return;
-      }
-      HEAP32[((p)>>2)] = attribute ? attribute.pointer : 0;
-    }
-  Module["_emscripten_glGetPointerv"] = _emscripten_glGetPointerv;
 
   function _emscripten_glGetProgramBinary(program, bufSize, length, binaryFormat, binary) {
       GL.recordError(0x502/*GL_INVALID_OPERATION*/);
@@ -18020,6 +12781,13 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glGetShaderiv"] = _emscripten_glGetShaderiv;
 
+  function stringToNewUTF8(jsString) {
+      var length = lengthBytesUTF8(jsString)+1;
+      var cString = _malloc(length);
+      stringToUTF8(jsString, cString, length);
+      return cString;
+    }
+  Module["stringToNewUTF8"] = stringToNewUTF8;
   function _emscripten_glGetString(name_) {
       var ret = GL.stringCache[name_];
       if (!ret) {
@@ -18043,7 +12811,7 @@ var ASM_CONSTS = {
           case 0x1F02 /* GL_VERSION */:
             var glVersion = GLctx.getParameter(0x1F02 /*GL_VERSION*/);
             // return GLES version string corresponding to the version of the WebGL context
-            if (GL.currentContext.version >= 2) glVersion = 'OpenGL ES 3.0 (' + glVersion + ')';
+            if (true) glVersion = 'OpenGL ES 3.0 (' + glVersion + ')';
             else
             {
               glVersion = 'OpenGL ES 2.0 (' + glVersion + ')';
@@ -18123,15 +12891,6 @@ var ASM_CONSTS = {
       }
     }
   Module["_emscripten_glGetSynciv"] = _emscripten_glGetSynciv;
-
-  function _emscripten_glGetTexEnvfv(target, pname, param) { throw 'GL emulation not initialized!'; }
-  Module["_emscripten_glGetTexEnvfv"] = _emscripten_glGetTexEnvfv;
-
-  function _emscripten_glGetTexEnviv(target, pname, param) { throw 'GL emulation not initialized!'; }
-  Module["_emscripten_glGetTexEnviv"] = _emscripten_glGetTexEnviv;
-
-  function _emscripten_glGetTexLevelParameteriv() { throw 'glGetTexLevelParameteriv: TODO' }
-  Module["_emscripten_glGetTexLevelParameteriv"] = _emscripten_glGetTexLevelParameteriv;
 
   function _emscripten_glGetTexParameterfv(target, pname, params) {
       if (!params) {
@@ -18360,6 +13119,9 @@ var ASM_CONSTS = {
         GL.recordError(0x501 /* GL_INVALID_VALUE */);
         return;
       }
+      if (GL.currentContext.clientBuffers[index].enabled) {
+        err("glGetVertexAttrib*v on client-side array: not supported, bad data returned");
+      }
       var data = GLctx.getVertexAttrib(index, pname);
       if (pname == 0x889F/*VERTEX_ATTRIB_ARRAY_BUFFER_BINDING*/) {
         HEAP32[((params)>>2)] = data && data["name"];
@@ -18400,6 +13162,9 @@ var ASM_CONSTS = {
         // if pointer == null, issue a GL error to notify user about it.
         GL.recordError(0x501 /* GL_INVALID_VALUE */);
         return;
+      }
+      if (GL.currentContext.clientBuffers[index].enabled) {
+        err("glGetVertexAttribPointer on client-side array: not supported, bad data returned");
       }
       HEAP32[((pointer)>>2)] = GLctx.getVertexAttribOffset(index, pname);
     }
@@ -18518,76 +13283,21 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glIsTransformFeedback"] = _emscripten_glIsTransformFeedback;
 
-  function _emulGlIsVertexArray(array) {
-      var vao = GLEmulation.vaos[array];
-      if (!vao) return 0;
-      return 1;
-    }
-  Module["_emulGlIsVertexArray"] = _emulGlIsVertexArray;
   function _emscripten_glIsVertexArray(array) {
-      return _emulGlIsVertexArray(array);
+  
+      var vao = GL.vaos[array];
+      if (!vao) return 0;
+      return GLctx['isVertexArray'](vao);
     }
   Module["_emscripten_glIsVertexArray"] = _emscripten_glIsVertexArray;
 
   function _emscripten_glIsVertexArrayOES(array) {
-      return _emulGlIsVertexArray(array);
+  
+      var vao = GL.vaos[array];
+      if (!vao) return 0;
+      return GLctx['isVertexArray'](vao);
     }
   Module["_emscripten_glIsVertexArrayOES"] = _emscripten_glIsVertexArrayOES;
-
-  function _emscripten_glLightModelf(pname, param) {
-      if (pname == 0x0B52) { // GL_LIGHT_MODEL_TWO_SIDE
-        GLEmulation.lightModelTwoSide = (param != 0) ? true : false;
-      } else {
-        throw 'glLightModelf: TODO: ' + pname;
-      }
-    }
-  Module["_emscripten_glLightModelf"] = _emscripten_glLightModelf;
-
-  function _emscripten_glLightModelfv(pname, param) { // TODO: GL_LIGHT_MODEL_LOCAL_VIEWER
-      if (pname == 0x0B53) { // GL_LIGHT_MODEL_AMBIENT
-        GLEmulation.lightModelAmbient[0] = HEAPF32[((param)>>2)];
-        GLEmulation.lightModelAmbient[1] = HEAPF32[(((param)+(4))>>2)];
-        GLEmulation.lightModelAmbient[2] = HEAPF32[(((param)+(8))>>2)];
-        GLEmulation.lightModelAmbient[3] = HEAPF32[(((param)+(12))>>2)];
-      } else {
-        throw 'glLightModelfv: TODO: ' + pname;
-      }
-    }
-  Module["_emscripten_glLightModelfv"] = _emscripten_glLightModelfv;
-
-  function _emscripten_glLightfv(light, pname, param) {
-      if ((light >= 0x4000) && (light < 0x4008)  /* GL_LIGHT0 to GL_LIGHT7 */) {
-        var lightId = light - 0x4000;
-  
-        if (pname == 0x1200) { // GL_AMBIENT
-          GLEmulation.lightAmbient[lightId][0] = HEAPF32[((param)>>2)];
-          GLEmulation.lightAmbient[lightId][1] = HEAPF32[(((param)+(4))>>2)];
-          GLEmulation.lightAmbient[lightId][2] = HEAPF32[(((param)+(8))>>2)];
-          GLEmulation.lightAmbient[lightId][3] = HEAPF32[(((param)+(12))>>2)];
-        } else if (pname == 0x1201) { // GL_DIFFUSE
-          GLEmulation.lightDiffuse[lightId][0] = HEAPF32[((param)>>2)];
-          GLEmulation.lightDiffuse[lightId][1] = HEAPF32[(((param)+(4))>>2)];
-          GLEmulation.lightDiffuse[lightId][2] = HEAPF32[(((param)+(8))>>2)];
-          GLEmulation.lightDiffuse[lightId][3] = HEAPF32[(((param)+(12))>>2)];
-        } else if (pname == 0x1202) { // GL_SPECULAR
-          GLEmulation.lightSpecular[lightId][0] = HEAPF32[((param)>>2)];
-          GLEmulation.lightSpecular[lightId][1] = HEAPF32[(((param)+(4))>>2)];
-          GLEmulation.lightSpecular[lightId][2] = HEAPF32[(((param)+(8))>>2)];
-          GLEmulation.lightSpecular[lightId][3] = HEAPF32[(((param)+(12))>>2)];
-        } else if (pname == 0x1203) { // GL_POSITION
-          GLEmulation.lightPosition[lightId][0] = HEAPF32[((param)>>2)];
-          GLEmulation.lightPosition[lightId][1] = HEAPF32[(((param)+(4))>>2)];
-          GLEmulation.lightPosition[lightId][2] = HEAPF32[(((param)+(8))>>2)];
-          GLEmulation.lightPosition[lightId][3] = HEAPF32[(((param)+(12))>>2)];
-  
-          // multiply position with current modelviewmatrix
-          GLImmediate.matrixLib.mat4.multiplyVec4(GLImmediate.matrix[0], GLEmulation.lightPosition[lightId]);
-        } else {
-          throw 'glLightfv: TODO: ' + pname;
-        }
-      }
-    }
-  Module["_emscripten_glLightfv"] = _emscripten_glLightfv;
 
   function _emscripten_glLineWidth(x0) { GLctx['lineWidth'](x0) }
   Module["_emscripten_glLineWidth"] = _emscripten_glLineWidth;
@@ -18602,141 +13312,30 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glLinkProgram"] = _emscripten_glLinkProgram;
 
-  function _emscripten_glLoadIdentity() {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[GLImmediate.currentMatrix]);
-    }
-  Module["_emscripten_glLoadIdentity"] = _emscripten_glLoadIdentity;
-
-  function _emscripten_glLoadMatrixd(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.set(HEAPF64.subarray((matrix)>>3, (matrix+128)>>3), GLImmediate.matrix[GLImmediate.currentMatrix]);
-    }
-  Module["_emscripten_glLoadMatrixd"] = _emscripten_glLoadMatrixd;
-
-  function _emscripten_glLoadMatrixf(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.set(HEAPF32.subarray((matrix)>>2, (matrix+64)>>2), GLImmediate.matrix[GLImmediate.currentMatrix]);
-    }
-  Module["_emscripten_glLoadMatrixf"] = _emscripten_glLoadMatrixf;
-
-  function _emscripten_glLoadTransposeMatrixd(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.set(HEAPF64.subarray((matrix)>>3, (matrix+128)>>3), GLImmediate.matrix[GLImmediate.currentMatrix]);
-      GLImmediate.matrixLib.mat4.transpose(GLImmediate.matrix[GLImmediate.currentMatrix]);
-    }
-  Module["_emscripten_glLoadTransposeMatrixd"] = _emscripten_glLoadTransposeMatrixd;
-
-  function _emscripten_glLoadTransposeMatrixf(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.set(HEAPF32.subarray((matrix)>>2, (matrix+64)>>2), GLImmediate.matrix[GLImmediate.currentMatrix]);
-      GLImmediate.matrixLib.mat4.transpose(GLImmediate.matrix[GLImmediate.currentMatrix]);
-    }
-  Module["_emscripten_glLoadTransposeMatrixf"] = _emscripten_glLoadTransposeMatrixf;
-
-  function _emscripten_glMaterialfv(face, pname, param) {
-      if ((face != 0x0404) && (face != 0x0408)) { throw 'glMaterialfv: TODO' + face; } // only GL_FRONT and GL_FRONT_AND_BACK supported
+  function _emscripten_glMapBufferRange(target, offset, length, access) {
+      if (access != 0x1A && access != 0xA) {
+        err("glMapBufferRange is only supported when access is MAP_WRITE|INVALIDATE_BUFFER");
+        return 0;
+      }
   
-      if (pname == 0x1200) { // GL_AMBIENT
-        GLEmulation.materialAmbient[0] = HEAPF32[((param)>>2)];
-        GLEmulation.materialAmbient[1] = HEAPF32[(((param)+(4))>>2)];
-        GLEmulation.materialAmbient[2] = HEAPF32[(((param)+(8))>>2)];
-        GLEmulation.materialAmbient[3] = HEAPF32[(((param)+(12))>>2)];
-      } else if (pname == 0x1201) { // GL_DIFFUSE
-        GLEmulation.materialDiffuse[0] = HEAPF32[((param)>>2)];
-        GLEmulation.materialDiffuse[1] = HEAPF32[(((param)+(4))>>2)];
-        GLEmulation.materialDiffuse[2] = HEAPF32[(((param)+(8))>>2)];
-        GLEmulation.materialDiffuse[3] = HEAPF32[(((param)+(12))>>2)];
-      } else if (pname == 0x1202) { // GL_SPECULAR
-        GLEmulation.materialSpecular[0] = HEAPF32[((param)>>2)];
-        GLEmulation.materialSpecular[1] = HEAPF32[(((param)+(4))>>2)];
-        GLEmulation.materialSpecular[2] = HEAPF32[(((param)+(8))>>2)];
-        GLEmulation.materialSpecular[3] = HEAPF32[(((param)+(12))>>2)];
-      } else if (pname == 0x1601) { // GL_SHININESS
-        GLEmulation.materialShininess[0] = HEAPF32[((param)>>2)];
-      } else {
-        throw 'glMaterialfv: TODO: ' + pname;
+      if (!emscriptenWebGLValidateMapBufferTarget(target)) {
+        GL.recordError(0x500/*GL_INVALID_ENUM*/);
+        err('GL_INVALID_ENUM in glMapBufferRange');
+        return 0;
       }
+  
+      var mem = _malloc(length);
+      if (!mem) return 0;
+  
+      GL.mappedBuffers[emscriptenWebGLGetBufferBinding(target)] = {
+        offset: offset,
+        length: length,
+        mem: mem,
+        access: access,
+      };
+      return mem;
     }
-  Module["_emscripten_glMaterialfv"] = _emscripten_glMaterialfv;
-
-  function _emscripten_glMatrixMode(mode) {
-      if (mode == 0x1700 /* GL_MODELVIEW */) {
-        GLImmediate.currentMatrix = 0/*m*/;
-      } else if (mode == 0x1701 /* GL_PROJECTION */) {
-        GLImmediate.currentMatrix = 1/*p*/;
-      } else if (mode == 0x1702) { // GL_TEXTURE
-        GLImmediate.useTextureMatrix = true;
-        GLImmediate.currentMatrix = 2/*t*/ + GLImmediate.TexEnvJIT.getActiveTexture();
-      } else {
-        throw "Wrong mode " + mode + " passed to glMatrixMode";
-      }
-    }
-  Module["_emscripten_glMatrixMode"] = _emscripten_glMatrixMode;
-
-  function _emscripten_glMultMatrixd(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.multiply(GLImmediate.matrix[GLImmediate.currentMatrix],
-          HEAPF64.subarray((matrix)>>3, (matrix+128)>>3));
-    }
-  Module["_emscripten_glMultMatrixd"] = _emscripten_glMultMatrixd;
-
-  function _emscripten_glMultMatrixf(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.multiply(GLImmediate.matrix[GLImmediate.currentMatrix],
-          HEAPF32.subarray((matrix)>>2, (matrix+64)>>2));
-    }
-  Module["_emscripten_glMultMatrixf"] = _emscripten_glMultMatrixf;
-
-  function _emscripten_glMultTransposeMatrixd(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      var colMajor = GLImmediate.matrixLib.mat4.create();
-      GLImmediate.matrixLib.mat4.set(HEAPF64.subarray((matrix)>>3, (matrix+128)>>3), colMajor);
-      GLImmediate.matrixLib.mat4.transpose(colMajor);
-      GLImmediate.matrixLib.mat4.multiply(GLImmediate.matrix[GLImmediate.currentMatrix], colMajor);
-    }
-  Module["_emscripten_glMultTransposeMatrixd"] = _emscripten_glMultTransposeMatrixd;
-
-  function _emscripten_glMultTransposeMatrixf(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      var colMajor = GLImmediate.matrixLib.mat4.create();
-      GLImmediate.matrixLib.mat4.set(HEAPF32.subarray((matrix)>>2, (matrix+64)>>2), colMajor);
-      GLImmediate.matrixLib.mat4.transpose(colMajor);
-      GLImmediate.matrixLib.mat4.multiply(GLImmediate.matrix[GLImmediate.currentMatrix], colMajor);
-    }
-  Module["_emscripten_glMultTransposeMatrixf"] = _emscripten_glMultTransposeMatrixf;
-
-  function _emscripten_glNormal3f(x, y, z) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = z;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.NORMAL, 3, GLctx.FLOAT);
-    }
-  Module["_emscripten_glNormal3f"] = _emscripten_glNormal3f;
-
-  function _emscripten_glNormalPointer(type, stride, pointer) {
-      GLImmediate.setClientAttribute(GLImmediate.NORMAL, 3, type, stride, pointer);
-    }
-  Module["_emscripten_glNormalPointer"] = _emscripten_glNormalPointer;
-
-  function _emscripten_glOrtho(left, right, bottom, top_, nearVal, farVal) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.multiply(GLImmediate.matrix[GLImmediate.currentMatrix],
-          GLImmediate.matrixLib.mat4.ortho(left, right, bottom, top_, nearVal, farVal));
-    }
-  Module["_emscripten_glOrtho"] = _emscripten_glOrtho;
+  Module["_emscripten_glMapBufferRange"] = _emscripten_glMapBufferRange;
 
   function _emscripten_glPauseTransformFeedback() { GLctx['pauseTransformFeedback']() }
   Module["_emscripten_glPauseTransformFeedback"] = _emscripten_glPauseTransformFeedback;
@@ -18749,22 +13348,8 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glPixelStorei"] = _emscripten_glPixelStorei;
 
-  function _emscripten_glPolygonMode(){}
-  Module["_emscripten_glPolygonMode"] = _emscripten_glPolygonMode;
-
   function _emscripten_glPolygonOffset(x0, x1) { GLctx['polygonOffset'](x0, x1) }
   Module["_emscripten_glPolygonOffset"] = _emscripten_glPolygonOffset;
-
-  function _emscripten_glPopMatrix() {
-      if (GLImmediate.matrixStack[GLImmediate.currentMatrix].length == 0) {
-        GL.recordError(0x504/*GL_STACK_UNDERFLOW*/);
-        return;
-      }
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrix[GLImmediate.currentMatrix] = GLImmediate.matrixStack[GLImmediate.currentMatrix].pop();
-    }
-  Module["_emscripten_glPopMatrix"] = _emscripten_glPopMatrix;
 
   function _emscripten_glProgramBinary(program, binaryFormat, binary, length) {
       GL.recordError(0x500/*GL_INVALID_ENUM*/);
@@ -18775,14 +13360,6 @@ var ASM_CONSTS = {
       GL.recordError(0x500/*GL_INVALID_ENUM*/);
     }
   Module["_emscripten_glProgramParameteri"] = _emscripten_glProgramParameteri;
-
-  function _emscripten_glPushMatrix() {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixStack[GLImmediate.currentMatrix].push(
-          Array.prototype.slice.call(GLImmediate.matrix[GLImmediate.currentMatrix]));
-    }
-  Module["_emscripten_glPushMatrix"] = _emscripten_glPushMatrix;
 
   function _emscripten_glQueryCounterEXT(id, target) {
       GLctx.disjointTimerQueryExt['queryCounterEXT'](GL.queries[id], target);
@@ -18867,7 +13444,7 @@ var ASM_CONSTS = {
     }
   Module["emscriptenWebGLGetTexPixelData"] = emscriptenWebGLGetTexPixelData;
   function _emscripten_glReadPixels(x, y, width, height, format, type, pixels) {
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
         if (GLctx.currentPixelPackBufferBinding) {
           GLctx.readPixels(x, y, width, height, format, type, pixels);
         } else {
@@ -18899,20 +13476,6 @@ var ASM_CONSTS = {
   function _emscripten_glResumeTransformFeedback() { GLctx['resumeTransformFeedback']() }
   Module["_emscripten_glResumeTransformFeedback"] = _emscripten_glResumeTransformFeedback;
 
-  function _emscripten_glRotated(angle, x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.rotate(GLImmediate.matrix[GLImmediate.currentMatrix], angle*Math.PI/180, [x, y, z]);
-    }
-  Module["_emscripten_glRotated"] = _emscripten_glRotated;
-
-  function _emscripten_glRotatef(angle, x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.rotate(GLImmediate.matrix[GLImmediate.currentMatrix], angle*Math.PI/180, [x, y, z]);
-    }
-  Module["_emscripten_glRotatef"] = _emscripten_glRotatef;
-
   function _emscripten_glSampleCoverage(value, invert) {
       GLctx.sampleCoverage(value, !!invert);
     }
@@ -18940,25 +13503,8 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glSamplerParameteriv"] = _emscripten_glSamplerParameteriv;
 
-  function _emscripten_glScaled(x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.scale(GLImmediate.matrix[GLImmediate.currentMatrix], [x, y, z]);
-    }
-  Module["_emscripten_glScaled"] = _emscripten_glScaled;
-
-  function _emscripten_glScalef(x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.scale(GLImmediate.matrix[GLImmediate.currentMatrix], [x, y, z]);
-    }
-  Module["_emscripten_glScalef"] = _emscripten_glScalef;
-
   function _emscripten_glScissor(x0, x1, x2, x3) { GLctx['scissor'](x0, x1, x2, x3) }
   Module["_emscripten_glScissor"] = _emscripten_glScissor;
-
-  function _emscripten_glShadeModel() { warnOnce('TODO: glShadeModel') }
-  Module["_emscripten_glShadeModel"] = _emscripten_glShadeModel;
 
   function _emscripten_glShaderBinary() {
       GL.recordError(0x500/*GL_INVALID_ENUM*/);
@@ -18990,49 +13536,8 @@ var ASM_CONSTS = {
   function _emscripten_glStencilOpSeparate(x0, x1, x2, x3) { GLctx['stencilOpSeparate'](x0, x1, x2, x3) }
   Module["_emscripten_glStencilOpSeparate"] = _emscripten_glStencilOpSeparate;
 
-  function _emscripten_glTexCoord2f(u, v) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = u;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = v;
-      GLImmediate.addRendererComponent(GLImmediate.TEXTURE0, 2, GLctx.FLOAT);
-    }
-  Module["_emscripten_glTexCoord2f"] = _emscripten_glTexCoord2f;
-
-  function _emscripten_glTexCoord2i(u, v) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = u;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = v;
-      GLImmediate.addRendererComponent(GLImmediate.TEXTURE0, 2, GLctx.FLOAT);
-    }
-  Module["_emscripten_glTexCoord2i"] = _emscripten_glTexCoord2i;
-  function _emscripten_glTexCoord2fv(v) {
-      _emscripten_glTexCoord2i(HEAPF32[((v)>>2)], HEAPF32[(((v)+(4))>>2)]);
-    }
-  Module["_emscripten_glTexCoord2fv"] = _emscripten_glTexCoord2fv;
-
-
-  function _emscripten_glTexCoord3f() { throw 'glTexCoord3f: TODO' }
-  Module["_emscripten_glTexCoord3f"] = _emscripten_glTexCoord3f;
-
-  function _emscripten_glTexCoord4f() { throw 'glTexCoord4f: TODO' }
-  Module["_emscripten_glTexCoord4f"] = _emscripten_glTexCoord4f;
-
-  function _emscripten_glTexCoordPointer(size, type, stride, pointer) {
-      GLImmediate.setClientAttribute(GLImmediate.TEXTURE0 + GLImmediate.clientActiveTexture, size, type, stride, pointer);
-    }
-  Module["_emscripten_glTexCoordPointer"] = _emscripten_glTexCoordPointer;
-
-  function _emscripten_glTexGenfv() { throw 'glTexGenfv: TODO' }
-  Module["_emscripten_glTexGenfv"] = _emscripten_glTexGenfv;
-
-  function _emscripten_glTexGeni() { throw 'glTexGeni: TODO' }
-  Module["_emscripten_glTexGeni"] = _emscripten_glTexGeni;
-
-  function _emscripten_glTexImage1D() { throw 'glTexImage1D: TODO' }
-  Module["_emscripten_glTexImage1D"] = _emscripten_glTexImage1D;
-
   function _emscripten_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels) {
-      if (GL.currentContext.version >= 2) {
+      if (true) {
         // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
         if (GLctx.currentPixelUnpackBufferBinding) {
           GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
@@ -19085,7 +13590,7 @@ var ASM_CONSTS = {
   Module["_emscripten_glTexStorage3D"] = _emscripten_glTexStorage3D;
 
   function _emscripten_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels) {
-      if (GL.currentContext.version >= 2) {
+      if (true) {
         // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
         if (GLctx.currentPixelUnpackBufferBinding) {
           GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
@@ -19125,45 +13630,14 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glTransformFeedbackVaryings"] = _emscripten_glTransformFeedbackVaryings;
 
-  function _emscripten_glTranslated(x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.translate(GLImmediate.matrix[GLImmediate.currentMatrix], [x, y, z]);
-    }
-  Module["_emscripten_glTranslated"] = _emscripten_glTranslated;
-
-  function _emscripten_glTranslatef(x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.translate(GLImmediate.matrix[GLImmediate.currentMatrix], [x, y, z]);
-    }
-  Module["_emscripten_glTranslatef"] = _emscripten_glTranslatef;
-
   function _emscripten_glUniform1f(location, v0) {
       GLctx.uniform1f(webglGetUniformLocation(location), v0);
     }
   Module["_emscripten_glUniform1f"] = _emscripten_glUniform1f;
 
-  var miniTempWebGLFloatBuffers = [];
-  Module["miniTempWebGLFloatBuffers"] = miniTempWebGLFloatBuffers;
   function _emscripten_glUniform1fv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform1fv(webglGetUniformLocation(location), HEAPF32, value>>2, count);
-        return;
-      }
-  
-      if (count <= 288) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[count-1];
-        for (var i = 0; i < count; ++i) {
-          view[i] = HEAPF32[(((value)+(4*i))>>2)];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*4)>>2);
-      }
-      GLctx.uniform1fv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform1fv(webglGetUniformLocation(location), HEAPF32, value>>2, count);
     }
   Module["_emscripten_glUniform1fv"] = _emscripten_glUniform1fv;
 
@@ -19172,26 +13646,9 @@ var ASM_CONSTS = {
     }
   Module["_emscripten_glUniform1i"] = _emscripten_glUniform1i;
 
-  var __miniTempWebGLIntBuffers = [];
-  Module["__miniTempWebGLIntBuffers"] = __miniTempWebGLIntBuffers;
   function _emscripten_glUniform1iv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform1iv(webglGetUniformLocation(location), HEAP32, value>>2, count);
-        return;
-      }
-  
-      if (count <= 288) {
-        // avoid allocation when uploading few enough uniforms
-        var view = __miniTempWebGLIntBuffers[count-1];
-        for (var i = 0; i < count; ++i) {
-          view[i] = HEAP32[(((value)+(4*i))>>2)];
-        }
-      } else
-      {
-        var view = HEAP32.subarray((value)>>2, (value+count*4)>>2);
-      }
-      GLctx.uniform1iv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform1iv(webglGetUniformLocation(location), HEAP32, value>>2, count);
     }
   Module["_emscripten_glUniform1iv"] = _emscripten_glUniform1iv;
 
@@ -19212,23 +13669,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform2fv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform2fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*2);
-        return;
-      }
-  
-      if (count <= 144) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[2*count-1];
-        for (var i = 0; i < 2*count; i += 2) {
-          view[i] = HEAPF32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAPF32[(((value)+(4*i+4))>>2)];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*8)>>2);
-      }
-      GLctx.uniform2fv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform2fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*2);
     }
   Module["_emscripten_glUniform2fv"] = _emscripten_glUniform2fv;
 
@@ -19239,23 +13680,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform2iv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform2iv(webglGetUniformLocation(location), HEAP32, value>>2, count*2);
-        return;
-      }
-  
-      if (count <= 144) {
-        // avoid allocation when uploading few enough uniforms
-        var view = __miniTempWebGLIntBuffers[2*count-1];
-        for (var i = 0; i < 2*count; i += 2) {
-          view[i] = HEAP32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAP32[(((value)+(4*i+4))>>2)];
-        }
-      } else
-      {
-        var view = HEAP32.subarray((value)>>2, (value+count*8)>>2);
-      }
-      GLctx.uniform2iv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform2iv(webglGetUniformLocation(location), HEAP32, value>>2, count*2);
     }
   Module["_emscripten_glUniform2iv"] = _emscripten_glUniform2iv;
 
@@ -19276,24 +13701,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform3fv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform3fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*3);
-        return;
-      }
-  
-      if (count <= 96) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[3*count-1];
-        for (var i = 0; i < 3*count; i += 3) {
-          view[i] = HEAPF32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAPF32[(((value)+(4*i+4))>>2)];
-          view[i+2] = HEAPF32[(((value)+(4*i+8))>>2)];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*12)>>2);
-      }
-      GLctx.uniform3fv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform3fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*3);
     }
   Module["_emscripten_glUniform3fv"] = _emscripten_glUniform3fv;
 
@@ -19304,24 +13712,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform3iv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform3iv(webglGetUniformLocation(location), HEAP32, value>>2, count*3);
-        return;
-      }
-  
-      if (count <= 96) {
-        // avoid allocation when uploading few enough uniforms
-        var view = __miniTempWebGLIntBuffers[3*count-1];
-        for (var i = 0; i < 3*count; i += 3) {
-          view[i] = HEAP32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAP32[(((value)+(4*i+4))>>2)];
-          view[i+2] = HEAP32[(((value)+(4*i+8))>>2)];
-        }
-      } else
-      {
-        var view = HEAP32.subarray((value)>>2, (value+count*12)>>2);
-      }
-      GLctx.uniform3iv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform3iv(webglGetUniformLocation(location), HEAP32, value>>2, count*3);
     }
   Module["_emscripten_glUniform3iv"] = _emscripten_glUniform3iv;
 
@@ -19342,29 +13733,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform4fv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform4fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*4);
-        return;
-      }
-  
-      if (count <= 72) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[4*count-1];
-        // hoist the heap out of the loop for size and for pthreads+growth.
-        var heap = HEAPF32;
-        value >>= 2;
-        for (var i = 0; i < 4 * count; i += 4) {
-          var dst = value + i;
-          view[i] = heap[dst];
-          view[i + 1] = heap[dst + 1];
-          view[i + 2] = heap[dst + 2];
-          view[i + 3] = heap[dst + 3];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*16)>>2);
-      }
-      GLctx.uniform4fv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform4fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*4);
     }
   Module["_emscripten_glUniform4fv"] = _emscripten_glUniform4fv;
 
@@ -19375,25 +13744,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniform4iv(location, count, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniform4iv(webglGetUniformLocation(location), HEAP32, value>>2, count*4);
-        return;
-      }
-  
-      if (count <= 72) {
-        // avoid allocation when uploading few enough uniforms
-        var view = __miniTempWebGLIntBuffers[4*count-1];
-        for (var i = 0; i < 4*count; i += 4) {
-          view[i] = HEAP32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAP32[(((value)+(4*i+4))>>2)];
-          view[i+2] = HEAP32[(((value)+(4*i+8))>>2)];
-          view[i+3] = HEAP32[(((value)+(4*i+12))>>2)];
-        }
-      } else
-      {
-        var view = HEAP32.subarray((value)>>2, (value+count*16)>>2);
-      }
-      GLctx.uniform4iv(webglGetUniformLocation(location), view);
+      count && GLctx.uniform4iv(webglGetUniformLocation(location), HEAP32, value>>2, count*4);
     }
   Module["_emscripten_glUniform4iv"] = _emscripten_glUniform4iv;
 
@@ -19416,25 +13767,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniformMatrix2fv(location, count, transpose, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniformMatrix2fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*4);
-        return;
-      }
-  
-      if (count <= 72) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[4*count-1];
-        for (var i = 0; i < 4*count; i += 4) {
-          view[i] = HEAPF32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAPF32[(((value)+(4*i+4))>>2)];
-          view[i+2] = HEAPF32[(((value)+(4*i+8))>>2)];
-          view[i+3] = HEAPF32[(((value)+(4*i+12))>>2)];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*16)>>2);
-      }
-      GLctx.uniformMatrix2fv(webglGetUniformLocation(location), !!transpose, view);
+      count && GLctx.uniformMatrix2fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*4);
     }
   Module["_emscripten_glUniformMatrix2fv"] = _emscripten_glUniformMatrix2fv;
 
@@ -19450,30 +13783,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniformMatrix3fv(location, count, transpose, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniformMatrix3fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*9);
-        return;
-      }
-  
-      if (count <= 32) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[9*count-1];
-        for (var i = 0; i < 9*count; i += 9) {
-          view[i] = HEAPF32[(((value)+(4*i))>>2)];
-          view[i+1] = HEAPF32[(((value)+(4*i+4))>>2)];
-          view[i+2] = HEAPF32[(((value)+(4*i+8))>>2)];
-          view[i+3] = HEAPF32[(((value)+(4*i+12))>>2)];
-          view[i+4] = HEAPF32[(((value)+(4*i+16))>>2)];
-          view[i+5] = HEAPF32[(((value)+(4*i+20))>>2)];
-          view[i+6] = HEAPF32[(((value)+(4*i+24))>>2)];
-          view[i+7] = HEAPF32[(((value)+(4*i+28))>>2)];
-          view[i+8] = HEAPF32[(((value)+(4*i+32))>>2)];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*36)>>2);
-      }
-      GLctx.uniformMatrix3fv(webglGetUniformLocation(location), !!transpose, view);
+      count && GLctx.uniformMatrix3fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*9);
     }
   Module["_emscripten_glUniformMatrix3fv"] = _emscripten_glUniformMatrix3fv;
 
@@ -19489,41 +13799,7 @@ var ASM_CONSTS = {
 
   function _emscripten_glUniformMatrix4fv(location, count, transpose, value) {
   
-      if (GL.currentContext.version >= 2) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
-        count && GLctx.uniformMatrix4fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*16);
-        return;
-      }
-  
-      if (count <= 18) {
-        // avoid allocation when uploading few enough uniforms
-        var view = miniTempWebGLFloatBuffers[16*count-1];
-        // hoist the heap out of the loop for size and for pthreads+growth.
-        var heap = HEAPF32;
-        value >>= 2;
-        for (var i = 0; i < 16 * count; i += 16) {
-          var dst = value + i;
-          view[i] = heap[dst];
-          view[i + 1] = heap[dst + 1];
-          view[i + 2] = heap[dst + 2];
-          view[i + 3] = heap[dst + 3];
-          view[i + 4] = heap[dst + 4];
-          view[i + 5] = heap[dst + 5];
-          view[i + 6] = heap[dst + 6];
-          view[i + 7] = heap[dst + 7];
-          view[i + 8] = heap[dst + 8];
-          view[i + 9] = heap[dst + 9];
-          view[i + 10] = heap[dst + 10];
-          view[i + 11] = heap[dst + 11];
-          view[i + 12] = heap[dst + 12];
-          view[i + 13] = heap[dst + 13];
-          view[i + 14] = heap[dst + 14];
-          view[i + 15] = heap[dst + 15];
-        }
-      } else
-      {
-        var view = HEAPF32.subarray((value)>>2, (value+count*64)>>2);
-      }
-      GLctx.uniformMatrix4fv(webglGetUniformLocation(location), !!transpose, view);
+      count && GLctx.uniformMatrix4fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*16);
     }
   Module["_emscripten_glUniformMatrix4fv"] = _emscripten_glUniformMatrix4fv;
 
@@ -19536,6 +13812,33 @@ var ASM_CONSTS = {
       count && GLctx.uniformMatrix4x3fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*12);
     }
   Module["_emscripten_glUniformMatrix4x3fv"] = _emscripten_glUniformMatrix4x3fv;
+
+  function _emscripten_glUnmapBuffer(target) {
+      if (!emscriptenWebGLValidateMapBufferTarget(target)) {
+        GL.recordError(0x500/*GL_INVALID_ENUM*/);
+        err('GL_INVALID_ENUM in glUnmapBuffer');
+        return 0;
+      }
+  
+      var buffer = emscriptenWebGLGetBufferBinding(target);
+      var mapping = GL.mappedBuffers[buffer];
+      if (!mapping) {
+        GL.recordError(0x502 /* GL_INVALID_OPERATION */);
+        err('buffer was never mapped in glUnmapBuffer');
+        return 0;
+      }
+      GL.mappedBuffers[buffer] = null;
+  
+      if (!(mapping.access & 0x10)) /* GL_MAP_FLUSH_EXPLICIT_BIT */
+        if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+          GLctx.bufferSubData(target, mapping.offset, HEAPU8, mapping.mem, mapping.length);
+        } else {
+          GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
+        }
+      _free(mapping.mem);
+      return 1;
+    }
+  Module["_emscripten_glUnmapBuffer"] = _emscripten_glUnmapBuffer;
 
   function _emscripten_glUseProgram(program) {
       program = GL.programs[program];
@@ -19550,87 +13853,6 @@ var ASM_CONSTS = {
       GLctx.validateProgram(GL.programs[program]);
     }
   Module["_emscripten_glValidateProgram"] = _emscripten_glValidateProgram;
-
-  function _emscripten_glVertex2f(x, y) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 0;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 1;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_emscripten_glVertex2f"] = _emscripten_glVertex2f;
-
-  function _emscripten_glVertex2fv(p) {
-      _emscripten_glVertex2f(HEAPF32[((p)>>2)], HEAPF32[(((p)+(4))>>2)]);
-    }
-  Module["_emscripten_glVertex2fv"] = _emscripten_glVertex2fv;
-
-  function _emscripten_glVertex2i(x, y) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 0;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 1;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_emscripten_glVertex2i"] = _emscripten_glVertex2i;
-
-  function _emscripten_glVertex3f(x, y, z) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = z;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 1;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_emscripten_glVertex3f"] = _emscripten_glVertex3f;
-
-  function _emscripten_glVertex3fv(p) {
-      _emscripten_glVertex3f(HEAPF32[((p)>>2)], HEAPF32[(((p)+(4))>>2)], HEAPF32[(((p)+(8))>>2)]);
-    }
-  Module["_emscripten_glVertex3fv"] = _emscripten_glVertex3fv;
-
-  function _emscripten_glVertex3i(x, y, z) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = z;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 1;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_emscripten_glVertex3i"] = _emscripten_glVertex3i;
-
-  function _emscripten_glVertex4f(x, y, z, w) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = z;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = w;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_emscripten_glVertex4f"] = _emscripten_glVertex4f;
-
-  function _emscripten_glVertex4fv(p) {
-      _emscripten_glVertex4f(HEAPF32[((p)>>2)], HEAPF32[(((p)+(4))>>2)], HEAPF32[(((p)+(8))>>2)], HEAPF32[(((p)+(12))>>2)]);
-    }
-  Module["_emscripten_glVertex4fv"] = _emscripten_glVertex4fv;
-
-  function _emscripten_glVertex4i(x, y, z, w) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = z;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = w;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_emscripten_glVertex4i"] = _emscripten_glVertex4i;
 
   function _emscripten_glVertexAttrib1f(x0, x1) { GLctx['vertexAttrib1f'](x0, x1) }
   Module["_emscripten_glVertexAttrib1f"] = _emscripten_glVertexAttrib1f;
@@ -19710,19 +13932,42 @@ var ASM_CONSTS = {
   Module["_emscripten_glVertexAttribI4uiv"] = _emscripten_glVertexAttribI4uiv;
 
   function _emscripten_glVertexAttribIPointer(index, size, type, stride, ptr) {
+      var cb = GL.currentContext.clientBuffers[index];
+      if (!GLctx.currentArrayBufferBinding) {
+        cb.size = size;
+        cb.type = type;
+        cb.normalized = false;
+        cb.stride = stride;
+        cb.ptr = ptr;
+        cb.clientside = true;
+        cb.vertexAttribPointerAdaptor = function(index, size, type, normalized, stride, ptr) {
+          this.vertexAttribIPointer(index, size, type, stride, ptr);
+        };
+        return;
+      }
+      cb.clientside = false;
       GLctx['vertexAttribIPointer'](index, size, type, stride, ptr);
     }
   Module["_emscripten_glVertexAttribIPointer"] = _emscripten_glVertexAttribIPointer;
 
   function _emscripten_glVertexAttribPointer(index, size, type, normalized, stride, ptr) {
+      var cb = GL.currentContext.clientBuffers[index];
+      if (!GLctx.currentArrayBufferBinding) {
+        cb.size = size;
+        cb.type = type;
+        cb.normalized = normalized;
+        cb.stride = stride;
+        cb.ptr = ptr;
+        cb.clientside = true;
+        cb.vertexAttribPointerAdaptor = function(index, size, type, normalized, stride, ptr) {
+          this.vertexAttribPointer(index, size, type, normalized, stride, ptr);
+        };
+        return;
+      }
+      cb.clientside = false;
       GLctx.vertexAttribPointer(index, size, type, !!normalized, stride, ptr);
     }
   Module["_emscripten_glVertexAttribPointer"] = _emscripten_glVertexAttribPointer;
-
-  function _emscripten_glVertexPointer(size, type, stride, pointer) {
-      GLImmediate.setClientAttribute(GLImmediate.VERTEX, size, type, stride, pointer);
-    }
-  Module["_emscripten_glVertexPointer"] = _emscripten_glVertexPointer;
 
   function _emscripten_glViewport(x0, x1, x2, x3) { GLctx['viewport'](x0, x1, x2, x3) }
   Module["_emscripten_glViewport"] = _emscripten_glViewport;
@@ -20037,34 +14282,60 @@ var ASM_CONSTS = {
     }
   Module["_getnameinfo"] = _getnameinfo;
 
-  function _glBegin(mode) {
-      // Push the old state:
-      GLImmediate.enabledClientAttributes_preBegin = GLImmediate.enabledClientAttributes;
-      GLImmediate.enabledClientAttributes = [];
-  
-      GLImmediate.clientAttributes_preBegin = GLImmediate.clientAttributes;
-      GLImmediate.clientAttributes = []
-      for (var i = 0; i < GLImmediate.clientAttributes_preBegin.length; i++) {
-        GLImmediate.clientAttributes.push({});
-      }
-  
-      GLImmediate.mode = mode;
-      GLImmediate.vertexCounter = 0;
-      var components = GLImmediate.rendererComponents = [];
-      for (var i = 0; i < GLImmediate.NUM_ATTRIBUTES; i++) {
-        components[i] = 0;
-      }
-      GLImmediate.rendererComponentPointer = 0;
-      GLImmediate.vertexData = GLImmediate.tempData;
+  function _glAttachShader(program, shader) {
+      GLctx.attachShader(GL.programs[program], GL.shaders[shader]);
     }
-  Module["_glBegin"] = _glBegin;
+  Module["_glAttachShader"] = _glAttachShader;
+
+  function _glBindBuffer(target, buffer) {
+      if (target == 0x8892 /*GL_ARRAY_BUFFER*/) {
+        GLctx.currentArrayBufferBinding = buffer;
+      } else if (target == 0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/) {
+        GLctx.currentElementArrayBufferBinding = buffer;
+      }
+  
+      if (target == 0x88EB /*GL_PIXEL_PACK_BUFFER*/) {
+        // In WebGL 2 glReadPixels entry point, we need to use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_PACK_BUFFER_BINDING point, so must keep track whether that binding point is non-null to know what is
+        // the proper API function to call.
+        GLctx.currentPixelPackBufferBinding = buffer;
+      } else if (target == 0x88EC /*GL_PIXEL_UNPACK_BUFFER*/) {
+        // In WebGL 2 gl(Compressed)Tex(Sub)Image[23]D entry points, we need to
+        // use a different WebGL 2 API function call when a buffer is bound to
+        // GL_PIXEL_UNPACK_BUFFER_BINDING point, so must keep track whether that
+        // binding point is non-null to know what is the proper API function to
+        // call.
+        GLctx.currentPixelUnpackBufferBinding = buffer;
+      }
+      GLctx.bindBuffer(target, GL.buffers[buffer]);
+    }
+  Module["_glBindBuffer"] = _glBindBuffer;
 
   function _glBindVertexArray(vao) {
-      _emulGlBindVertexArray(vao);
+      GLctx['bindVertexArray'](GL.vaos[vao]);
       var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
       GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
     }
   Module["_glBindVertexArray"] = _glBindVertexArray;
+
+  function _glBufferData(target, size, data, usage) {
+  
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        // If size is zero, WebGL would interpret uploading the whole input arraybuffer (starting from given offset), which would
+        // not make sense in WebAssembly, so avoid uploading if size is zero. However we must still call bufferData to establish a
+        // backing storage of zero bytes.
+        if (data && size) {
+          GLctx.bufferData(target, HEAPU8, usage, data, size);
+        } else {
+          GLctx.bufferData(target, size, usage);
+        }
+      } else {
+        // N.b. here first form specifies a heap subarray, second form an integer size, so the ?: code here is polymorphic. It is advised to avoid
+        // randomly mixing both uses in calling code, to avoid any potential JS engine JIT issues.
+        GLctx.bufferData(target, data ? HEAPU8.subarray(data, data+size) : size, usage);
+      }
+    }
+  Module["_glBufferData"] = _glBufferData;
 
   function _glClear(x0) { GLctx['clear'](x0) }
   Module["_glClear"] = _glClear;
@@ -20072,15 +14343,96 @@ var ASM_CONSTS = {
   function _glClearColor(x0, x1, x2, x3) { GLctx['clearColor'](x0, x1, x2, x3) }
   Module["_glClearColor"] = _glClearColor;
 
-  function _glColor3f(r, g, b) {
-      _emscripten_glColor4f(r, g, b, 1);
+  function _glCompileShader(shader) {
+      GLctx.compileShader(GL.shaders[shader]);
     }
-  Module["_glColor3f"] = _glColor3f;
+  Module["_glCompileShader"] = _glCompileShader;
+
+  function _glCreateProgram() {
+      var id = GL.getNewId(GL.programs);
+      var program = GLctx.createProgram();
+      // Store additional information needed for each shader program:
+      program.name = id;
+      // Lazy cache results of glGetProgramiv(GL_ACTIVE_UNIFORM_MAX_LENGTH/GL_ACTIVE_ATTRIBUTE_MAX_LENGTH/GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH)
+      program.maxUniformLength = program.maxAttributeLength = program.maxUniformBlockNameLength = 0;
+      program.uniformIdCounter = 1;
+      GL.programs[id] = program;
+      return id;
+    }
+  Module["_glCreateProgram"] = _glCreateProgram;
+
+  function _glCreateShader(shaderType) {
+      var id = GL.getNewId(GL.shaders);
+      GL.shaders[id] = GLctx.createShader(shaderType);
+  
+      return id;
+    }
+  Module["_glCreateShader"] = _glCreateShader;
+
+  function _glDeleteBuffers(n, buffers) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((buffers)+(i*4))>>2)];
+        var buffer = GL.buffers[id];
+  
+        // From spec: "glDeleteBuffers silently ignores 0's and names that do not
+        // correspond to existing buffer objects."
+        if (!buffer) continue;
+  
+        GLctx.deleteBuffer(buffer);
+        buffer.name = 0;
+        GL.buffers[id] = null;
+  
+        if (id == GLctx.currentArrayBufferBinding) GLctx.currentArrayBufferBinding = 0;
+        if (id == GLctx.currentElementArrayBufferBinding) GLctx.currentElementArrayBufferBinding = 0;
+        if (id == GLctx.currentPixelPackBufferBinding) GLctx.currentPixelPackBufferBinding = 0;
+        if (id == GLctx.currentPixelUnpackBufferBinding) GLctx.currentPixelUnpackBufferBinding = 0;
+      }
+    }
+  Module["_glDeleteBuffers"] = _glDeleteBuffers;
+
+  function _glDeleteProgram(id) {
+      if (!id) return;
+      var program = GL.programs[id];
+      if (!program) { // glDeleteProgram actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteProgram(program);
+      program.name = 0;
+      GL.programs[id] = null;
+    }
+  Module["_glDeleteProgram"] = _glDeleteProgram;
+
+  function _glDeleteShader(id) {
+      if (!id) return;
+      var shader = GL.shaders[id];
+      if (!shader) { // glDeleteShader actually signals an error when deleting a nonexisting object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteShader(shader);
+      GL.shaders[id] = null;
+    }
+  Module["_glDeleteShader"] = _glDeleteShader;
 
   function _glDeleteVertexArrays(n, vaos) {
-      _emulGlDeleteVertexArrays(n, vaos);
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((vaos)+(i*4))>>2)];
+        GLctx['deleteVertexArray'](GL.vaos[id]);
+        GL.vaos[id] = null;
+      }
     }
   Module["_glDeleteVertexArrays"] = _glDeleteVertexArrays;
+
+  function _glDrawArrays(mode, first, count) {
+      // bind any client-side buffers
+      GL.preDrawHandleClientVertexAttribBindings(first + count);
+  
+      GLctx.drawArrays(mode, first, count);
+  
+      GL.postDrawHandleClientVertexAttribBindings();
+    }
+  Module["_glDrawArrays"] = _glDrawArrays;
 
   function _glDrawArraysInstanced(mode, first, count, primcount) {
       GLctx['drawArraysInstanced'](mode, first, count, primcount);
@@ -20103,98 +14455,290 @@ var ASM_CONSTS = {
     }
   Module["_glDrawElementsInstanced"] = _glDrawElementsInstanced;
 
+  function _glEnable(x0) { GLctx['enable'](x0) }
+  Module["_glEnable"] = _glEnable;
 
-  function _glEnd() {
-      GLImmediate.prepareClientAttributes(GLImmediate.rendererComponents[GLImmediate.VERTEX], true);
-      GLImmediate.firstVertex = 0;
-      GLImmediate.lastVertex = GLImmediate.vertexCounter / (GLImmediate.stride >> 2);
-      GLImmediate.flush();
-      GLImmediate.disableBeginEndClientAttributes();
-      GLImmediate.mode = -1;
-  
-      // Pop the old state:
-      GLImmediate.enabledClientAttributes = GLImmediate.enabledClientAttributes_preBegin;
-      GLImmediate.clientAttributes = GLImmediate.clientAttributes_preBegin;
-      GLImmediate.currentRenderer = null; // The set of active client attributes changed, we must re-lookup the renderer to use.
-      GLImmediate.modifiedClientAttributes = true;
+  function _glEnableVertexAttribArray(index) {
+      var cb = GL.currentContext.clientBuffers[index];
+      cb.enabled = true;
+      GLctx.enableVertexAttribArray(index);
     }
-  Module["_glEnd"] = _glEnd;
+  Module["_glEnableVertexAttribArray"] = _glEnableVertexAttribArray;
+
+  function _glGenBuffers(n, buffers) {
+      __glGenObject(n, buffers, 'createBuffer', GL.buffers
+        );
+    }
+  Module["_glGenBuffers"] = _glGenBuffers;
 
   function _glGenVertexArrays(n, arrays) {
-      _emulGlGenVertexArrays(n, arrays);
+      __glGenObject(n, arrays, 'createVertexArray', GL.vaos
+        );
     }
   Module["_glGenVertexArrays"] = _glGenVertexArrays;
 
+  function _glGetShaderInfoLog(shader, maxLength, length, infoLog) {
+      var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
+      if (log === null) log = '(unknown error)';
+      var numBytesWrittenExclNull = (maxLength > 0 && infoLog) ? stringToUTF8(log, infoLog, maxLength) : 0;
+      if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
+    }
+  Module["_glGetShaderInfoLog"] = _glGetShaderInfoLog;
+
+  function _glGetShaderiv(shader, pname, p) {
+      if (!p) {
+        // GLES2 specification does not specify how to behave if p is a null pointer. Since calling this function does not make sense
+        // if p == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      if (pname == 0x8B84) { // GL_INFO_LOG_LENGTH
+        var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
+        if (log === null) log = '(unknown error)';
+        // The GLES2 specification says that if the shader has an empty info log,
+        // a value of 0 is returned. Otherwise the log has a null char appended.
+        // (An empty string is falsey, so we can just check that instead of
+        // looking at log.length.)
+        var logLength = log ? log.length + 1 : 0;
+        HEAP32[((p)>>2)] = logLength;
+      } else if (pname == 0x8B88) { // GL_SHADER_SOURCE_LENGTH
+        var source = GLctx.getShaderSource(GL.shaders[shader]);
+        // source may be a null, or the empty string, both of which are falsey
+        // values that we report a 0 length for.
+        var sourceLength = source ? source.length + 1 : 0;
+        HEAP32[((p)>>2)] = sourceLength;
+      } else {
+        HEAP32[((p)>>2)] = GLctx.getShaderParameter(GL.shaders[shader], pname);
+      }
+    }
+  Module["_glGetShaderiv"] = _glGetShaderiv;
+
+  function _glGetUniformLocation(program, name) {
+  
+      name = UTF8ToString(name);
+  
+      if (program = GL.programs[program]) {
+        webglPrepareUniformLocationsBeforeFirstUse(program);
+        var uniformLocsById = program.uniformLocsById; // Maps GLuint -> WebGLUniformLocation
+        var arrayIndex = 0;
+        var uniformBaseName = name;
+  
+        // Invariant: when populating integer IDs for uniform locations, we must maintain the precondition that
+        // arrays reside in contiguous addresses, i.e. for a 'vec4 colors[10];', colors[4] must be at location colors[0]+4.
+        // However, user might call glGetUniformLocation(program, "colors") for an array, so we cannot discover based on the user
+        // input arguments whether the uniform we are dealing with is an array. The only way to discover which uniforms are arrays
+        // is to enumerate over all the active uniforms in the program.
+        var leftBrace = webglGetLeftBracePos(name);
+  
+        // If user passed an array accessor "[index]", parse the array index off the accessor.
+        if (leftBrace > 0) {
+          arrayIndex = jstoi_q(name.slice(leftBrace + 1)) >>> 0; // "index]", coerce parseInt(']') with >>>0 to treat "foo[]" as "foo[0]" and foo[-1] as unsigned out-of-bounds.
+          uniformBaseName = name.slice(0, leftBrace);
+        }
+  
+        // Have we cached the location of this uniform before?
+        var sizeAndId = program.uniformSizeAndIdsByName[uniformBaseName]; // A pair [array length, GLint of the uniform location]
+  
+        // If an uniform with this name exists, and if its index is within the array limits (if it's even an array),
+        // query the WebGLlocation, or return an existing cached location.
+        if (sizeAndId && arrayIndex < sizeAndId[0]) {
+          arrayIndex += sizeAndId[1]; // Add the base location of the uniform to the array index offset.
+          if ((uniformLocsById[arrayIndex] = uniformLocsById[arrayIndex] || GLctx.getUniformLocation(program, name))) {
+            return arrayIndex;
+          }
+        }
+      }
+      else {
+        // N.b. we are currently unable to distinguish between GL program IDs that never existed vs GL program IDs that have been deleted,
+        // so report GL_INVALID_VALUE in both cases.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+      }
+      return -1;
+    }
+  Module["_glGetUniformLocation"] = _glGetUniformLocation;
+
   function _glIsVertexArray(array) {
-      return _emulGlIsVertexArray(array);
+  
+      var vao = GL.vaos[array];
+      if (!vao) return 0;
+      return GLctx['isVertexArray'](vao);
     }
   Module["_glIsVertexArray"] = _glIsVertexArray;
 
-  function _glLoadIdentity() {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[GLImmediate.currentMatrix]);
+  function _glLinkProgram(program) {
+      program = GL.programs[program];
+      GLctx.linkProgram(program);
+      // Invalidate earlier computed uniform->ID mappings, those have now become stale
+      program.uniformLocsById = 0; // Mark as null-like so that glGetUniformLocation() knows to populate this again.
+      program.uniformSizeAndIdsByName = {};
+  
     }
-  Module["_glLoadIdentity"] = _glLoadIdentity;
+  Module["_glLinkProgram"] = _glLinkProgram;
 
-  function _glLoadMatrixf(matrix) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.set(HEAPF32.subarray((matrix)>>2, (matrix+64)>>2), GLImmediate.matrix[GLImmediate.currentMatrix]);
+  function _glShaderSource(shader, count, string, length) {
+      var source = GL.getSource(shader, count, string, length);
+  
+      GLctx.shaderSource(GL.shaders[shader], source);
     }
-  Module["_glLoadMatrixf"] = _glLoadMatrixf;
+  Module["_glShaderSource"] = _glShaderSource;
 
-  function _glMatrixMode(mode) {
-      if (mode == 0x1700 /* GL_MODELVIEW */) {
-        GLImmediate.currentMatrix = 0/*m*/;
-      } else if (mode == 0x1701 /* GL_PROJECTION */) {
-        GLImmediate.currentMatrix = 1/*p*/;
-      } else if (mode == 0x1702) { // GL_TEXTURE
-        GLImmediate.useTextureMatrix = true;
-        GLImmediate.currentMatrix = 2/*t*/ + GLImmediate.TexEnvJIT.getActiveTexture();
-      } else {
-        throw "Wrong mode " + mode + " passed to glMatrixMode";
-      }
+  function _glUniform3fv(location, count, value) {
+  
+      count && GLctx.uniform3fv(webglGetUniformLocation(location), HEAPF32, value>>2, count*3);
     }
-  Module["_glMatrixMode"] = _glMatrixMode;
+  Module["_glUniform3fv"] = _glUniform3fv;
 
-  function _glPointSize(size) {
-      GLEmulation.pointSize = size;
+  function _glUniformMatrix4fv(location, count, transpose, value) {
+  
+      count && GLctx.uniformMatrix4fv(webglGetUniformLocation(location), !!transpose, HEAPF32, value>>2, count*16);
     }
-  Module["_glPointSize"] = _glPointSize;
+  Module["_glUniformMatrix4fv"] = _glUniformMatrix4fv;
 
-  function _glRotatef(angle, x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.rotate(GLImmediate.matrix[GLImmediate.currentMatrix], angle*Math.PI/180, [x, y, z]);
+  function _glUseProgram(program) {
+      program = GL.programs[program];
+      GLctx.useProgram(program);
+      // Record the currently active program so that we can access the uniform
+      // mapping table of that program.
+      GLctx.currentProgram = program;
     }
-  Module["_glRotatef"] = _glRotatef;
-
-  function _glTranslatef(x, y, z) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.translate(GLImmediate.matrix[GLImmediate.currentMatrix], [x, y, z]);
-    }
-  Module["_glTranslatef"] = _glTranslatef;
-
-  function _glVertex3f(x, y, z) {
-      assert(GLImmediate.mode >= 0); // must be in begin/end
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = x;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = y;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = z;
-      GLImmediate.vertexData[GLImmediate.vertexCounter++] = 1;
-      assert(GLImmediate.vertexCounter << 2 < GL.MAX_TEMP_BUFFER_SIZE);
-      GLImmediate.addRendererComponent(GLImmediate.VERTEX, 4, GLctx.FLOAT);
-    }
-  Module["_glVertex3f"] = _glVertex3f;
+  Module["_glUseProgram"] = _glUseProgram;
 
   function _glVertexAttribDivisor(index, divisor) {
       GLctx['vertexAttribDivisor'](index, divisor);
     }
   Module["_glVertexAttribDivisor"] = _glVertexAttribDivisor;
 
+  function _glVertexAttribPointer(index, size, type, normalized, stride, ptr) {
+      var cb = GL.currentContext.clientBuffers[index];
+      if (!GLctx.currentArrayBufferBinding) {
+        cb.size = size;
+        cb.type = type;
+        cb.normalized = normalized;
+        cb.stride = stride;
+        cb.ptr = ptr;
+        cb.clientside = true;
+        cb.vertexAttribPointerAdaptor = function(index, size, type, normalized, stride, ptr) {
+          this.vertexAttribPointer(index, size, type, normalized, stride, ptr);
+        };
+        return;
+      }
+      cb.clientside = false;
+      GLctx.vertexAttribPointer(index, size, type, !!normalized, stride, ptr);
+    }
+  Module["_glVertexAttribPointer"] = _glVertexAttribPointer;
+
   function _glViewport(x0, x1, x2, x3) { GLctx['viewport'](x0, x1, x2, x3) }
   Module["_glViewport"] = _glViewport;
+
+  function _glGetString(name_) {
+      var ret = GL.stringCache[name_];
+      if (!ret) {
+        switch (name_) {
+          case 0x1F03 /* GL_EXTENSIONS */:
+            var exts = GLctx.getSupportedExtensions() || []; // .getSupportedExtensions() can return null if context is lost, so coerce to empty array.
+            exts = exts.concat(exts.map(function(e) { return "GL_" + e; }));
+            ret = stringToNewUTF8(exts.join(' '));
+            break;
+          case 0x1F00 /* GL_VENDOR */:
+          case 0x1F01 /* GL_RENDERER */:
+          case 0x9245 /* UNMASKED_VENDOR_WEBGL */:
+          case 0x9246 /* UNMASKED_RENDERER_WEBGL */:
+            var s = GLctx.getParameter(name_);
+            if (!s) {
+              GL.recordError(0x500/*GL_INVALID_ENUM*/);
+            }
+            ret = s && stringToNewUTF8(s);
+            break;
+  
+          case 0x1F02 /* GL_VERSION */:
+            var glVersion = GLctx.getParameter(0x1F02 /*GL_VERSION*/);
+            // return GLES version string corresponding to the version of the WebGL context
+            if (true) glVersion = 'OpenGL ES 3.0 (' + glVersion + ')';
+            else
+            {
+              glVersion = 'OpenGL ES 2.0 (' + glVersion + ')';
+            }
+            ret = stringToNewUTF8(glVersion);
+            break;
+          case 0x8B8C /* GL_SHADING_LANGUAGE_VERSION */:
+            var glslVersion = GLctx.getParameter(0x8B8C /*GL_SHADING_LANGUAGE_VERSION*/);
+            // extract the version number 'N.M' from the string 'WebGL GLSL ES N.M ...'
+            var ver_re = /^WebGL GLSL ES ([0-9]\.[0-9][0-9]?)(?:$| .*)/;
+            var ver_num = glslVersion.match(ver_re);
+            if (ver_num !== null) {
+              if (ver_num[1].length == 3) ver_num[1] = ver_num[1] + '0'; // ensure minor version has 2 digits
+              glslVersion = 'OpenGL ES GLSL ES ' + ver_num[1] + ' (' + glslVersion + ')';
+            }
+            ret = stringToNewUTF8(glslVersion);
+            break;
+          default:
+            GL.recordError(0x500/*GL_INVALID_ENUM*/);
+            // fall through
+        }
+        GL.stringCache[name_] = ret;
+      }
+      return ret;
+    }
+  Module["_glGetString"] = _glGetString;
+  var GLEW = {isLinaroFork:1,extensions:null,error:{0:null,1:null,2:null,3:null,4:null,5:null,6:null,7:null,8:null},version:{1:null,2:null,3:null,4:null},errorStringConstantFromCode:function(error) {
+        if (GLEW.isLinaroFork) {
+          switch (error) {
+            case 4:return "OpenGL ES lib expected, found OpenGL lib"; // GLEW_ERROR_NOT_GLES_VERSION
+            case 5:return "OpenGL lib expected, found OpenGL ES lib"; // GLEW_ERROR_GLES_VERSION
+            case 6:return "Missing EGL version"; // GLEW_ERROR_NO_EGL_VERSION
+            case 7:return "EGL 1.1 and up are supported"; // GLEW_ERROR_EGL_VERSION_10_ONLY
+            default:break;
+          }
+        }
+  
+        switch (error) {
+          case 0:return "No error"; // GLEW_OK || GLEW_NO_ERROR
+          case 1:return "Missing GL version"; // GLEW_ERROR_NO_GL_VERSION
+          case 2:return "GL 1.1 and up are supported"; // GLEW_ERROR_GL_VERSION_10_ONLY
+          case 3:return "GLX 1.2 and up are supported"; // GLEW_ERROR_GLX_VERSION_11_ONLY
+          default:return null;
+        }
+      },errorString:function(error) {
+        if (!GLEW.error[error]) {
+          var string = GLEW.errorStringConstantFromCode(error);
+          if (!string) {
+            string = "Unknown error";
+            error = 8; // prevent array from growing more than this
+          }
+          GLEW.error[error] = allocateUTF8(string);
+        }
+        return GLEW.error[error];
+      },versionStringConstantFromCode:function(name) {
+        switch (name) {
+          case 1:return "1.10.0"; // GLEW_VERSION
+          case 2:return "1"; // GLEW_VERSION_MAJOR
+          case 3:return "10"; // GLEW_VERSION_MINOR
+          case 4:return "0"; // GLEW_VERSION_MICRO
+          default:return null;
+        }
+      },versionString:function(name) {
+        if (!GLEW.version[name]) {
+          var string = GLEW.versionStringConstantFromCode(name);
+          if (!string)
+            return 0;
+          GLEW.version[name] = allocateUTF8(string);
+        }
+        return GLEW.version[name];
+      },extensionIsSupported:function(name) {
+        if (!GLEW.extensions) {
+          GLEW.extensions = UTF8ToString(_glGetString(0x1F03)).split(' ');
+        }
+  
+        if (GLEW.extensions.includes(name))
+          return 1;
+  
+        // extensions from GLEmulations do not come unprefixed
+        // so, try with prefix
+        return (GLEW.extensions.includes("GL_" + name));
+      }};
+  Module["GLEW"] = GLEW;
+  function _glewInit() { return 0; }
+  Module["_glewInit"] = _glewInit;
 
   /** @constructor */
   function GLFW_Window(id, width, height, title, monitor, share) {
@@ -21018,6 +15562,15 @@ var ASM_CONSTS = {
     }
   Module["_glfwSetErrorCallback"] = _glfwSetErrorCallback;
 
+  function _glfwSetFramebufferSizeCallback(winid, cbfun) {
+      var win = GLFW.WindowFromId(winid);
+      if (!win) return null;
+      var prevcbfun = win.framebufferSizeFunc;
+      win.framebufferSizeFunc = cbfun;
+      return prevcbfun;
+    }
+  Module["_glfwSetFramebufferSizeCallback"] = _glfwSetFramebufferSizeCallback;
+
   function _glfwSetKeyCallback(winid, cbfun) {
       return GLFW.setKeyCallback(winid, cbfun);
     }
@@ -21078,14 +15631,6 @@ var ASM_CONSTS = {
       GLFW.active = null;
     }
   Module["_glfwTerminate"] = _glfwTerminate;
-
-  function _gluLookAt(ex, ey, ez, cx, cy, cz, ux, uy, uz) {
-      GLImmediate.matricesModified = true;
-      GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-      GLImmediate.matrixLib.mat4.lookAt(GLImmediate.matrix[GLImmediate.currentMatrix], [ex, ey, ez],
-          [cx, cy, cz], [ux, uy, uz]);
-    }
-  Module["_gluLookAt"] = _gluLookAt;
 
 
   function __isLeapYear(year) {
@@ -21915,7 +16460,6 @@ var ASM_CONSTS = {
   Module["cwrap"] = cwrap;
 
 
-
   var FSNode = /** @constructor */ function(parent, name, mode, rdev) {
     if (!parent) {
       parent = this;  // root node sets parent to itself
@@ -22098,19 +16642,7 @@ ERRNO_CODES = {
       var preloadedImages = {};
       var preloadedAudios = {};;
 var GLctx;;
-GLImmediate.setupFuncs(); Browser.moduleContextCreatedCallbacks.push(function() { GLImmediate.init() });;
-GLEmulation.init();;
 for (var i = 0; i < 32; ++i) tempFixedLengthArray.push(new Array(i));;
-var miniTempWebGLFloatBuffersStorage = new Float32Array(288);
-  for (/**@suppress{duplicate}*/var i = 0; i < 288; ++i) {
-  miniTempWebGLFloatBuffers[i] = miniTempWebGLFloatBuffersStorage.subarray(0, i+1);
-  }
-  ;
-var __miniTempWebGLIntBuffersStorage = new Int32Array(288);
-  for (/**@suppress{duplicate}*/var i = 0; i < 288; ++i) {
-  __miniTempWebGLIntBuffers[i] = __miniTempWebGLIntBuffersStorage.subarray(0, i+1);
-  }
-  ;
 var ASSERTIONS = true;
 
 function checkIncomingModuleAPI() {
@@ -22294,9 +16826,7 @@ var asmLibraryArg = {
   "emscripten_get_now": _emscripten_get_now,
   "emscripten_get_now_res": _emscripten_get_now_res,
   "emscripten_glActiveTexture": _emscripten_glActiveTexture,
-  "emscripten_glAlphaFunc": _emscripten_glAlphaFunc,
   "emscripten_glAttachShader": _emscripten_glAttachShader,
-  "emscripten_glBegin": _emscripten_glBegin,
   "emscripten_glBeginQuery": _emscripten_glBeginQuery,
   "emscripten_glBeginQueryEXT": _emscripten_glBeginQueryEXT,
   "emscripten_glBeginTransformFeedback": _emscripten_glBeginTransformFeedback,
@@ -22305,7 +16835,6 @@ var asmLibraryArg = {
   "emscripten_glBindBufferBase": _emscripten_glBindBufferBase,
   "emscripten_glBindBufferRange": _emscripten_glBindBufferRange,
   "emscripten_glBindFramebuffer": _emscripten_glBindFramebuffer,
-  "emscripten_glBindProgram": _emscripten_glBindProgram,
   "emscripten_glBindRenderbuffer": _emscripten_glBindRenderbuffer,
   "emscripten_glBindSampler": _emscripten_glBindSampler,
   "emscripten_glBindTexture": _emscripten_glBindTexture,
@@ -22329,27 +16858,8 @@ var asmLibraryArg = {
   "emscripten_glClearColor": _emscripten_glClearColor,
   "emscripten_glClearDepthf": _emscripten_glClearDepthf,
   "emscripten_glClearStencil": _emscripten_glClearStencil,
-  "emscripten_glClientActiveTexture": _emscripten_glClientActiveTexture,
   "emscripten_glClientWaitSync": _emscripten_glClientWaitSync,
-  "emscripten_glClipPlane": _emscripten_glClipPlane,
-  "emscripten_glColor3d": _emscripten_glColor3d,
-  "emscripten_glColor3f": _emscripten_glColor3f,
-  "emscripten_glColor3fv": _emscripten_glColor3fv,
-  "emscripten_glColor3ub": _emscripten_glColor3ub,
-  "emscripten_glColor3ubv": _emscripten_glColor3ubv,
-  "emscripten_glColor3ui": _emscripten_glColor3ui,
-  "emscripten_glColor3uiv": _emscripten_glColor3uiv,
-  "emscripten_glColor3us": _emscripten_glColor3us,
-  "emscripten_glColor3usv": _emscripten_glColor3usv,
-  "emscripten_glColor4d": _emscripten_glColor4d,
-  "emscripten_glColor4f": _emscripten_glColor4f,
-  "emscripten_glColor4fv": _emscripten_glColor4fv,
-  "emscripten_glColor4ub": _emscripten_glColor4ub,
-  "emscripten_glColor4ubv": _emscripten_glColor4ubv,
-  "emscripten_glColor4ui": _emscripten_glColor4ui,
-  "emscripten_glColor4us": _emscripten_glColor4us,
   "emscripten_glColorMask": _emscripten_glColorMask,
-  "emscripten_glColorPointer": _emscripten_glColorPointer,
   "emscripten_glCompileShader": _emscripten_glCompileShader,
   "emscripten_glCompressedTexImage2D": _emscripten_glCompressedTexImage2D,
   "emscripten_glCompressedTexImage3D": _emscripten_glCompressedTexImage3D,
@@ -22364,7 +16874,6 @@ var asmLibraryArg = {
   "emscripten_glCullFace": _emscripten_glCullFace,
   "emscripten_glDeleteBuffers": _emscripten_glDeleteBuffers,
   "emscripten_glDeleteFramebuffers": _emscripten_glDeleteFramebuffers,
-  "emscripten_glDeleteObject": _emscripten_glDeleteObject,
   "emscripten_glDeleteProgram": _emscripten_glDeleteProgram,
   "emscripten_glDeleteQueries": _emscripten_glDeleteQueries,
   "emscripten_glDeleteQueriesEXT": _emscripten_glDeleteQueriesEXT,
@@ -22381,7 +16890,6 @@ var asmLibraryArg = {
   "emscripten_glDepthRangef": _emscripten_glDepthRangef,
   "emscripten_glDetachShader": _emscripten_glDetachShader,
   "emscripten_glDisable": _emscripten_glDisable,
-  "emscripten_glDisableClientState": _emscripten_glDisableClientState,
   "emscripten_glDisableVertexAttribArray": _emscripten_glDisableVertexAttribArray,
   "emscripten_glDrawArrays": _emscripten_glDrawArrays,
   "emscripten_glDrawArraysInstanced": _emscripten_glDrawArraysInstanced,
@@ -22389,7 +16897,6 @@ var asmLibraryArg = {
   "emscripten_glDrawArraysInstancedARB": _emscripten_glDrawArraysInstancedARB,
   "emscripten_glDrawArraysInstancedEXT": _emscripten_glDrawArraysInstancedEXT,
   "emscripten_glDrawArraysInstancedNV": _emscripten_glDrawArraysInstancedNV,
-  "emscripten_glDrawBuffer": _emscripten_glDrawBuffer,
   "emscripten_glDrawBuffers": _emscripten_glDrawBuffers,
   "emscripten_glDrawBuffersEXT": _emscripten_glDrawBuffersEXT,
   "emscripten_glDrawBuffersWEBGL": _emscripten_glDrawBuffersWEBGL,
@@ -22401,20 +16908,18 @@ var asmLibraryArg = {
   "emscripten_glDrawElementsInstancedNV": _emscripten_glDrawElementsInstancedNV,
   "emscripten_glDrawRangeElements": _emscripten_glDrawRangeElements,
   "emscripten_glEnable": _emscripten_glEnable,
-  "emscripten_glEnableClientState": _emscripten_glEnableClientState,
   "emscripten_glEnableVertexAttribArray": _emscripten_glEnableVertexAttribArray,
-  "emscripten_glEnd": _emscripten_glEnd,
   "emscripten_glEndQuery": _emscripten_glEndQuery,
   "emscripten_glEndQueryEXT": _emscripten_glEndQueryEXT,
   "emscripten_glEndTransformFeedback": _emscripten_glEndTransformFeedback,
   "emscripten_glFenceSync": _emscripten_glFenceSync,
   "emscripten_glFinish": _emscripten_glFinish,
   "emscripten_glFlush": _emscripten_glFlush,
+  "emscripten_glFlushMappedBufferRange": _emscripten_glFlushMappedBufferRange,
   "emscripten_glFramebufferRenderbuffer": _emscripten_glFramebufferRenderbuffer,
   "emscripten_glFramebufferTexture2D": _emscripten_glFramebufferTexture2D,
   "emscripten_glFramebufferTextureLayer": _emscripten_glFramebufferTextureLayer,
   "emscripten_glFrontFace": _emscripten_glFrontFace,
-  "emscripten_glFrustum": _emscripten_glFrustum,
   "emscripten_glGenBuffers": _emscripten_glGenBuffers,
   "emscripten_glGenFramebuffers": _emscripten_glGenFramebuffers,
   "emscripten_glGenQueries": _emscripten_glGenQueries,
@@ -22436,18 +16941,16 @@ var asmLibraryArg = {
   "emscripten_glGetBooleanv": _emscripten_glGetBooleanv,
   "emscripten_glGetBufferParameteri64v": _emscripten_glGetBufferParameteri64v,
   "emscripten_glGetBufferParameteriv": _emscripten_glGetBufferParameteriv,
+  "emscripten_glGetBufferPointerv": _emscripten_glGetBufferPointerv,
   "emscripten_glGetError": _emscripten_glGetError,
   "emscripten_glGetFloatv": _emscripten_glGetFloatv,
   "emscripten_glGetFragDataLocation": _emscripten_glGetFragDataLocation,
   "emscripten_glGetFramebufferAttachmentParameteriv": _emscripten_glGetFramebufferAttachmentParameteriv,
-  "emscripten_glGetInfoLog": _emscripten_glGetInfoLog,
   "emscripten_glGetInteger64i_v": _emscripten_glGetInteger64i_v,
   "emscripten_glGetInteger64v": _emscripten_glGetInteger64v,
   "emscripten_glGetIntegeri_v": _emscripten_glGetIntegeri_v,
   "emscripten_glGetIntegerv": _emscripten_glGetIntegerv,
   "emscripten_glGetInternalformativ": _emscripten_glGetInternalformativ,
-  "emscripten_glGetObjectParameteriv": _emscripten_glGetObjectParameteriv,
-  "emscripten_glGetPointerv": _emscripten_glGetPointerv,
   "emscripten_glGetProgramBinary": _emscripten_glGetProgramBinary,
   "emscripten_glGetProgramInfoLog": _emscripten_glGetProgramInfoLog,
   "emscripten_glGetProgramiv": _emscripten_glGetProgramiv,
@@ -22468,9 +16971,6 @@ var asmLibraryArg = {
   "emscripten_glGetString": _emscripten_glGetString,
   "emscripten_glGetStringi": _emscripten_glGetStringi,
   "emscripten_glGetSynciv": _emscripten_glGetSynciv,
-  "emscripten_glGetTexEnvfv": _emscripten_glGetTexEnvfv,
-  "emscripten_glGetTexEnviv": _emscripten_glGetTexEnviv,
-  "emscripten_glGetTexLevelParameteriv": _emscripten_glGetTexLevelParameteriv,
   "emscripten_glGetTexParameterfv": _emscripten_glGetTexParameterfv,
   "emscripten_glGetTexParameteriv": _emscripten_glGetTexParameteriv,
   "emscripten_glGetTransformFeedbackVarying": _emscripten_glGetTransformFeedbackVarying,
@@ -22502,33 +17002,14 @@ var asmLibraryArg = {
   "emscripten_glIsTransformFeedback": _emscripten_glIsTransformFeedback,
   "emscripten_glIsVertexArray": _emscripten_glIsVertexArray,
   "emscripten_glIsVertexArrayOES": _emscripten_glIsVertexArrayOES,
-  "emscripten_glLightModelf": _emscripten_glLightModelf,
-  "emscripten_glLightModelfv": _emscripten_glLightModelfv,
-  "emscripten_glLightfv": _emscripten_glLightfv,
   "emscripten_glLineWidth": _emscripten_glLineWidth,
   "emscripten_glLinkProgram": _emscripten_glLinkProgram,
-  "emscripten_glLoadIdentity": _emscripten_glLoadIdentity,
-  "emscripten_glLoadMatrixd": _emscripten_glLoadMatrixd,
-  "emscripten_glLoadMatrixf": _emscripten_glLoadMatrixf,
-  "emscripten_glLoadTransposeMatrixd": _emscripten_glLoadTransposeMatrixd,
-  "emscripten_glLoadTransposeMatrixf": _emscripten_glLoadTransposeMatrixf,
-  "emscripten_glMaterialfv": _emscripten_glMaterialfv,
-  "emscripten_glMatrixMode": _emscripten_glMatrixMode,
-  "emscripten_glMultMatrixd": _emscripten_glMultMatrixd,
-  "emscripten_glMultMatrixf": _emscripten_glMultMatrixf,
-  "emscripten_glMultTransposeMatrixd": _emscripten_glMultTransposeMatrixd,
-  "emscripten_glMultTransposeMatrixf": _emscripten_glMultTransposeMatrixf,
-  "emscripten_glNormal3f": _emscripten_glNormal3f,
-  "emscripten_glNormalPointer": _emscripten_glNormalPointer,
-  "emscripten_glOrtho": _emscripten_glOrtho,
+  "emscripten_glMapBufferRange": _emscripten_glMapBufferRange,
   "emscripten_glPauseTransformFeedback": _emscripten_glPauseTransformFeedback,
   "emscripten_glPixelStorei": _emscripten_glPixelStorei,
-  "emscripten_glPolygonMode": _emscripten_glPolygonMode,
   "emscripten_glPolygonOffset": _emscripten_glPolygonOffset,
-  "emscripten_glPopMatrix": _emscripten_glPopMatrix,
   "emscripten_glProgramBinary": _emscripten_glProgramBinary,
   "emscripten_glProgramParameteri": _emscripten_glProgramParameteri,
-  "emscripten_glPushMatrix": _emscripten_glPushMatrix,
   "emscripten_glQueryCounterEXT": _emscripten_glQueryCounterEXT,
   "emscripten_glReadBuffer": _emscripten_glReadBuffer,
   "emscripten_glReadPixels": _emscripten_glReadPixels,
@@ -22536,17 +17017,12 @@ var asmLibraryArg = {
   "emscripten_glRenderbufferStorage": _emscripten_glRenderbufferStorage,
   "emscripten_glRenderbufferStorageMultisample": _emscripten_glRenderbufferStorageMultisample,
   "emscripten_glResumeTransformFeedback": _emscripten_glResumeTransformFeedback,
-  "emscripten_glRotated": _emscripten_glRotated,
-  "emscripten_glRotatef": _emscripten_glRotatef,
   "emscripten_glSampleCoverage": _emscripten_glSampleCoverage,
   "emscripten_glSamplerParameterf": _emscripten_glSamplerParameterf,
   "emscripten_glSamplerParameterfv": _emscripten_glSamplerParameterfv,
   "emscripten_glSamplerParameteri": _emscripten_glSamplerParameteri,
   "emscripten_glSamplerParameteriv": _emscripten_glSamplerParameteriv,
-  "emscripten_glScaled": _emscripten_glScaled,
-  "emscripten_glScalef": _emscripten_glScalef,
   "emscripten_glScissor": _emscripten_glScissor,
-  "emscripten_glShadeModel": _emscripten_glShadeModel,
   "emscripten_glShaderBinary": _emscripten_glShaderBinary,
   "emscripten_glShaderSource": _emscripten_glShaderSource,
   "emscripten_glStencilFunc": _emscripten_glStencilFunc,
@@ -22555,15 +17031,6 @@ var asmLibraryArg = {
   "emscripten_glStencilMaskSeparate": _emscripten_glStencilMaskSeparate,
   "emscripten_glStencilOp": _emscripten_glStencilOp,
   "emscripten_glStencilOpSeparate": _emscripten_glStencilOpSeparate,
-  "emscripten_glTexCoord2f": _emscripten_glTexCoord2f,
-  "emscripten_glTexCoord2fv": _emscripten_glTexCoord2fv,
-  "emscripten_glTexCoord2i": _emscripten_glTexCoord2i,
-  "emscripten_glTexCoord3f": _emscripten_glTexCoord3f,
-  "emscripten_glTexCoord4f": _emscripten_glTexCoord4f,
-  "emscripten_glTexCoordPointer": _emscripten_glTexCoordPointer,
-  "emscripten_glTexGenfv": _emscripten_glTexGenfv,
-  "emscripten_glTexGeni": _emscripten_glTexGeni,
-  "emscripten_glTexImage1D": _emscripten_glTexImage1D,
   "emscripten_glTexImage2D": _emscripten_glTexImage2D,
   "emscripten_glTexImage3D": _emscripten_glTexImage3D,
   "emscripten_glTexParameterf": _emscripten_glTexParameterf,
@@ -22575,8 +17042,6 @@ var asmLibraryArg = {
   "emscripten_glTexSubImage2D": _emscripten_glTexSubImage2D,
   "emscripten_glTexSubImage3D": _emscripten_glTexSubImage3D,
   "emscripten_glTransformFeedbackVaryings": _emscripten_glTransformFeedbackVaryings,
-  "emscripten_glTranslated": _emscripten_glTranslated,
-  "emscripten_glTranslatef": _emscripten_glTranslatef,
   "emscripten_glUniform1f": _emscripten_glUniform1f,
   "emscripten_glUniform1fv": _emscripten_glUniform1fv,
   "emscripten_glUniform1i": _emscripten_glUniform1i,
@@ -22611,17 +17076,9 @@ var asmLibraryArg = {
   "emscripten_glUniformMatrix4fv": _emscripten_glUniformMatrix4fv,
   "emscripten_glUniformMatrix4x2fv": _emscripten_glUniformMatrix4x2fv,
   "emscripten_glUniformMatrix4x3fv": _emscripten_glUniformMatrix4x3fv,
+  "emscripten_glUnmapBuffer": _emscripten_glUnmapBuffer,
   "emscripten_glUseProgram": _emscripten_glUseProgram,
   "emscripten_glValidateProgram": _emscripten_glValidateProgram,
-  "emscripten_glVertex2f": _emscripten_glVertex2f,
-  "emscripten_glVertex2fv": _emscripten_glVertex2fv,
-  "emscripten_glVertex2i": _emscripten_glVertex2i,
-  "emscripten_glVertex3f": _emscripten_glVertex3f,
-  "emscripten_glVertex3fv": _emscripten_glVertex3fv,
-  "emscripten_glVertex3i": _emscripten_glVertex3i,
-  "emscripten_glVertex4f": _emscripten_glVertex4f,
-  "emscripten_glVertex4fv": _emscripten_glVertex4fv,
-  "emscripten_glVertex4i": _emscripten_glVertex4i,
   "emscripten_glVertexAttrib1f": _emscripten_glVertexAttrib1f,
   "emscripten_glVertexAttrib1fv": _emscripten_glVertexAttrib1fv,
   "emscripten_glVertexAttrib2f": _emscripten_glVertexAttrib2f,
@@ -22641,7 +17098,6 @@ var asmLibraryArg = {
   "emscripten_glVertexAttribI4uiv": _emscripten_glVertexAttribI4uiv,
   "emscripten_glVertexAttribIPointer": _emscripten_glVertexAttribIPointer,
   "emscripten_glVertexAttribPointer": _emscripten_glVertexAttribPointer,
-  "emscripten_glVertexPointer": _emscripten_glVertexPointer,
   "emscripten_glViewport": _emscripten_glViewport,
   "emscripten_glWaitSync": _emscripten_glWaitSync,
   "emscripten_memcpy_big": _emscripten_memcpy_big,
@@ -22660,28 +17116,40 @@ var asmLibraryArg = {
   "fd_write": _fd_write,
   "getentropy": _getentropy,
   "getnameinfo": _getnameinfo,
-  "glBegin": _glBegin,
+  "glAttachShader": _glAttachShader,
+  "glBindBuffer": _glBindBuffer,
   "glBindVertexArray": _glBindVertexArray,
+  "glBufferData": _glBufferData,
   "glClear": _glClear,
   "glClearColor": _glClearColor,
-  "glColor3f": _glColor3f,
+  "glCompileShader": _glCompileShader,
+  "glCreateProgram": _glCreateProgram,
+  "glCreateShader": _glCreateShader,
+  "glDeleteBuffers": _glDeleteBuffers,
+  "glDeleteProgram": _glDeleteProgram,
+  "glDeleteShader": _glDeleteShader,
   "glDeleteVertexArrays": _glDeleteVertexArrays,
+  "glDrawArrays": _glDrawArrays,
   "glDrawArraysInstanced": _glDrawArraysInstanced,
   "glDrawBuffers": _glDrawBuffers,
   "glDrawElementsInstanced": _glDrawElementsInstanced,
   "glEnable": _glEnable,
-  "glEnd": _glEnd,
+  "glEnableVertexAttribArray": _glEnableVertexAttribArray,
+  "glGenBuffers": _glGenBuffers,
   "glGenVertexArrays": _glGenVertexArrays,
+  "glGetShaderInfoLog": _glGetShaderInfoLog,
+  "glGetShaderiv": _glGetShaderiv,
+  "glGetUniformLocation": _glGetUniformLocation,
   "glIsVertexArray": _glIsVertexArray,
-  "glLoadIdentity": _glLoadIdentity,
-  "glLoadMatrixf": _glLoadMatrixf,
-  "glMatrixMode": _glMatrixMode,
-  "glPointSize": _glPointSize,
-  "glRotatef": _glRotatef,
-  "glTranslatef": _glTranslatef,
-  "glVertex3f": _glVertex3f,
+  "glLinkProgram": _glLinkProgram,
+  "glShaderSource": _glShaderSource,
+  "glUniform3fv": _glUniform3fv,
+  "glUniformMatrix4fv": _glUniformMatrix4fv,
+  "glUseProgram": _glUseProgram,
   "glVertexAttribDivisor": _glVertexAttribDivisor,
+  "glVertexAttribPointer": _glVertexAttribPointer,
   "glViewport": _glViewport,
+  "glewInit": _glewInit,
   "glfwCreateWindow": _glfwCreateWindow,
   "glfwDestroyWindow": _glfwDestroyWindow,
   "glfwGetTime": _glfwGetTime,
@@ -22690,6 +17158,7 @@ var asmLibraryArg = {
   "glfwPollEvents": _glfwPollEvents,
   "glfwSetCursorPosCallback": _glfwSetCursorPosCallback,
   "glfwSetErrorCallback": _glfwSetErrorCallback,
+  "glfwSetFramebufferSizeCallback": _glfwSetFramebufferSizeCallback,
   "glfwSetKeyCallback": _glfwSetKeyCallback,
   "glfwSetMouseButtonCallback": _glfwSetMouseButtonCallback,
   "glfwSetScrollCallback": _glfwSetScrollCallback,
@@ -22697,7 +17166,6 @@ var asmLibraryArg = {
   "glfwSwapBuffers": _glfwSwapBuffers,
   "glfwSwapInterval": _glfwSwapInterval,
   "glfwTerminate": _glfwTerminate,
-  "gluLookAt": _gluLookAt,
   "proc_exit": _proc_exit,
   "strftime": _strftime,
   "strftime_l": _strftime_l
@@ -22782,6 +17250,24 @@ var __ZN4NodeC2ERKS_ = Module["__ZN4NodeC2ERKS_"] = createExportWrapper("_ZN4Nod
 var __ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_ = Module["__ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_"] = createExportWrapper("_ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_");
 
 /** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IdddEET_T0_T1_ = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IdddEET_T0_T1_"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IdddEET_T0_T1_");
+
+/** @type {function(...*):?} */
+var __ZN4LineC2EN3glm3vecILi3EfLNS0_9qualifierE0EEES3_ = Module["__ZN4LineC2EN3glm3vecILi3EfLNS0_9qualifierE0EEES3_"] = createExportWrapper("_ZN4LineC2EN3glm3vecILi3EfLNS0_9qualifierE0EEES3_");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_");
+
+/** @type {function(...*):?} */
+var __ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE = Module["__ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE"] = createExportWrapper("_ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE");
+
+/** @type {function(...*):?} */
+var __ZN4Line4drawEv = Module["__ZN4Line4drawEv"] = createExportWrapper("_ZN4Line4drawEv");
+
+/** @type {function(...*):?} */
+var __ZN4LineD2Ev = Module["__ZN4LineD2Ev"] = createExportWrapper("_ZN4LineD2Ev");
+
+/** @type {function(...*):?} */
 var __ZN4NodeD2Ev = Module["__ZN4NodeD2Ev"] = createExportWrapper("_ZN4NodeD2Ev");
 
 /** @type {function(...*):?} */
@@ -22800,19 +17286,61 @@ var __ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE6reh
 var __ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE6insertINS_21__hash_const_iteratorIPNS_11__hash_nodeIiPvEEEEEEvT_SF_ = Module["__ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE6insertINS_21__hash_const_iteratorIPNS_11__hash_nodeIiPvEEEEEEvT_SF_"] = createExportWrapper("_ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE6insertINS_21__hash_const_iteratorIPNS_11__hash_nodeIiPvEEEEEEvT_SF_");
 
 /** @type {function(...*):?} */
-var __ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEED2Ev = Module["__ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEED2Ev"] = createExportWrapper("_ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEED2Ev");
+var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEC2ERKf = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEC2ERKf"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEC2ERKf");
 
 /** @type {function(...*):?} */
-var __Z6renderv = Module["__Z6renderv"] = createExportWrapper("_Z6renderv");
-
-/** @type {function(...*):?} */
-var __Z15scroll_callbackP10GLFWwindowdd = Module["__Z15scroll_callbackP10GLFWwindowdd"] = createExportWrapper("_Z15scroll_callbackP10GLFWwindowdd");
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IiiiEET_T0_T1_ = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IiiiEET_T0_T1_"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IiiiEET_T0_T1_");
 
 /** @type {function(...*):?} */
 var __ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc = Module["__ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc"] = createExportWrapper("_ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc");
 
 /** @type {function(...*):?} */
 var __ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_ = Module["__ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_"] = createExportWrapper("_ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_");
+
+/** @type {function(...*):?} */
+var __ZNK3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi = Module["__ZNK3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZNK3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK3glm3vecILi4EfLNS_9qualifierE0EEixEi = Module["__ZNK3glm3vecILi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZNK3glm3vecILi4EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_RKS3_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_RKS3_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_RKS3_");
+
+/** @type {function(...*):?} */
+var __ZN3glmplIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_S6_ = Module["__ZN3glmplIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmplIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_S6_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEixEi");
+
+/** @type {function(...*):?} */
+var __ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEED2Ev = Module["__ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEED2Ev"] = createExportWrapper("_ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEED2Ev");
+
+/** @type {function(...*):?} */
+var __Z6renderv = Module["__Z6renderv"] = createExportWrapper("_Z6renderv");
+
+/** @type {function(...*):?} */
+var _sin = Module["_sin"] = createExportWrapper("sin");
+
+/** @type {function(...*):?} */
+var _cos = Module["_cos"] = createExportWrapper("cos");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IfdfEET_T0_T1_ = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IfdfEET_T0_T1_"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IfdfEET_T0_T1_");
+
+/** @type {function(...*):?} */
+var __ZN3glm6lookAtIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKNS_3vecILi3ES3_XT0_EEES8_S8_ = Module["__ZN3glm6lookAtIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKNS_3vecILi3ES3_XT0_EEES8_S8_"] = createExportWrapper("_ZN3glm6lookAtIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKNS_3vecILi3ES3_XT0_EEES8_S8_");
+
+/** @type {function(...*):?} */
+var __ZN3glm8lookAtRHIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKNS_3vecILi3ES3_XT0_EEES8_S8_ = Module["__ZN3glm8lookAtRHIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKNS_3vecILi3ES3_XT0_EEES8_S8_"] = createExportWrapper("_ZN3glm8lookAtRHIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKNS_3vecILi3ES3_XT0_EEES8_S8_");
+
+/** @type {function(...*):?} */
+var __Z15scroll_callbackP10GLFWwindowdd = Module["__Z15scroll_callbackP10GLFWwindowdd"] = createExportWrapper("_Z15scroll_callbackP10GLFWwindowdd");
 
 /** @type {function(...*):?} */
 var __ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m = Module["__ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m"] = createExportWrapper("_ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m");
@@ -22825,6 +17353,9 @@ var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv = Module["__ZNSt3__
 
 /** @type {function(...*):?} */
 var __Z21mouse_button_callbackP10GLFWwindowiii = Module["__Z21mouse_button_callbackP10GLFWwindowiii"] = createExportWrapper("_Z21mouse_button_callbackP10GLFWwindowiii");
+
+/** @type {function(...*):?} */
+var __Z25framebuffer_size_callbackP10GLFWwindowii = Module["__Z25framebuffer_size_callbackP10GLFWwindowii"] = createExportWrapper("_Z25framebuffer_size_callbackP10GLFWwindowii");
 
 /** @type {function(...*):?} */
 var __ZNSt3__28functionIFvvEED2Ev = Module["__ZNSt3__28functionIFvvEED2Ev"] = createExportWrapper("_ZNSt3__28functionIFvvEED2Ev");
@@ -22848,9 +17379,6 @@ var __ZN3glm7radiansIfEET_S1_ = Module["__ZN3glm7radiansIfEET_S1_"] = createExpo
 var __ZN3glm11perspectiveIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_ = Module["__ZN3glm11perspectiveIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_"] = createExportWrapper("_ZN3glm11perspectiveIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_");
 
 /** @type {function(...*):?} */
-var __ZN3glm9value_ptrIfLNS_9qualifierE0EEEPT_RNS_3matILi4ELi4ES2_XT0_EEE = Module["__ZN3glm9value_ptrIfLNS_9qualifierE0EEEPT_RNS_3matILi4ELi4ES2_XT0_EEE"] = createExportWrapper("_ZN3glm9value_ptrIfLNS_9qualifierE0EEEPT_RNS_3matILi4ELi4ES2_XT0_EEE");
-
-/** @type {function(...*):?} */
 var _printf = Module["_printf"] = createExportWrapper("printf");
 
 /** @type {function(...*):?} */
@@ -22858,9 +17386,6 @@ var _fprintf = Module["_fprintf"] = createExportWrapper("fprintf");
 
 /** @type {function(...*):?} */
 var __ZN3glm16perspectiveRH_NOIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_ = Module["__ZN3glm16perspectiveRH_NOIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_"] = createExportWrapper("_ZN3glm16perspectiveRH_NOIfEENS_3matILi4ELi4ET_LNS_9qualifierE0EEES2_S2_S2_S2_");
-
-/** @type {function(...*):?} */
-var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EEixEi");
 
 /** @type {function(...*):?} */
 var __ZNSt3__28functionIFvvEE4swapERS2_ = Module["__ZNSt3__28functionIFvvEE4swapERS2_"] = createExportWrapper("_ZNSt3__28functionIFvvEE4swapERS2_");
@@ -22980,7 +17505,97 @@ var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE25__init_cop
 var __ZNSt3__222__compressed_pair_elemINS_9allocatorIcEELi1ELb1EEC2IS2_vEEOT_ = Module["__ZNSt3__222__compressed_pair_elemINS_9allocatorIcEELi1ELb1EEC2IS2_vEEOT_"] = createExportWrapper("_ZNSt3__222__compressed_pair_elemINS_9allocatorIcEELi1ELb1EEC2IS2_vEEOT_");
 
 /** @type {function(...*):?} */
+var __ZNSt3__217__compressed_pairIPfNS_9allocatorIfEEEC2IDnNS_18__default_init_tagEEEOT_OT0_ = Module["__ZNSt3__217__compressed_pairIPfNS_9allocatorIfEEEC2IDnNS_18__default_init_tagEEEOT_OT0_"] = createExportWrapper("_ZNSt3__217__compressed_pairIPfNS_9allocatorIfEEEC2IDnNS_18__default_init_tagEEEOT_OT0_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IfiiiEET_T0_T1_T2_ = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IfiiiEET_T0_T1_T2_"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IfiiiEET_T0_T1_T2_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IifiiEET_T0_T1_T2_ = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IifiiEET_T0_T1_T2_"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IifiiEET_T0_T1_T2_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IiifiEET_T0_T1_T2_ = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IiifiEET_T0_T1_T2_"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IiifiEET_T0_T1_T2_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IiiifEET_T0_T1_T2_ = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IiiifEET_T0_T1_T2_"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IiiifEET_T0_T1_T2_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26vectorIfNS_9allocatorIfEEE6assignIPKfEENS_9enable_ifIXaasr27__is_cpp17_forward_iteratorIT_EE5valuesr16is_constructibleIfNS_15iterator_traitsIS8_E9referenceEEE5valueEvE4typeES8_S8_ = Module["__ZNSt3__26vectorIfNS_9allocatorIfEEE6assignIPKfEENS_9enable_ifIXaasr27__is_cpp17_forward_iteratorIT_EE5valuesr16is_constructibleIfNS_15iterator_traitsIS8_E9referenceEEE5valueEvE4typeES8_S8_"] = createExportWrapper("_ZNSt3__26vectorIfNS_9allocatorIfEEE6assignIPKfEENS_9enable_ifIXaasr27__is_cpp17_forward_iteratorIT_EE5valuesr16is_constructibleIfNS_15iterator_traitsIS8_E9referenceEEE5valueEvE4typeES8_S8_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__222__compressed_pair_elemIPfLi0ELb0EEC2IDnvEEOT_ = Module["__ZNSt3__222__compressed_pair_elemIPfLi0ELb0EEC2IDnvEEOT_"] = createExportWrapper("_ZNSt3__222__compressed_pair_elemIPfLi0ELb0EEC2IDnvEEOT_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26vectorIfNS_9allocatorIfEEE18__construct_at_endIPKfEENS_9enable_ifIXsr27__is_cpp17_forward_iteratorIT_EE5valueEvE4typeES8_S8_m = Module["__ZNSt3__26vectorIfNS_9allocatorIfEEE18__construct_at_endIPKfEENS_9enable_ifIXsr27__is_cpp17_forward_iteratorIT_EE5valueEvE4typeES8_S8_m"] = createExportWrapper("_ZNSt3__26vectorIfNS_9allocatorIfEEE18__construct_at_endIPKfEENS_9enable_ifIXsr27__is_cpp17_forward_iteratorIT_EE5valueEvE4typeES8_S8_m");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26vectorIfNS_9allocatorIfEEE13__vdeallocateEv = Module["__ZNSt3__26vectorIfNS_9allocatorIfEEE13__vdeallocateEv"] = createExportWrapper("_ZNSt3__26vectorIfNS_9allocatorIfEEE13__vdeallocateEv");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26vectorIfNS_9allocatorIfEEE11__vallocateEm = Module["__ZNSt3__26vectorIfNS_9allocatorIfEEE11__vallocateEm"] = createExportWrapper("_ZNSt3__26vectorIfNS_9allocatorIfEEE11__vallocateEm");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26vectorIfNS_9allocatorIfEEE21_ConstructTransactionC2ERS3_m = Module["__ZNSt3__26vectorIfNS_9allocatorIfEEE21_ConstructTransactionC2ERS3_m"] = createExportWrapper("_ZNSt3__26vectorIfNS_9allocatorIfEEE21_ConstructTransactionC2ERS3_m");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26vectorIfNS_9allocatorIfEEE21_ConstructTransactionD2Ev = Module["__ZNSt3__26vectorIfNS_9allocatorIfEEE21_ConstructTransactionD2Ev"] = createExportWrapper("_ZNSt3__26vectorIfNS_9allocatorIfEEE21_ConstructTransactionD2Ev");
+
+/** @type {function(...*):?} */
+var __ZNKSt3__26vectorIfNS_9allocatorIfEEE8max_sizeEv = Module["__ZNKSt3__26vectorIfNS_9allocatorIfEEE8max_sizeEv"] = createExportWrapper("_ZNKSt3__26vectorIfNS_9allocatorIfEEE8max_sizeEv");
+
+/** @type {function(...*):?} */
+var _memmove = Module["_memmove"] = createExportWrapper("memmove");
+
+/** @type {function(...*):?} */
+var __ZNSt3__218__unwrap_iter_implIPKfLb1EE7__applyES2_ = Module["__ZNSt3__218__unwrap_iter_implIPKfLb1EE7__applyES2_"] = createExportWrapper("_ZNSt3__218__unwrap_iter_implIPKfLb1EE7__applyES2_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__218__unwrap_iter_implIPfLb1EE7__applyES1_ = Module["__ZNSt3__218__unwrap_iter_implIPfLb1EE7__applyES1_"] = createExportWrapper("_ZNSt3__218__unwrap_iter_implIPfLb1EE7__applyES1_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__216allocator_traitsINS_9allocatorIfEEE7destroyIfvEEvRS2_PT_ = Module["__ZNSt3__216allocator_traitsINS_9allocatorIfEEE7destroyIfvEEvRS2_PT_"] = createExportWrapper("_ZNSt3__216allocator_traitsINS_9allocatorIfEEE7destroyIfvEEvRS2_PT_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__216allocator_traitsINS_9allocatorIfEEE8max_sizeIS2_vEEmRKS2_ = Module["__ZNSt3__216allocator_traitsINS_9allocatorIfEEE8max_sizeIS2_vEEmRKS2_"] = createExportWrapper("_ZNSt3__216allocator_traitsINS_9allocatorIfEEE8max_sizeIS2_vEEmRKS2_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EE6lengthEv");
+
+/** @type {function(...*):?} */
 var _strlen = Module["_strlen"] = createExportWrapper("strlen");
+
+/** @type {function(...*):?} */
+var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryC1ERS3_ = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryC1ERS3_"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryC1ERS3_");
+
+/** @type {function(...*):?} */
+var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryD1Ev = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryD1Ev"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryD1Ev");
+
+/** @type {function(...*):?} */
+var __ZNSt3__211char_traitsIcE3eofEv = Module["__ZNSt3__211char_traitsIcE3eofEv"] = createExportWrapper("_ZNSt3__211char_traitsIcE3eofEv");
+
+/** @type {function(...*):?} */
+var __ZNSt3__211char_traitsIcE11eq_int_typeEii = Module["__ZNSt3__211char_traitsIcE11eq_int_typeEii"] = createExportWrapper("_ZNSt3__211char_traitsIcE11eq_int_typeEii");
+
+/** @type {function(...*):?} */
+var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEmc = Module["__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEmc"] = createExportWrapper("_ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEmc");
+
+/** @type {function(...*):?} */
+var __ZNKSt3__28ios_base6getlocEv = Module["__ZNKSt3__28ios_base6getlocEv"] = createExportWrapper("_ZNKSt3__28ios_base6getlocEv");
+
+/** @type {function(...*):?} */
+var __ZNSt3__26localeD1Ev = Module["__ZNSt3__26localeD1Ev"] = createExportWrapper("_ZNSt3__26localeD1Ev");
+
+/** @type {function(...*):?} */
+var __ZNKSt3__26locale9use_facetERNS0_2idE = Module["__ZNKSt3__26locale9use_facetERNS0_2idE"] = createExportWrapper("_ZNKSt3__26locale9use_facetERNS0_2idE");
+
+/** @type {function(...*):?} */
+var __ZNSt3__28ios_base5clearEj = Module["__ZNSt3__28ios_base5clearEj"] = createExportWrapper("_ZNSt3__28ios_base5clearEj");
 
 /** @type {function(...*):?} */
 var __ZNSt3__216allocator_traitsINS_9allocatorIPNS_16__hash_node_baseIPNS_11__hash_nodeIiPvEEEEEEE37select_on_container_copy_constructionIS9_vvEES9_RKS9_ = Module["__ZNSt3__216allocator_traitsINS_9allocatorIPNS_16__hash_node_baseIPNS_11__hash_nodeIiPvEEEEEEE37select_on_container_copy_constructionIS9_vvEES9_RKS9_"] = createExportWrapper("_ZNSt3__216allocator_traitsINS_9allocatorIPNS_16__hash_node_baseIPNS_11__hash_nodeIiPvEEEEEEE37select_on_container_copy_constructionIS9_vvEES9_RKS9_");
@@ -23073,31 +17688,55 @@ var __ZNSt3__216allocator_traitsINS_9allocatorINS_11__hash_nodeIiPvEEEEE7destroy
 var __ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE17__deallocate_nodeEPNS_16__hash_node_baseIPNS_11__hash_nodeIiPvEEEE = Module["__ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE17__deallocate_nodeEPNS_16__hash_node_baseIPNS_11__hash_nodeIiPvEEEE"] = createExportWrapper("_ZNSt3__212__hash_tableIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEE17__deallocate_nodeEPNS_16__hash_node_baseIPNS_11__hash_nodeIiPvEEEE");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryC1ERS3_ = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryC1ERS3_"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryC1ERS3_");
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEpLIfEERS2_RKNS0_ILi4ET_LS1_0EEE = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEpLIfEERS2_RKNS0_ILi4ET_LS1_0EEE"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEpLIfEERS2_RKNS0_ILi4ET_LS1_0EEE");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryD1Ev = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryD1Ev"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE6sentryD1Ev");
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEmLIfEERS2_T_ = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEmLIfEERS2_T_"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEmLIfEERS2_T_");
 
 /** @type {function(...*):?} */
-var __ZNSt3__211char_traitsIcE3eofEv = Module["__ZNSt3__211char_traitsIcE3eofEv"] = createExportWrapper("_ZNSt3__211char_traitsIcE3eofEv");
+var __ZN3glm6detail16compute_vec4_addIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_ = Module["__ZN3glm6detail16compute_vec4_addIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_"] = createExportWrapper("_ZN3glm6detail16compute_vec4_addIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_");
 
 /** @type {function(...*):?} */
-var __ZNSt3__211char_traitsIcE11eq_int_typeEii = Module["__ZNSt3__211char_traitsIcE11eq_int_typeEii"] = createExportWrapper("_ZNSt3__211char_traitsIcE11eq_int_typeEii");
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2Effff = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2Effff"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2Effff");
 
 /** @type {function(...*):?} */
-var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEmc = Module["__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEmc"] = createExportWrapper("_ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEmc");
+var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2Ef = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2Ef"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2Ef");
 
 /** @type {function(...*):?} */
-var __ZNKSt3__28ios_base6getlocEv = Module["__ZNKSt3__28ios_base6getlocEv"] = createExportWrapper("_ZNKSt3__28ios_base6getlocEv");
+var __ZN3glm6detail16compute_vec4_mulIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_ = Module["__ZN3glm6detail16compute_vec4_mulIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_"] = createExportWrapper("_ZN3glm6detail16compute_vec4_mulIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_");
 
 /** @type {function(...*):?} */
-var __ZNSt3__26localeD1Ev = Module["__ZNSt3__26localeD1Ev"] = createExportWrapper("_ZNSt3__26localeD1Ev");
+var __ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
 
 /** @type {function(...*):?} */
-var __ZNKSt3__26locale9use_facetERNS0_2idE = Module["__ZNKSt3__26locale9use_facetERNS0_2idE"] = createExportWrapper("_ZNKSt3__26locale9use_facetERNS0_2idE");
+var __ZN3glm9normalizeILi3EfLNS_9qualifierE0EEENS_3vecIXT_ET0_XT1_EEERKS4_ = Module["__ZN3glm9normalizeILi3EfLNS_9qualifierE0EEENS_3vecIXT_ET0_XT1_EEERKS4_"] = createExportWrapper("_ZN3glm9normalizeILi3EfLNS_9qualifierE0EEENS_3vecIXT_ET0_XT1_EEERKS4_");
 
 /** @type {function(...*):?} */
-var __ZNSt3__28ios_base5clearEj = Module["__ZNSt3__28ios_base5clearEj"] = createExportWrapper("_ZNSt3__28ios_base5clearEj");
+var __ZN3glm5crossIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glm5crossIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glm5crossIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_ = Module["__ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_"] = createExportWrapper("_ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_");
+
+/** @type {function(...*):?} */
+var __ZN3glm6detail17compute_normalizeILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEE = Module["__ZN3glm6detail17compute_normalizeILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEE"] = createExportWrapper("_ZN3glm6detail17compute_normalizeILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEE");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Efff = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Efff"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Efff");
+
+/** @type {function(...*):?} */
+var __ZN3glm6detail13compute_crossIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEES7_ = Module["__ZN3glm6detail13compute_crossIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEES7_"] = createExportWrapper("_ZN3glm6detail13compute_crossIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEES7_");
+
+/** @type {function(...*):?} */
+var __ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_ = Module["__ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_"] = createExportWrapper("_ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_");
+
+/** @type {function(...*):?} */
+var __ZN3glm11inversesqrtIfEET_S1_ = Module["__ZN3glm11inversesqrtIfEET_S1_"] = createExportWrapper("_ZN3glm11inversesqrtIfEET_S1_");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
 
 /** @type {function(...*):?} */
 var __ZNSt3__217bad_function_callC2Ev = Module["__ZNSt3__217bad_function_callC2Ev"] = createExportWrapper("_ZNSt3__217bad_function_callC2Ev");
@@ -23109,22 +17748,16 @@ var __ZNSt3__217bad_function_callD1Ev = Module["__ZNSt3__217bad_function_callD1E
 var __ZN3glm3absIfEET_S1_ = Module["__ZN3glm3absIfEET_S1_"] = createExportWrapper("_ZN3glm3absIfEET_S1_");
 
 /** @type {function(...*):?} */
-var __ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEixEi");
-
-/** @type {function(...*):?} */
 var __ZN3glm6detail11compute_absIfLb1EE4callEf = Module["__ZN3glm6detail11compute_absIfLb1EE4callEf"] = createExportWrapper("_ZN3glm6detail11compute_absIfLb1EE4callEf");
 
 /** @type {function(...*):?} */
 var _tanf = Module["_tanf"] = createExportWrapper("tanf");
 
 /** @type {function(...*):?} */
-var __ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3matILi4ELi4EfLNS_9qualifierE0EE6lengthEv");
-
-/** @type {function(...*):?} */
-var __ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EE6lengthEv");
-
-/** @type {function(...*):?} */
 var __ZN8Universe6updateEd = Module["__ZN8Universe6updateEd"] = createExportWrapper("_ZN8Universe6updateEd");
+
+/** @type {function(...*):?} */
+var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEd = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEd"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEd");
 
 /** @type {function(...*):?} */
 var __ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv = Module["__ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv"] = createExportWrapper("_ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv");
@@ -23283,9 +17916,6 @@ var __ZdvRK5Vec3DS1_ = Module["__ZdvRK5Vec3DS1_"] = createExportWrapper("_ZdvRK5
 var __ZlsRNSt3__213basic_ostreamIcNS_11char_traitsIcEEEERK5Vec3D = Module["__ZlsRNSt3__213basic_ostreamIcNS_11char_traitsIcEEEERK5Vec3D"] = createExportWrapper("_ZlsRNSt3__213basic_ostreamIcNS_11char_traitsIcEEEERK5Vec3D");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEd = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEd"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEElsEd");
-
-/** @type {function(...*):?} */
 var __ZNSt3__213random_deviceC2Ev = Module["__ZNSt3__213random_deviceC2Ev"] = createExportWrapper("_ZNSt3__213random_deviceC2Ev");
 
 /** @type {function(...*):?} */
@@ -23421,12 +18051,6 @@ var __ZNSt3__225__independent_bits_engineINS_13random_deviceEjE6__evalENS_17inte
 var __ZN8MyCameraC2E5Vec3D = Module["__ZN8MyCameraC2E5Vec3D"] = createExportWrapper("_ZN8MyCameraC2E5Vec3D");
 
 /** @type {function(...*):?} */
-var _emscripten_legacy_gl_emulation_GetProcAddress = Module["_emscripten_legacy_gl_emulation_GetProcAddress"] = createExportWrapper("emscripten_legacy_gl_emulation_GetProcAddress");
-
-/** @type {function(...*):?} */
-var _strcmp = Module["_strcmp"] = createExportWrapper("strcmp");
-
-/** @type {function(...*):?} */
 var _emscripten_GetProcAddress = Module["_emscripten_GetProcAddress"] = createExportWrapper("emscripten_GetProcAddress");
 
 /** @type {function(...*):?} */
@@ -23464,6 +18088,9 @@ var _eglGetProcAddress = Module["_eglGetProcAddress"] = createExportWrapper("egl
 
 /** @type {function(...*):?} */
 var _glfwGetProcAddress = Module["_glfwGetProcAddress"] = createExportWrapper("glfwGetProcAddress");
+
+/** @type {function(...*):?} */
+var _strcmp = Module["_strcmp"] = createExportWrapper("strcmp");
 
 /** @type {function(...*):?} */
 var _glVertexAttribDivisorNV = Module["_glVertexAttribDivisorNV"] = createExportWrapper("glVertexAttribDivisorNV");
@@ -23776,12 +18403,6 @@ var ___cxa_finalize = Module["___cxa_finalize"] = createExportWrapper("__cxa_fin
 
 /** @type {function(...*):?} */
 var __Exit = Module["__Exit"] = createExportWrapper("_Exit");
-
-/** @type {function(...*):?} */
-var _cos = Module["_cos"] = createExportWrapper("cos");
-
-/** @type {function(...*):?} */
-var _sin = Module["_sin"] = createExportWrapper("sin");
 
 /** @type {function(...*):?} */
 var _exp = Module["_exp"] = createExportWrapper("exp");
@@ -24163,9 +18784,6 @@ var _memcmp = Module["_memcmp"] = createExportWrapper("memcmp");
 
 /** @type {function(...*):?} */
 var _bcopy = Module["_bcopy"] = createExportWrapper("bcopy");
-
-/** @type {function(...*):?} */
-var _memmove = Module["_memmove"] = createExportWrapper("memmove");
 
 /** @type {function(...*):?} */
 var _bind_textdomain_codeset = Module["_bind_textdomain_codeset"] = createExportWrapper("bind_textdomain_codeset");
@@ -41332,875 +35950,877 @@ var dynCall_iiiiijj = Module["dynCall_iiiiijj"] = createExportWrapper("dynCall_i
 /** @type {function(...*):?} */
 var dynCall_iiiiiijj = Module["dynCall_iiiiiijj"] = createExportWrapper("dynCall_iiiiiijj");
 
-var _graph = Module['_graph'] = 383304;
-var _camera = Module['_camera'] = 383328;
-var _universe = Module['_universe'] = 383408;
-var _yLocation = Module['_yLocation'] = 383300;
-var __ZNSt3__24coutE = Module['__ZNSt3__24coutE'] = 423092;
-var _mouseDown = Module['_mouseDown'] = 383400;
-var _mouseDownFirst = Module['_mouseDownFirst'] = 383401;
-var _loop = Module['_loop'] = 383472;
-var _stderr = Module['_stderr'] = 217056;
-var _autoRotateX = Module['_autoRotateX'] = 383402;
-var _mouseX = Module['_mouseX'] = 383376;
-var _mouseY = Module['_mouseY'] = 383384;
-var __ZTISt12length_error = Module['__ZTISt12length_error'] = 381880;
-var __ZTVSt12length_error = Module['__ZTVSt12length_error'] = 381840;
-var __ZTISt20bad_array_new_length = Module['__ZTISt20bad_array_new_length'] = 381652;
-var __ZNSt3__25ctypeIcE2idE = Module['__ZNSt3__25ctypeIcE2idE'] = 424160;
-var __ZTINSt3__217bad_function_callE = Module['__ZTINSt3__217bad_function_callE'] = 352564;
-var __ZTVNSt3__217bad_function_callE = Module['__ZTVNSt3__217bad_function_callE'] = 352516;
-var __ZTVSt9exception = Module['__ZTVSt9exception'] = 381500;
-var __ZTVNSt3__210__function6__baseIFvvEEE = Module['__ZTVNSt3__210__function6__baseIFvvEEE'] = 25608;
-var _n_iterations = Module['_n_iterations'] = 382304;
-var _movingUp = Module['_movingUp'] = 383296;
-var _mouseScroll = Module['_mouseScroll'] = 383392;
-var __ZTSNSt3__210__function6__baseIFvvEEE = Module['__ZTSNSt3__210__function6__baseIFvvEEE'] = 25552;
-var __ZTINSt3__210__function6__baseIFvvEEE = Module['__ZTINSt3__210__function6__baseIFvvEEE'] = 25588;
-var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 381152;
-var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 381192;
-var ___environ = Module['___environ'] = 383496;
-var ____environ = Module['____environ'] = 383496;
-var __environ = Module['__environ'] = 383496;
-var _environ = Module['_environ'] = 383496;
-var _timezone = Module['_timezone'] = 384040;
-var _daylight = Module['_daylight'] = 384044;
-var _tzname = Module['_tzname'] = 384048;
-var ___progname = Module['___progname'] = 385264;
-var _optind = Module['_optind'] = 382328;
-var ___optreset = Module['___optreset'] = 384228;
-var ___optpos = Module['___optpos'] = 384232;
-var _optarg = Module['_optarg'] = 384236;
-var _optopt = Module['_optopt'] = 384240;
-var _opterr = Module['_opterr'] = 382332;
-var _optreset = Module['_optreset'] = 384228;
-var _h_errno = Module['_h_errno'] = 384364;
-var ___signgam = Module['___signgam'] = 399564;
-var __ns_flagdata = Module['__ns_flagdata'] = 211680;
-var ___progname_full = Module['___progname_full'] = 385268;
-var _program_invocation_short_name = Module['_program_invocation_short_name'] = 385264;
-var _program_invocation_name = Module['_program_invocation_name'] = 385268;
-var ___sig_pending = Module['___sig_pending'] = 389616;
-var ___sig_actions = Module['___sig_actions'] = 390464;
-var _signgam = Module['_signgam'] = 399564;
-var _stdin = Module['_stdin'] = 217060;
-var _stdout = Module['_stdout'] = 217064;
-var ___THREW__ = Module['___THREW__'] = 406368;
-var ___threwValue = Module['___threwValue'] = 406372;
-var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 230992;
-var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 231032;
-var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 231012;
-var __ZTISt8bad_cast = Module['__ZTISt8bad_cast'] = 382220;
-var __ZTVNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTVNSt12experimental15fundamentals_v112bad_any_castE'] = 231044;
-var __ZTINSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTINSt12experimental15fundamentals_v112bad_any_castE'] = 231116;
-var __ZTSNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTSNSt12experimental15fundamentals_v112bad_any_castE'] = 231064;
-var __ZNSt3__212placeholders2_1E = Module['__ZNSt3__212placeholders2_1E'] = 231128;
-var __ZNSt3__212placeholders2_2E = Module['__ZNSt3__212placeholders2_2E'] = 231129;
-var __ZNSt3__212placeholders2_3E = Module['__ZNSt3__212placeholders2_3E'] = 231130;
-var __ZNSt3__212placeholders2_4E = Module['__ZNSt3__212placeholders2_4E'] = 231131;
-var __ZNSt3__212placeholders2_5E = Module['__ZNSt3__212placeholders2_5E'] = 231132;
-var __ZNSt3__212placeholders2_6E = Module['__ZNSt3__212placeholders2_6E'] = 231133;
-var __ZNSt3__212placeholders2_7E = Module['__ZNSt3__212placeholders2_7E'] = 231134;
-var __ZNSt3__212placeholders2_8E = Module['__ZNSt3__212placeholders2_8E'] = 231135;
-var __ZNSt3__212placeholders2_9E = Module['__ZNSt3__212placeholders2_9E'] = 231136;
-var __ZNSt3__212placeholders3_10E = Module['__ZNSt3__212placeholders3_10E'] = 231137;
-var __ZNSt3__213__DIGIT_TABLEE = Module['__ZNSt3__213__DIGIT_TABLEE'] = 231152;
-var __ZNSt3__26__itoa16_Charconv_digitsE = Module['__ZNSt3__26__itoa16_Charconv_digitsE'] = 231360;
-var __ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE'] = 231456;
-var __ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE'] = 231712;
-var __ZNSt3__225_General_precision_tablesIfE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIfE6_Max_PE'] = 231888;
-var __ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE'] = 231904;
-var __ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE'] = 233472;
-var __ZNSt3__225_General_precision_tablesIdE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIdE6_Max_PE'] = 235984;
-var __ZNSt3__26chrono12system_clock9is_steadyE = Module['__ZNSt3__26chrono12system_clock9is_steadyE'] = 235988;
-var __ZNSt3__26chrono12steady_clock9is_steadyE = Module['__ZNSt3__26chrono12steady_clock9is_steadyE'] = 235989;
-var __ZNSt3__214__POW10_OFFSETE = Module['__ZNSt3__214__POW10_OFFSETE'] = 265376;
-var __ZNSt3__213__POW10_SPLITE = Module['__ZNSt3__213__POW10_SPLITE'] = 236000;
-var __ZNSt3__213__MIN_BLOCK_2E = Module['__ZNSt3__213__MIN_BLOCK_2E'] = 265504;
-var __ZNSt3__216__POW10_OFFSET_2E = Module['__ZNSt3__216__POW10_OFFSET_2E'] = 265584;
-var __ZNSt3__215__POW10_SPLIT_2E = Module['__ZNSt3__215__POW10_SPLIT_2E'] = 265728;
-var __ZNSt3__223__DOUBLE_POW5_INV_SPLITE = Module['__ZNSt3__223__DOUBLE_POW5_INV_SPLITE'] = 340928;
-var __ZNSt3__219__DOUBLE_POW5_SPLITE = Module['__ZNSt3__219__DOUBLE_POW5_SPLITE'] = 345600;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment'] = 350816;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa'] = 351136;
-var __ZNSt3__223__libcpp_debug_functionE = Module['__ZNSt3__223__libcpp_debug_functionE'] = 382940;
-var __ZTVNSt3__28__c_nodeE = Module['__ZTVNSt3__28__c_nodeE'] = 351320;
-var __ZTINSt3__28__c_nodeE = Module['__ZTINSt3__28__c_nodeE'] = 351372;
-var __ZTSNSt3__28__c_nodeE = Module['__ZTSNSt3__28__c_nodeE'] = 351352;
-var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351380;
-var __ZTVNSt3__219__shared_weak_countE = Module['__ZTVNSt3__219__shared_weak_countE'] = 367532;
-var __ZTVNSt3__214__shared_countE = Module['__ZTVNSt3__214__shared_countE'] = 367476;
-var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351508;
-var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351496;
-var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351408;
-var __ZTINSt3__219__shared_weak_countE = Module['__ZTINSt3__219__shared_weak_countE'] = 367592;
-var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351656;
-var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351536;
-var __ZTVSt16nested_exception = Module['__ZTVSt16nested_exception'] = 351680;
-var __ZTISt16nested_exception = Module['__ZTISt16nested_exception'] = 351720;
-var __ZTSSt16nested_exception = Module['__ZTSSt16nested_exception'] = 351696;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment'] = 352368;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa'] = 352416;
-var __ZNSt3__222__FLOAT_POW5_INV_SPLITE = Module['__ZNSt3__222__FLOAT_POW5_INV_SPLITE'] = 351728;
-var __ZNSt3__218__FLOAT_POW5_SPLITE = Module['__ZNSt3__218__FLOAT_POW5_SPLITE'] = 351984;
-var __ZTVNSt3__212format_errorE = Module['__ZTVNSt3__212format_errorE'] = 352460;
-var __ZTINSt3__212format_errorE = Module['__ZTINSt3__212format_errorE'] = 352504;
-var __ZTSNSt3__212format_errorE = Module['__ZTSNSt3__212format_errorE'] = 352480;
-var __ZTISt13runtime_error = Module['__ZTISt13runtime_error'] = 382000;
-var __ZTSNSt3__217bad_function_callE = Module['__ZTSNSt3__217bad_function_callE'] = 352536;
-var __ZTISt9exception = Module['__ZTISt9exception'] = 381536;
-var __ZTVNSt3__212future_errorE = Module['__ZTVNSt3__212future_errorE'] = 352612;
-var __ZTVNSt3__217__assoc_sub_stateE = Module['__ZTVNSt3__217__assoc_sub_stateE'] = 352632;
-var __ZTVNSt3__223__future_error_categoryE = Module['__ZTVNSt3__223__future_error_categoryE'] = 352576;
-var __ZTINSt3__223__future_error_categoryE = Module['__ZTINSt3__223__future_error_categoryE'] = 352732;
-var __ZTINSt3__212future_errorE = Module['__ZTINSt3__212future_errorE'] = 352768;
-var __ZTINSt3__217__assoc_sub_stateE = Module['__ZTINSt3__217__assoc_sub_stateE'] = 352684;
-var __ZTSNSt3__217__assoc_sub_stateE = Module['__ZTSNSt3__217__assoc_sub_stateE'] = 352656;
-var __ZTINSt3__214__shared_countE = Module['__ZTINSt3__214__shared_countE'] = 367524;
-var __ZTSNSt3__223__future_error_categoryE = Module['__ZTSNSt3__223__future_error_categoryE'] = 352696;
-var __ZTINSt3__212__do_messageE = Module['__ZTINSt3__212__do_messageE'] = 370492;
-var __ZTSNSt3__212future_errorE = Module['__ZTSNSt3__212future_errorE'] = 352744;
-var __ZTISt11logic_error = Module['__ZTISt11logic_error'] = 381760;
-var __ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353184;
-var __ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353288;
-var __ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353336;
-var __ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423988;
-var __ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353404;
-var __ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 353432;
-var __ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353536;
-var __ZNSt3__25ctypeIwE2idE = Module['__ZNSt3__25ctypeIwE2idE'] = 424152;
-var __ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353584;
-var __ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423996;
-var __ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353592;
-var __ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 353656;
-var __ZNSt3__27codecvtIcc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIcc11__mbstate_tE2idE'] = 424168;
-var __ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354572;
-var __ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354876;
-var __ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355056;
-var __ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355236;
-var __ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355392;
-var __ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423972;
-var __ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423980;
-var __ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353844;
-var __ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353248;
-var __ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353900;
-var __ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353296;
-var __ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353972;
-var __ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353344;
-var __ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 354124;
-var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 353996;
-var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 354036;
-var __ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 354280;
-var __ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353496;
-var __ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 354336;
-var __ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353544;
-var __ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 354408;
-var __ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354500;
-var __ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 355556;
-var __ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353720;
-var __ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353780;
-var __ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353736;
-var __ZTINSt3__28ios_baseE = Module['__ZTINSt3__28ios_baseE'] = 355772;
-var __ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353792;
-var __ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353852;
-var __ZTVN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTVN10__cxxabiv121__vmi_class_type_infoE'] = 381284;
-var __ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353924;
-var __ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 354076;
-var __ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 354156;
-var __ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 354216;
-var __ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 354172;
-var __ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 354228;
-var __ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 354288;
-var __ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 354360;
-var __ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354432;
-var __ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354512;
-var __ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354824;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE'] = 354612;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354672;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 354712;
-var __ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354752;
-var __ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354836;
-var __ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355004;
-var __ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 354892;
-var __ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354932;
-var __ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355016;
-var __ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355184;
-var __ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 355072;
-var __ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 355112;
-var __ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355196;
-var __ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355340;
-var __ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 355252;
-var __ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355292;
-var __ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355352;
-var __ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355496;
-var __ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 355408;
-var __ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355448;
-var __ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 355508;
-var __ZTVNSt3__28ios_base7failureE = Module['__ZTVNSt3__28ios_base7failureE'] = 355604;
-var __ZNSt3__28ios_base9__xindex_E = Module['__ZNSt3__28ios_base9__xindex_E'] = 422904;
-var __ZTVNSt3__28ios_baseE = Module['__ZTVNSt3__28ios_baseE'] = 355736;
-var __ZTVNSt3__219__iostream_categoryE = Module['__ZTVNSt3__219__iostream_categoryE'] = 355568;
-var __ZTINSt3__219__iostream_categoryE = Module['__ZTINSt3__219__iostream_categoryE'] = 355812;
-var __ZTINSt3__28ios_base7failureE = Module['__ZTINSt3__28ios_base7failureE'] = 355852;
-var __ZNSt3__28ios_base9boolalphaE = Module['__ZNSt3__28ios_base9boolalphaE'] = 355624;
-var __ZNSt3__28ios_base3decE = Module['__ZNSt3__28ios_base3decE'] = 355628;
-var __ZNSt3__28ios_base5fixedE = Module['__ZNSt3__28ios_base5fixedE'] = 355632;
-var __ZNSt3__28ios_base3hexE = Module['__ZNSt3__28ios_base3hexE'] = 355636;
-var __ZNSt3__28ios_base8internalE = Module['__ZNSt3__28ios_base8internalE'] = 355640;
-var __ZNSt3__28ios_base4leftE = Module['__ZNSt3__28ios_base4leftE'] = 355644;
-var __ZNSt3__28ios_base3octE = Module['__ZNSt3__28ios_base3octE'] = 355648;
-var __ZNSt3__28ios_base5rightE = Module['__ZNSt3__28ios_base5rightE'] = 355652;
-var __ZNSt3__28ios_base10scientificE = Module['__ZNSt3__28ios_base10scientificE'] = 355656;
-var __ZNSt3__28ios_base8showbaseE = Module['__ZNSt3__28ios_base8showbaseE'] = 355660;
-var __ZNSt3__28ios_base9showpointE = Module['__ZNSt3__28ios_base9showpointE'] = 355664;
-var __ZNSt3__28ios_base7showposE = Module['__ZNSt3__28ios_base7showposE'] = 355668;
-var __ZNSt3__28ios_base6skipwsE = Module['__ZNSt3__28ios_base6skipwsE'] = 355672;
-var __ZNSt3__28ios_base7unitbufE = Module['__ZNSt3__28ios_base7unitbufE'] = 355676;
-var __ZNSt3__28ios_base9uppercaseE = Module['__ZNSt3__28ios_base9uppercaseE'] = 355680;
-var __ZNSt3__28ios_base11adjustfieldE = Module['__ZNSt3__28ios_base11adjustfieldE'] = 355684;
-var __ZNSt3__28ios_base9basefieldE = Module['__ZNSt3__28ios_base9basefieldE'] = 355688;
-var __ZNSt3__28ios_base10floatfieldE = Module['__ZNSt3__28ios_base10floatfieldE'] = 355692;
-var __ZNSt3__28ios_base6badbitE = Module['__ZNSt3__28ios_base6badbitE'] = 355696;
-var __ZNSt3__28ios_base6eofbitE = Module['__ZNSt3__28ios_base6eofbitE'] = 355700;
-var __ZNSt3__28ios_base7failbitE = Module['__ZNSt3__28ios_base7failbitE'] = 355704;
-var __ZNSt3__28ios_base7goodbitE = Module['__ZNSt3__28ios_base7goodbitE'] = 355708;
-var __ZNSt3__28ios_base3appE = Module['__ZNSt3__28ios_base3appE'] = 355712;
-var __ZNSt3__28ios_base3ateE = Module['__ZNSt3__28ios_base3ateE'] = 355716;
-var __ZNSt3__28ios_base6binaryE = Module['__ZNSt3__28ios_base6binaryE'] = 355720;
-var __ZNSt3__28ios_base2inE = Module['__ZNSt3__28ios_base2inE'] = 355724;
-var __ZNSt3__28ios_base3outE = Module['__ZNSt3__28ios_base3outE'] = 355728;
-var __ZNSt3__28ios_base5truncE = Module['__ZNSt3__28ios_base5truncE'] = 355732;
-var __ZTSNSt3__28ios_baseE = Module['__ZTSNSt3__28ios_baseE'] = 355752;
-var __ZTSNSt3__219__iostream_categoryE = Module['__ZTSNSt3__219__iostream_categoryE'] = 355780;
-var __ZTSNSt3__28ios_base7failureE = Module['__ZTSNSt3__28ios_base7failureE'] = 355824;
-var __ZTINSt3__212system_errorE = Module['__ZTINSt3__212system_errorE'] = 370624;
-var __ZNSt3__219__start_std_streamsE = Module['__ZNSt3__219__start_std_streamsE'] = 423596;
-var __ZNSt3__23cinE = Module['__ZNSt3__23cinE'] = 422916;
-var __ZNSt3__24cerrE = Module['__ZNSt3__24cerrE'] = 423260;
-var __ZNSt3__24clogE = Module['__ZNSt3__24clogE'] = 423428;
-var __ZNSt3__24wcinE = Module['__ZNSt3__24wcinE'] = 423004;
-var __ZNSt3__25wcoutE = Module['__ZNSt3__25wcoutE'] = 423176;
-var __ZNSt3__25wcerrE = Module['__ZNSt3__25wcerrE'] = 423344;
-var __ZNSt3__25wclogE = Module['__ZNSt3__25wclogE'] = 423512;
-var __ZTVNSt3__210__stdinbufIcEE = Module['__ZTVNSt3__210__stdinbufIcEE'] = 355864;
-var __ZTVNSt3__211__stdoutbufIcEE = Module['__ZTVNSt3__211__stdoutbufIcEE'] = 355964;
-var __ZTVNSt3__210__stdinbufIwEE = Module['__ZTVNSt3__210__stdinbufIwEE'] = 356068;
-var __ZTVNSt3__211__stdoutbufIwEE = Module['__ZTVNSt3__211__stdoutbufIwEE'] = 356168;
-var __ZNSt3__27codecvtIwc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIwc11__mbstate_tE2idE'] = 424176;
-var __ZTINSt3__210__stdinbufIcEE = Module['__ZTINSt3__210__stdinbufIcEE'] = 355952;
-var __ZTSNSt3__210__stdinbufIcEE = Module['__ZTSNSt3__210__stdinbufIcEE'] = 355928;
-var __ZTINSt3__211__stdoutbufIcEE = Module['__ZTINSt3__211__stdoutbufIcEE'] = 356056;
-var __ZTSNSt3__211__stdoutbufIcEE = Module['__ZTSNSt3__211__stdoutbufIcEE'] = 356028;
-var __ZTINSt3__210__stdinbufIwEE = Module['__ZTINSt3__210__stdinbufIwEE'] = 356156;
-var __ZTSNSt3__210__stdinbufIwEE = Module['__ZTSNSt3__210__stdinbufIwEE'] = 356132;
-var __ZTINSt3__211__stdoutbufIwEE = Module['__ZTINSt3__211__stdoutbufIwEE'] = 356260;
-var __ZTSNSt3__211__stdoutbufIwEE = Module['__ZTSNSt3__211__stdoutbufIwEE'] = 356232;
-var __ZNSt3__28numpunctIcE2idE = Module['__ZNSt3__28numpunctIcE2idE'] = 424216;
-var __ZNSt3__214__num_get_base5__srcE = Module['__ZNSt3__214__num_get_base5__srcE'] = 356272;
-var __ZNSt3__28numpunctIwE2idE = Module['__ZNSt3__28numpunctIwE2idE'] = 424224;
-var __ZNSt3__210moneypunctIcLb1EE2idE = Module['__ZNSt3__210moneypunctIcLb1EE2idE'] = 424044;
-var __ZNSt3__210moneypunctIcLb0EE2idE = Module['__ZNSt3__210moneypunctIcLb0EE2idE'] = 424036;
-var __ZNSt3__210moneypunctIwLb1EE2idE = Module['__ZNSt3__210moneypunctIwLb1EE2idE'] = 424060;
-var __ZNSt3__210moneypunctIwLb0EE2idE = Module['__ZNSt3__210moneypunctIwLb0EE2idE'] = 424052;
-var __ZTVNSt3__26locale5__impE = Module['__ZTVNSt3__26locale5__impE'] = 356548;
-var __ZTVNSt3__26locale5facetE = Module['__ZTVNSt3__26locale5facetE'] = 358348;
-var __ZNSt3__27collateIcE2idE = Module['__ZNSt3__27collateIcE2idE'] = 423956;
-var __ZNSt3__27collateIwE2idE = Module['__ZNSt3__27collateIwE2idE'] = 423964;
-var __ZNSt3__27codecvtIDsc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsc11__mbstate_tE2idE'] = 424184;
-var __ZNSt3__27codecvtIDic11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDic11__mbstate_tE2idE'] = 424200;
-var __ZNSt3__27codecvtIDsDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsDu11__mbstate_tE2idE'] = 424192;
-var __ZNSt3__27codecvtIDiDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDiDu11__mbstate_tE2idE'] = 424208;
-var __ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424068;
-var __ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424076;
-var __ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424084;
-var __ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424092;
-var __ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424004;
-var __ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424012;
-var __ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424020;
-var __ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424028;
-var __ZNSt3__28messagesIcE2idE = Module['__ZNSt3__28messagesIcE2idE'] = 424100;
-var __ZNSt3__28messagesIwE2idE = Module['__ZNSt3__28messagesIwE2idE'] = 424108;
-var __ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365684;
-var __ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365788;
-var __ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365892;
-var __ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365996;
-var __ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 366100;
-var __ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366204;
-var __ZTVNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb0EEE'] = 364252;
-var __ZTVNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb1EEE'] = 364356;
-var __ZTVNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb0EEE'] = 364460;
-var __ZTVNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb1EEE'] = 364564;
-var __ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362676;
-var __ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362972;
-var __ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363524;
-var __ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363640;
-var __ZTVNSt3__215messages_bynameIcEE = Module['__ZTVNSt3__215messages_bynameIcEE'] = 365532;
-var __ZTVNSt3__215messages_bynameIwEE = Module['__ZTVNSt3__215messages_bynameIwEE'] = 365608;
-var __ZNSt3__26locale2id9__next_idE = Module['__ZNSt3__26locale2id9__next_idE'] = 424148;
-var __ZTVNSt3__214collate_bynameIcEE = Module['__ZTVNSt3__214collate_bynameIcEE'] = 356568;
-var __ZTVNSt3__214collate_bynameIwEE = Module['__ZTVNSt3__214collate_bynameIwEE'] = 356600;
-var __ZTVNSt3__25ctypeIcEE = Module['__ZTVNSt3__25ctypeIcEE'] = 356684;
-var __ZTVNSt3__212ctype_bynameIcEE = Module['__ZTVNSt3__212ctype_bynameIcEE'] = 357760;
-var __ZTVNSt3__212ctype_bynameIwEE = Module['__ZTVNSt3__212ctype_bynameIwEE'] = 357812;
-var __ZTVNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIwc11__mbstate_tEE'] = 357880;
-var __ZTVNSt3__28numpunctIcEE = Module['__ZTVNSt3__28numpunctIcEE'] = 357928;
-var __ZTVNSt3__28numpunctIwEE = Module['__ZTVNSt3__28numpunctIwEE'] = 357968;
-var __ZTVNSt3__215numpunct_bynameIcEE = Module['__ZTVNSt3__215numpunct_bynameIcEE'] = 358052;
-var __ZTVNSt3__215numpunct_bynameIwEE = Module['__ZTVNSt3__215numpunct_bynameIwEE'] = 358092;
-var __ZTVNSt3__215__time_get_tempIcEE = Module['__ZTVNSt3__215__time_get_tempIcEE'] = 367264;
-var __ZTVNSt3__215__time_get_tempIwEE = Module['__ZTVNSt3__215__time_get_tempIwEE'] = 367360;
-var __ZTVNSt3__27collateIcEE = Module['__ZTVNSt3__27collateIcEE'] = 361224;
-var __ZTVNSt3__27collateIwEE = Module['__ZTVNSt3__27collateIwEE'] = 361256;
-var __ZTVNSt3__25ctypeIwEE = Module['__ZTVNSt3__25ctypeIwEE'] = 358404;
-var __ZTVNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIcc11__mbstate_tEE'] = 358552;
-var __ZTVNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsc11__mbstate_tEE'] = 358700;
-var __ZTVNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDic11__mbstate_tEE'] = 358932;
-var __ZTVNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358816;
-var __ZTVNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDiDu11__mbstate_tEE'] = 359048;
-var __ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361288;
-var __ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361532;
-var __ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361744;
-var __ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361976;
-var __ZTVNSt3__210moneypunctIcLb0EEE = Module['__ZTVNSt3__210moneypunctIcLb0EEE'] = 363756;
-var __ZTVNSt3__210moneypunctIcLb1EEE = Module['__ZTVNSt3__210moneypunctIcLb1EEE'] = 363904;
-var __ZTVNSt3__210moneypunctIwLb0EEE = Module['__ZTVNSt3__210moneypunctIwLb0EEE'] = 364020;
-var __ZTVNSt3__210moneypunctIwLb1EEE = Module['__ZTVNSt3__210moneypunctIwLb1EEE'] = 364136;
-var __ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364668;
-var __ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364832;
-var __ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364996;
-var __ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365160;
-var __ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362176;
-var __ZTVNSt3__220__time_get_c_storageIcEE = Module['__ZTVNSt3__220__time_get_c_storageIcEE'] = 367192;
-var __ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362440;
-var __ZTVNSt3__220__time_get_c_storageIwEE = Module['__ZTVNSt3__220__time_get_c_storageIwEE'] = 367228;
-var __ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363240;
-var __ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363396;
-var __ZTVNSt3__28messagesIcEE = Module['__ZTVNSt3__28messagesIcEE'] = 365324;
-var __ZTVNSt3__28messagesIwEE = Module['__ZTVNSt3__28messagesIwEE'] = 365444;
-var __ZNSt3__210moneypunctIcLb0EE4intlE = Module['__ZNSt3__210moneypunctIcLb0EE4intlE'] = 356512;
-var __ZNSt3__210moneypunctIcLb1EE4intlE = Module['__ZNSt3__210moneypunctIcLb1EE4intlE'] = 356513;
-var __ZNSt3__210moneypunctIwLb0EE4intlE = Module['__ZNSt3__210moneypunctIwLb0EE4intlE'] = 356514;
-var __ZNSt3__210moneypunctIwLb1EE4intlE = Module['__ZNSt3__210moneypunctIwLb1EE4intlE'] = 356515;
-var __ZNSt3__26locale4noneE = Module['__ZNSt3__26locale4noneE'] = 356516;
-var __ZNSt3__26locale7collateE = Module['__ZNSt3__26locale7collateE'] = 356520;
-var __ZNSt3__26locale5ctypeE = Module['__ZNSt3__26locale5ctypeE'] = 356524;
-var __ZNSt3__26locale8monetaryE = Module['__ZNSt3__26locale8monetaryE'] = 356528;
-var __ZNSt3__26locale7numericE = Module['__ZNSt3__26locale7numericE'] = 356532;
-var __ZNSt3__26locale4timeE = Module['__ZNSt3__26locale4timeE'] = 356536;
-var __ZNSt3__26locale8messagesE = Module['__ZNSt3__26locale8messagesE'] = 356540;
-var __ZNSt3__26locale3allE = Module['__ZNSt3__26locale3allE'] = 356544;
-var __ZTINSt3__26locale5__impE = Module['__ZTINSt3__26locale5__impE'] = 360776;
-var __ZTINSt3__214collate_bynameIcEE = Module['__ZTINSt3__214collate_bynameIcEE'] = 360848;
-var __ZTINSt3__214collate_bynameIwEE = Module['__ZTINSt3__214collate_bynameIwEE'] = 360920;
-var __ZNSt3__210ctype_base5spaceE = Module['__ZNSt3__210ctype_base5spaceE'] = 356632;
-var __ZNSt3__210ctype_base5printE = Module['__ZNSt3__210ctype_base5printE'] = 356636;
-var __ZNSt3__210ctype_base5cntrlE = Module['__ZNSt3__210ctype_base5cntrlE'] = 356640;
-var __ZNSt3__210ctype_base5upperE = Module['__ZNSt3__210ctype_base5upperE'] = 356644;
-var __ZNSt3__210ctype_base5lowerE = Module['__ZNSt3__210ctype_base5lowerE'] = 356648;
-var __ZNSt3__210ctype_base5alphaE = Module['__ZNSt3__210ctype_base5alphaE'] = 356652;
-var __ZNSt3__210ctype_base5digitE = Module['__ZNSt3__210ctype_base5digitE'] = 356656;
-var __ZNSt3__210ctype_base5punctE = Module['__ZNSt3__210ctype_base5punctE'] = 356660;
-var __ZNSt3__210ctype_base6xdigitE = Module['__ZNSt3__210ctype_base6xdigitE'] = 356664;
-var __ZNSt3__210ctype_base5blankE = Module['__ZNSt3__210ctype_base5blankE'] = 356668;
-var __ZNSt3__210ctype_base5alnumE = Module['__ZNSt3__210ctype_base5alnumE'] = 356672;
-var __ZNSt3__210ctype_base5graphE = Module['__ZNSt3__210ctype_base5graphE'] = 356676;
-var __ZNSt3__25ctypeIcE10table_sizeE = Module['__ZNSt3__25ctypeIcE10table_sizeE'] = 356680;
-var __ZTINSt3__25ctypeIcEE = Module['__ZTINSt3__25ctypeIcEE'] = 360952;
-var __ZTINSt3__212ctype_bynameIcEE = Module['__ZTINSt3__212ctype_bynameIcEE'] = 361012;
-var __ZTINSt3__212ctype_bynameIwEE = Module['__ZTINSt3__212ctype_bynameIwEE'] = 361052;
-var __ZTINSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIwc11__mbstate_tEE'] = 359660;
-var __ZTINSt3__28numpunctIcEE = Module['__ZTINSt3__28numpunctIcEE'] = 361088;
-var __ZTINSt3__28numpunctIwEE = Module['__ZTINSt3__28numpunctIwEE'] = 361124;
-var __ZTINSt3__215numpunct_bynameIcEE = Module['__ZTINSt3__215numpunct_bynameIcEE'] = 361168;
-var __ZTINSt3__215numpunct_bynameIwEE = Module['__ZTINSt3__215numpunct_bynameIwEE'] = 361212;
-var __ZTINSt3__26locale5facetE = Module['__ZTINSt3__26locale5facetE'] = 358392;
-var __ZTSNSt3__26locale5facetE = Module['__ZTSNSt3__26locale5facetE'] = 358368;
-var __ZTINSt3__25ctypeIwEE = Module['__ZTINSt3__25ctypeIwEE'] = 358520;
-var __ZTSNSt3__25ctypeIwEE = Module['__ZTSNSt3__25ctypeIwEE'] = 358472;
-var __ZTSNSt3__210ctype_baseE = Module['__ZTSNSt3__210ctype_baseE'] = 358490;
-var __ZTINSt3__210ctype_baseE = Module['__ZTINSt3__210ctype_baseE'] = 358512;
-var __ZTINSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIcc11__mbstate_tEE'] = 358668;
-var __ZTSNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIcc11__mbstate_tEE'] = 358600;
-var __ZTSNSt3__212codecvt_baseE = Module['__ZTSNSt3__212codecvt_baseE'] = 358634;
-var __ZTINSt3__212codecvt_baseE = Module['__ZTINSt3__212codecvt_baseE'] = 358660;
-var __ZTINSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsc11__mbstate_tEE'] = 358784;
-var __ZTSNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsc11__mbstate_tEE'] = 358748;
-var __ZTINSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsDu11__mbstate_tEE'] = 358900;
-var __ZTSNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358864;
-var __ZTINSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDic11__mbstate_tEE'] = 359016;
-var __ZTSNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDic11__mbstate_tEE'] = 358980;
-var __ZTINSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDiDu11__mbstate_tEE'] = 359132;
-var __ZTSNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDiDu11__mbstate_tEE'] = 359096;
-var __ZTVNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm16EEE'] = 359164;
-var __ZTINSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm16EEE'] = 359248;
-var __ZTSNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm16EEE'] = 359212;
-var __ZTVNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm32EEE'] = 359260;
-var __ZTINSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm32EEE'] = 359344;
-var __ZTSNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm32EEE'] = 359308;
-var __ZTVNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm16EEE'] = 359356;
-var __ZTINSt3__217__widen_from_utf8ILm16EEE = Module['__ZTINSt3__217__widen_from_utf8ILm16EEE'] = 359440;
-var __ZTSNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm16EEE'] = 359404;
-var __ZTVNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm32EEE'] = 359452;
-var __ZTINSt3__217__widen_from_utf8ILm32EEE = Module['__ZTINSt3__217__widen_from_utf8ILm32EEE'] = 359536;
-var __ZTSNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm32EEE'] = 359500;
-var __ZTVNSt3__214__codecvt_utf8IwEE = Module['__ZTVNSt3__214__codecvt_utf8IwEE'] = 359548;
-var __ZTINSt3__214__codecvt_utf8IwEE = Module['__ZTINSt3__214__codecvt_utf8IwEE'] = 359692;
-var __ZTSNSt3__214__codecvt_utf8IwEE = Module['__ZTSNSt3__214__codecvt_utf8IwEE'] = 359596;
-var __ZTSNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIwc11__mbstate_tEE'] = 359624;
-var __ZTVNSt3__214__codecvt_utf8IDsEE = Module['__ZTVNSt3__214__codecvt_utf8IDsEE'] = 359704;
-var __ZTINSt3__214__codecvt_utf8IDsEE = Module['__ZTINSt3__214__codecvt_utf8IDsEE'] = 359784;
-var __ZTSNSt3__214__codecvt_utf8IDsEE = Module['__ZTSNSt3__214__codecvt_utf8IDsEE'] = 359752;
-var __ZTVNSt3__214__codecvt_utf8IDiEE = Module['__ZTVNSt3__214__codecvt_utf8IDiEE'] = 359796;
-var __ZTINSt3__214__codecvt_utf8IDiEE = Module['__ZTINSt3__214__codecvt_utf8IDiEE'] = 359876;
-var __ZTSNSt3__214__codecvt_utf8IDiEE = Module['__ZTSNSt3__214__codecvt_utf8IDiEE'] = 359844;
-var __ZTVNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb0EEE'] = 359888;
-var __ZTINSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb0EEE'] = 359972;
-var __ZTSNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb0EEE'] = 359936;
-var __ZTVNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb1EEE'] = 359984;
-var __ZTINSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb1EEE'] = 360068;
-var __ZTSNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb1EEE'] = 360032;
-var __ZTVNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb0EEE'] = 360080;
-var __ZTINSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb0EEE'] = 360164;
-var __ZTSNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb0EEE'] = 360128;
-var __ZTVNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb1EEE'] = 360176;
-var __ZTINSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb1EEE'] = 360260;
-var __ZTSNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb1EEE'] = 360224;
-var __ZTVNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb0EEE'] = 360272;
-var __ZTINSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb0EEE'] = 360356;
-var __ZTSNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb0EEE'] = 360320;
-var __ZTVNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb1EEE'] = 360368;
-var __ZTINSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb1EEE'] = 360452;
-var __ZTSNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb1EEE'] = 360416;
-var __ZTVNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IwEE'] = 360464;
-var __ZTINSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IwEE'] = 360548;
-var __ZTSNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IwEE'] = 360512;
-var __ZTVNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDiEE'] = 360560;
-var __ZTINSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDiEE'] = 360644;
-var __ZTSNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDiEE'] = 360608;
-var __ZTVNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDsEE'] = 360656;
-var __ZTINSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDsEE'] = 360740;
-var __ZTSNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDsEE'] = 360704;
-var __ZTSNSt3__26locale5__impE = Module['__ZTSNSt3__26locale5__impE'] = 360752;
-var __ZTSNSt3__214collate_bynameIcEE = Module['__ZTSNSt3__214collate_bynameIcEE'] = 360788;
-var __ZTSNSt3__27collateIcEE = Module['__ZTSNSt3__27collateIcEE'] = 360816;
-var __ZTINSt3__27collateIcEE = Module['__ZTINSt3__27collateIcEE'] = 360836;
-var __ZTSNSt3__214collate_bynameIwEE = Module['__ZTSNSt3__214collate_bynameIwEE'] = 360860;
-var __ZTSNSt3__27collateIwEE = Module['__ZTSNSt3__27collateIwEE'] = 360888;
-var __ZTINSt3__27collateIwEE = Module['__ZTINSt3__27collateIwEE'] = 360908;
-var __ZTSNSt3__25ctypeIcEE = Module['__ZTSNSt3__25ctypeIcEE'] = 360932;
-var __ZTSNSt3__212ctype_bynameIcEE = Module['__ZTSNSt3__212ctype_bynameIcEE'] = 360984;
-var __ZTSNSt3__212ctype_bynameIwEE = Module['__ZTSNSt3__212ctype_bynameIwEE'] = 361024;
-var __ZTSNSt3__28numpunctIcEE = Module['__ZTSNSt3__28numpunctIcEE'] = 361064;
-var __ZTSNSt3__28numpunctIwEE = Module['__ZTSNSt3__28numpunctIwEE'] = 361100;
-var __ZTSNSt3__215numpunct_bynameIcEE = Module['__ZTSNSt3__215numpunct_bynameIcEE'] = 361136;
-var __ZTSNSt3__215numpunct_bynameIwEE = Module['__ZTSNSt3__215numpunct_bynameIwEE'] = 361180;
-var __ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361500;
-var __ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361352;
-var __ZTSNSt3__29__num_getIcEE = Module['__ZTSNSt3__29__num_getIcEE'] = 361420;
-var __ZTSNSt3__214__num_get_baseE = Module['__ZTSNSt3__214__num_get_baseE'] = 361442;
-var __ZTINSt3__214__num_get_baseE = Module['__ZTINSt3__214__num_get_baseE'] = 361468;
-var __ZTINSt3__29__num_getIcEE = Module['__ZTINSt3__29__num_getIcEE'] = 361476;
-var __ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361712;
-var __ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361596;
-var __ZTSNSt3__29__num_getIwEE = Module['__ZTSNSt3__29__num_getIwEE'] = 361664;
-var __ZTINSt3__29__num_getIwEE = Module['__ZTINSt3__29__num_getIwEE'] = 361688;
-var __ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361944;
-var __ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361796;
-var __ZTSNSt3__29__num_putIcEE = Module['__ZTSNSt3__29__num_putIcEE'] = 361864;
-var __ZTSNSt3__214__num_put_baseE = Module['__ZTSNSt3__214__num_put_baseE'] = 361886;
-var __ZTINSt3__214__num_put_baseE = Module['__ZTINSt3__214__num_put_baseE'] = 361912;
-var __ZTINSt3__29__num_putIcEE = Module['__ZTINSt3__29__num_putIcEE'] = 361920;
-var __ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362144;
-var __ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362028;
-var __ZTSNSt3__29__num_putIwEE = Module['__ZTSNSt3__29__num_putIwEE'] = 362096;
-var __ZTINSt3__29__num_putIwEE = Module['__ZTINSt3__29__num_putIwEE'] = 362120;
-var __ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362400;
-var __ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362260;
-var __ZTSNSt3__29time_baseE = Module['__ZTSNSt3__29time_baseE'] = 362329;
-var __ZTINSt3__29time_baseE = Module['__ZTINSt3__29time_baseE'] = 362348;
-var __ZTSNSt3__220__time_get_c_storageIcEE = Module['__ZTSNSt3__220__time_get_c_storageIcEE'] = 362356;
-var __ZTINSt3__220__time_get_c_storageIcEE = Module['__ZTINSt3__220__time_get_c_storageIcEE'] = 362392;
-var __ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362636;
-var __ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362524;
-var __ZTSNSt3__220__time_get_c_storageIwEE = Module['__ZTSNSt3__220__time_get_c_storageIwEE'] = 362593;
-var __ZTINSt3__220__time_get_c_storageIwEE = Module['__ZTINSt3__220__time_get_c_storageIwEE'] = 362628;
-var __ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362940;
-var __ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362788;
-var __ZTSNSt3__218__time_get_storageIcEE = Module['__ZTSNSt3__218__time_get_storageIcEE'] = 362865;
-var __ZTSNSt3__210__time_getE = Module['__ZTSNSt3__210__time_getE'] = 362897;
-var __ZTINSt3__210__time_getE = Module['__ZTINSt3__210__time_getE'] = 362920;
-var __ZTINSt3__218__time_get_storageIcEE = Module['__ZTINSt3__218__time_get_storageIcEE'] = 362928;
-var __ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363208;
-var __ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363084;
-var __ZTSNSt3__218__time_get_storageIwEE = Module['__ZTSNSt3__218__time_get_storageIwEE'] = 363161;
-var __ZTINSt3__218__time_get_storageIwEE = Module['__ZTINSt3__218__time_get_storageIwEE'] = 363196;
-var __ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363364;
-var __ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363264;
-var __ZTSNSt3__210__time_putE = Module['__ZTSNSt3__210__time_putE'] = 363333;
-var __ZTINSt3__210__time_putE = Module['__ZTINSt3__210__time_putE'] = 363356;
-var __ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363492;
-var __ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363420;
-var __ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363628;
-var __ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363548;
-var __ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363744;
-var __ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363664;
-var __ZTINSt3__210moneypunctIcLb0EEE = Module['__ZTINSt3__210moneypunctIcLb0EEE'] = 363872;
-var __ZTSNSt3__210moneypunctIcLb0EEE = Module['__ZTSNSt3__210moneypunctIcLb0EEE'] = 363812;
-var __ZTSNSt3__210money_baseE = Module['__ZTSNSt3__210money_baseE'] = 363840;
-var __ZTINSt3__210money_baseE = Module['__ZTINSt3__210money_baseE'] = 363864;
-var __ZTINSt3__210moneypunctIcLb1EEE = Module['__ZTINSt3__210moneypunctIcLb1EEE'] = 363988;
-var __ZTSNSt3__210moneypunctIcLb1EEE = Module['__ZTSNSt3__210moneypunctIcLb1EEE'] = 363960;
-var __ZTINSt3__210moneypunctIwLb0EEE = Module['__ZTINSt3__210moneypunctIwLb0EEE'] = 364104;
-var __ZTSNSt3__210moneypunctIwLb0EEE = Module['__ZTSNSt3__210moneypunctIwLb0EEE'] = 364076;
-var __ZTINSt3__210moneypunctIwLb1EEE = Module['__ZTINSt3__210moneypunctIwLb1EEE'] = 364220;
-var __ZTSNSt3__210moneypunctIwLb1EEE = Module['__ZTSNSt3__210moneypunctIwLb1EEE'] = 364192;
-var __ZTINSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb0EEE'] = 364344;
-var __ZTSNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb0EEE'] = 364308;
-var __ZTINSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb1EEE'] = 364448;
-var __ZTSNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb1EEE'] = 364412;
-var __ZTINSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb0EEE'] = 364552;
-var __ZTSNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb0EEE'] = 364516;
-var __ZTINSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb1EEE'] = 364656;
-var __ZTSNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb1EEE'] = 364620;
-var __ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364800;
-var __ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364696;
-var __ZTSNSt3__211__money_getIcEE = Module['__ZTSNSt3__211__money_getIcEE'] = 364766;
-var __ZTINSt3__211__money_getIcEE = Module['__ZTINSt3__211__money_getIcEE'] = 364792;
-var __ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364964;
-var __ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364860;
-var __ZTSNSt3__211__money_getIwEE = Module['__ZTSNSt3__211__money_getIwEE'] = 364930;
-var __ZTINSt3__211__money_getIwEE = Module['__ZTINSt3__211__money_getIwEE'] = 364956;
-var __ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 365128;
-var __ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 365024;
-var __ZTSNSt3__211__money_putIcEE = Module['__ZTSNSt3__211__money_putIcEE'] = 365094;
-var __ZTINSt3__211__money_putIcEE = Module['__ZTINSt3__211__money_putIcEE'] = 365120;
-var __ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365292;
-var __ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365188;
-var __ZTSNSt3__211__money_putIwEE = Module['__ZTSNSt3__211__money_putIwEE'] = 365258;
-var __ZTINSt3__211__money_putIwEE = Module['__ZTINSt3__211__money_putIwEE'] = 365284;
-var __ZTINSt3__28messagesIcEE = Module['__ZTINSt3__28messagesIcEE'] = 365412;
-var __ZTSNSt3__28messagesIcEE = Module['__ZTSNSt3__28messagesIcEE'] = 365356;
-var __ZTSNSt3__213messages_baseE = Module['__ZTSNSt3__213messages_baseE'] = 365377;
-var __ZTINSt3__213messages_baseE = Module['__ZTINSt3__213messages_baseE'] = 365404;
-var __ZTINSt3__28messagesIwEE = Module['__ZTINSt3__28messagesIwEE'] = 365500;
-var __ZTSNSt3__28messagesIwEE = Module['__ZTSNSt3__28messagesIwEE'] = 365476;
-var __ZTINSt3__215messages_bynameIcEE = Module['__ZTINSt3__215messages_bynameIcEE'] = 365596;
-var __ZTSNSt3__215messages_bynameIcEE = Module['__ZTSNSt3__215messages_bynameIcEE'] = 365564;
-var __ZTINSt3__215messages_bynameIwEE = Module['__ZTINSt3__215messages_bynameIwEE'] = 365672;
-var __ZTSNSt3__215messages_bynameIwEE = Module['__ZTSNSt3__215messages_bynameIwEE'] = 365640;
-var __ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365776;
-var __ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365732;
-var __ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365880;
-var __ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365836;
-var __ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365984;
-var __ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365940;
-var __ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 366088;
-var __ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 366044;
-var __ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 366192;
-var __ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 366148;
-var __ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366296;
-var __ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366252;
-var __ZTINSt3__215__time_get_tempIcEE = Module['__ZTINSt3__215__time_get_tempIcEE'] = 367348;
-var __ZTSNSt3__215__time_get_tempIcEE = Module['__ZTSNSt3__215__time_get_tempIcEE'] = 367316;
-var __ZTINSt3__215__time_get_tempIwEE = Module['__ZTINSt3__215__time_get_tempIwEE'] = 367460;
-var __ZTSNSt3__215__time_get_tempIwEE = Module['__ZTSNSt3__215__time_get_tempIwEE'] = 367428;
-var __ZNSt3__213allocator_argE = Module['__ZNSt3__213allocator_argE'] = 367472;
-var __ZTSNSt3__214__shared_countE = Module['__ZTSNSt3__214__shared_countE'] = 367496;
-var __ZTSNSt3__219__shared_weak_countE = Module['__ZTSNSt3__219__shared_weak_countE'] = 367560;
-var __ZTVNSt3__212bad_weak_ptrE = Module['__ZTVNSt3__212bad_weak_ptrE'] = 367616;
-var __ZTINSt3__212bad_weak_ptrE = Module['__ZTINSt3__212bad_weak_ptrE'] = 367660;
-var __ZTSNSt3__212bad_weak_ptrE = Module['__ZTSNSt3__212bad_weak_ptrE'] = 367636;
-var __ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367672;
-var __ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367868;
-var __ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367700;
-var __ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367948;
-var __ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367728;
-var __ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367802;
-var __ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367860;
-var __ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367880;
-var __ZNSt3__210defer_lockE = Module['__ZNSt3__210defer_lockE'] = 367960;
-var __ZNSt3__211try_to_lockE = Module['__ZNSt3__211try_to_lockE'] = 367961;
-var __ZNSt3__210adopt_lockE = Module['__ZNSt3__210adopt_lockE'] = 367962;
-var __ZSt7nothrow = Module['__ZSt7nothrow'] = 367963;
-var __ZTVNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTVNSt3__24__fs10filesystem16filesystem_errorE'] = 367968;
-var __ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE = Module['__ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE'] = 367964;
-var __ZTINSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTINSt3__24__fs10filesystem16filesystem_errorE'] = 368064;
-var __ZNSt3__24__fs10filesystem4path19preferred_separatorE = Module['__ZNSt3__24__fs10filesystem4path19preferred_separatorE'] = 368016;
-var __ZTSNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTSNSt3__24__fs10filesystem16filesystem_errorE'] = 368017;
-var __ZTVSt19bad_optional_access = Module['__ZTVSt19bad_optional_access'] = 368100;
-var __ZTISt19bad_optional_access = Module['__ZTISt19bad_optional_access'] = 368144;
-var __ZTSSt19bad_optional_access = Module['__ZTSSt19bad_optional_access'] = 368120;
-var __ZTVNSt12experimental19bad_optional_accessE = Module['__ZTVNSt12experimental19bad_optional_accessE'] = 368156;
-var __ZTINSt12experimental19bad_optional_accessE = Module['__ZTINSt12experimental19bad_optional_accessE'] = 368216;
-var __ZTSNSt12experimental19bad_optional_accessE = Module['__ZTSNSt12experimental19bad_optional_accessE'] = 368176;
-var __ZNSt3__212__rs_default4__c_E = Module['__ZNSt3__212__rs_default4__c_E'] = 426392;
-var __ZTVNSt3__211regex_errorE = Module['__ZTVNSt3__211regex_errorE'] = 368228;
-var __ZTINSt3__211regex_errorE = Module['__ZTINSt3__211regex_errorE'] = 369296;
-var __ZTSNSt3__211regex_errorE = Module['__ZTSNSt3__211regex_errorE'] = 369272;
-var __ZTVSt11logic_error = Module['__ZTVSt11logic_error'] = 381664;
-var __ZTVSt13runtime_error = Module['__ZTVSt13runtime_error'] = 381684;
-var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE = Module['__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE'] = 369376;
-var __ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE = Module['__ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE'] = 369380;
-var __ZTVNSt3__212strstreambufE = Module['__ZTVNSt3__212strstreambufE'] = 369632;
-var __ZTTNSt3__210istrstreamE = Module['__ZTTNSt3__210istrstreamE'] = 369736;
-var __ZTTNSt3__210ostrstreamE = Module['__ZTTNSt3__210ostrstreamE'] = 369792;
-var __ZTTNSt3__29strstreamE = Module['__ZTTNSt3__29strstreamE'] = 369868;
-var __ZTINSt3__212strstreambufE = Module['__ZTINSt3__212strstreambufE'] = 369932;
-var __ZTVNSt3__210istrstreamE = Module['__ZTVNSt3__210istrstreamE'] = 369696;
-var __ZTINSt3__210istrstreamE = Module['__ZTINSt3__210istrstreamE'] = 370008;
-var __ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 369944;
-var __ZTVNSt3__210ostrstreamE = Module['__ZTVNSt3__210ostrstreamE'] = 369752;
-var __ZTINSt3__210ostrstreamE = Module['__ZTINSt3__210ostrstreamE'] = 370084;
-var __ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 370020;
-var __ZTVNSt3__29strstreamE = Module['__ZTVNSt3__29strstreamE'] = 369808;
-var __ZTINSt3__29strstreamE = Module['__ZTINSt3__29strstreamE'] = 370256;
-var __ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE'] = 370096;
-var __ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 370156;
-var __ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 370196;
-var __ZTSNSt3__212strstreambufE = Module['__ZTSNSt3__212strstreambufE'] = 369908;
-var __ZTSNSt3__210istrstreamE = Module['__ZTSNSt3__210istrstreamE'] = 369984;
-var __ZTSNSt3__210ostrstreamE = Module['__ZTSNSt3__210ostrstreamE'] = 370060;
-var __ZTSNSt3__29strstreamE = Module['__ZTSNSt3__29strstreamE'] = 370236;
-var __ZTVNSt3__212system_errorE = Module['__ZTVNSt3__212system_errorE'] = 370340;
-var __ZTVNSt3__224__generic_error_categoryE = Module['__ZTVNSt3__224__generic_error_categoryE'] = 370268;
-var __ZTINSt3__224__generic_error_categoryE = Module['__ZTINSt3__224__generic_error_categoryE'] = 370540;
-var __ZTVNSt3__223__system_error_categoryE = Module['__ZTVNSt3__223__system_error_categoryE'] = 370304;
-var __ZTINSt3__223__system_error_categoryE = Module['__ZTINSt3__223__system_error_categoryE'] = 370588;
-var __ZTVNSt3__214error_categoryE = Module['__ZTVNSt3__214error_categoryE'] = 370360;
-var __ZTINSt3__214error_categoryE = Module['__ZTINSt3__214error_categoryE'] = 370424;
-var __ZTSNSt3__214error_categoryE = Module['__ZTSNSt3__214error_categoryE'] = 370396;
-var __ZTVNSt3__212__do_messageE = Module['__ZTVNSt3__212__do_messageE'] = 370432;
-var __ZTSNSt3__212__do_messageE = Module['__ZTSNSt3__212__do_messageE'] = 370468;
-var __ZTSNSt3__224__generic_error_categoryE = Module['__ZTSNSt3__224__generic_error_categoryE'] = 370504;
-var __ZTSNSt3__223__system_error_categoryE = Module['__ZTSNSt3__223__system_error_categoryE'] = 370552;
-var __ZTSNSt3__212system_errorE = Module['__ZTSNSt3__212system_errorE'] = 370600;
-var __ZNSt3__219piecewise_constructE = Module['__ZNSt3__219piecewise_constructE'] = 370636;
-var __ZTVSt18bad_variant_access = Module['__ZTVSt18bad_variant_access'] = 370640;
-var __ZTISt18bad_variant_access = Module['__ZTISt18bad_variant_access'] = 370684;
-var __ZTSSt18bad_variant_access = Module['__ZTSSt18bad_variant_access'] = 370660;
-var ___cxa_unexpected_handler = Module['___cxa_unexpected_handler'] = 383048;
-var ___cxa_terminate_handler = Module['___cxa_terminate_handler'] = 383044;
-var ___cxa_new_handler = Module['___cxa_new_handler'] = 428932;
-var __ZTIN10__cxxabiv116__shim_type_infoE = Module['__ZTIN10__cxxabiv116__shim_type_infoE'] = 379264;
-var __ZTIN10__cxxabiv117__class_type_infoE = Module['__ZTIN10__cxxabiv117__class_type_infoE'] = 379312;
-var __ZTIN10__cxxabiv117__pbase_type_infoE = Module['__ZTIN10__cxxabiv117__pbase_type_infoE'] = 379360;
-var __ZTIDn = Module['__ZTIDn'] = 379708;
-var __ZTIN10__cxxabiv119__pointer_type_infoE = Module['__ZTIN10__cxxabiv119__pointer_type_infoE'] = 379408;
-var __ZTIv = Module['__ZTIv'] = 379656;
-var __ZTIN10__cxxabiv120__function_type_infoE = Module['__ZTIN10__cxxabiv120__function_type_infoE'] = 379460;
-var __ZTIN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTIN10__cxxabiv129__pointer_to_member_type_infoE'] = 379520;
-var __ZTSN10__cxxabiv116__shim_type_infoE = Module['__ZTSN10__cxxabiv116__shim_type_infoE'] = 379228;
-var __ZTISt9type_info = Module['__ZTISt9type_info'] = 382200;
-var __ZTSN10__cxxabiv117__class_type_infoE = Module['__ZTSN10__cxxabiv117__class_type_infoE'] = 379276;
-var __ZTSN10__cxxabiv117__pbase_type_infoE = Module['__ZTSN10__cxxabiv117__pbase_type_infoE'] = 379324;
-var __ZTSN10__cxxabiv119__pointer_type_infoE = Module['__ZTSN10__cxxabiv119__pointer_type_infoE'] = 379372;
-var __ZTSN10__cxxabiv120__function_type_infoE = Module['__ZTSN10__cxxabiv120__function_type_infoE'] = 379420;
-var __ZTSN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTSN10__cxxabiv129__pointer_to_member_type_infoE'] = 379472;
-var __ZTVN10__cxxabiv116__shim_type_infoE = Module['__ZTVN10__cxxabiv116__shim_type_infoE'] = 379544;
-var __ZTVN10__cxxabiv123__fundamental_type_infoE = Module['__ZTVN10__cxxabiv123__fundamental_type_infoE'] = 379572;
-var __ZTIN10__cxxabiv123__fundamental_type_infoE = Module['__ZTIN10__cxxabiv123__fundamental_type_infoE'] = 379640;
-var __ZTSN10__cxxabiv123__fundamental_type_infoE = Module['__ZTSN10__cxxabiv123__fundamental_type_infoE'] = 379600;
-var __ZTSv = Module['__ZTSv'] = 379652;
-var __ZTSPv = Module['__ZTSPv'] = 379664;
-var __ZTIPv = Module['__ZTIPv'] = 379668;
-var __ZTVN10__cxxabiv119__pointer_type_infoE = Module['__ZTVN10__cxxabiv119__pointer_type_infoE'] = 381404;
-var __ZTSPKv = Module['__ZTSPKv'] = 379684;
-var __ZTIPKv = Module['__ZTIPKv'] = 379688;
-var __ZTSDn = Module['__ZTSDn'] = 379704;
-var __ZTSPDn = Module['__ZTSPDn'] = 379716;
-var __ZTIPDn = Module['__ZTIPDn'] = 379720;
-var __ZTSPKDn = Module['__ZTSPKDn'] = 379736;
-var __ZTIPKDn = Module['__ZTIPKDn'] = 379744;
-var __ZTSb = Module['__ZTSb'] = 379760;
-var __ZTIb = Module['__ZTIb'] = 379764;
-var __ZTSPb = Module['__ZTSPb'] = 379772;
-var __ZTIPb = Module['__ZTIPb'] = 379776;
-var __ZTSPKb = Module['__ZTSPKb'] = 379792;
-var __ZTIPKb = Module['__ZTIPKb'] = 379796;
-var __ZTSw = Module['__ZTSw'] = 379812;
-var __ZTIw = Module['__ZTIw'] = 379816;
-var __ZTSPw = Module['__ZTSPw'] = 379824;
-var __ZTIPw = Module['__ZTIPw'] = 379828;
-var __ZTSPKw = Module['__ZTSPKw'] = 379844;
-var __ZTIPKw = Module['__ZTIPKw'] = 379848;
-var __ZTSc = Module['__ZTSc'] = 379864;
-var __ZTIc = Module['__ZTIc'] = 379868;
-var __ZTSPc = Module['__ZTSPc'] = 379876;
-var __ZTIPc = Module['__ZTIPc'] = 379880;
-var __ZTSPKc = Module['__ZTSPKc'] = 379896;
-var __ZTIPKc = Module['__ZTIPKc'] = 379900;
-var __ZTSh = Module['__ZTSh'] = 379916;
-var __ZTIh = Module['__ZTIh'] = 379920;
-var __ZTSPh = Module['__ZTSPh'] = 379928;
-var __ZTIPh = Module['__ZTIPh'] = 379932;
-var __ZTSPKh = Module['__ZTSPKh'] = 379948;
-var __ZTIPKh = Module['__ZTIPKh'] = 379952;
-var __ZTSa = Module['__ZTSa'] = 379968;
-var __ZTIa = Module['__ZTIa'] = 379972;
-var __ZTSPa = Module['__ZTSPa'] = 379980;
-var __ZTIPa = Module['__ZTIPa'] = 379984;
-var __ZTSPKa = Module['__ZTSPKa'] = 380000;
-var __ZTIPKa = Module['__ZTIPKa'] = 380004;
-var __ZTSs = Module['__ZTSs'] = 380020;
-var __ZTIs = Module['__ZTIs'] = 380024;
-var __ZTSPs = Module['__ZTSPs'] = 380032;
-var __ZTIPs = Module['__ZTIPs'] = 380036;
-var __ZTSPKs = Module['__ZTSPKs'] = 380052;
-var __ZTIPKs = Module['__ZTIPKs'] = 380056;
-var __ZTSt = Module['__ZTSt'] = 380072;
-var __ZTIt = Module['__ZTIt'] = 380076;
-var __ZTSPt = Module['__ZTSPt'] = 380084;
-var __ZTIPt = Module['__ZTIPt'] = 380088;
-var __ZTSPKt = Module['__ZTSPKt'] = 380104;
-var __ZTIPKt = Module['__ZTIPKt'] = 380108;
-var __ZTSi = Module['__ZTSi'] = 380124;
-var __ZTIi = Module['__ZTIi'] = 380128;
-var __ZTSPi = Module['__ZTSPi'] = 380136;
-var __ZTIPi = Module['__ZTIPi'] = 380140;
-var __ZTSPKi = Module['__ZTSPKi'] = 380156;
-var __ZTIPKi = Module['__ZTIPKi'] = 380160;
-var __ZTSj = Module['__ZTSj'] = 380176;
-var __ZTIj = Module['__ZTIj'] = 380180;
-var __ZTSPj = Module['__ZTSPj'] = 380188;
-var __ZTIPj = Module['__ZTIPj'] = 380192;
-var __ZTSPKj = Module['__ZTSPKj'] = 380208;
-var __ZTIPKj = Module['__ZTIPKj'] = 380212;
-var __ZTSl = Module['__ZTSl'] = 380228;
-var __ZTIl = Module['__ZTIl'] = 380232;
-var __ZTSPl = Module['__ZTSPl'] = 380240;
-var __ZTIPl = Module['__ZTIPl'] = 380244;
-var __ZTSPKl = Module['__ZTSPKl'] = 380260;
-var __ZTIPKl = Module['__ZTIPKl'] = 380264;
-var __ZTSm = Module['__ZTSm'] = 380280;
-var __ZTIm = Module['__ZTIm'] = 380284;
-var __ZTSPm = Module['__ZTSPm'] = 380292;
-var __ZTIPm = Module['__ZTIPm'] = 380296;
-var __ZTSPKm = Module['__ZTSPKm'] = 380312;
-var __ZTIPKm = Module['__ZTIPKm'] = 380316;
-var __ZTSx = Module['__ZTSx'] = 380332;
-var __ZTIx = Module['__ZTIx'] = 380336;
-var __ZTSPx = Module['__ZTSPx'] = 380344;
-var __ZTIPx = Module['__ZTIPx'] = 380348;
-var __ZTSPKx = Module['__ZTSPKx'] = 380364;
-var __ZTIPKx = Module['__ZTIPKx'] = 380368;
-var __ZTSy = Module['__ZTSy'] = 380384;
-var __ZTIy = Module['__ZTIy'] = 380388;
-var __ZTSPy = Module['__ZTSPy'] = 380396;
-var __ZTIPy = Module['__ZTIPy'] = 380400;
-var __ZTSPKy = Module['__ZTSPKy'] = 380416;
-var __ZTIPKy = Module['__ZTIPKy'] = 380420;
-var __ZTSn = Module['__ZTSn'] = 380436;
-var __ZTIn = Module['__ZTIn'] = 380440;
-var __ZTSPn = Module['__ZTSPn'] = 380448;
-var __ZTIPn = Module['__ZTIPn'] = 380452;
-var __ZTSPKn = Module['__ZTSPKn'] = 380468;
-var __ZTIPKn = Module['__ZTIPKn'] = 380472;
-var __ZTSo = Module['__ZTSo'] = 380488;
-var __ZTIo = Module['__ZTIo'] = 380492;
-var __ZTSPo = Module['__ZTSPo'] = 380500;
-var __ZTIPo = Module['__ZTIPo'] = 380504;
-var __ZTSPKo = Module['__ZTSPKo'] = 380520;
-var __ZTIPKo = Module['__ZTIPKo'] = 380524;
-var __ZTSDh = Module['__ZTSDh'] = 380540;
-var __ZTIDh = Module['__ZTIDh'] = 380544;
-var __ZTSPDh = Module['__ZTSPDh'] = 380552;
-var __ZTIPDh = Module['__ZTIPDh'] = 380556;
-var __ZTSPKDh = Module['__ZTSPKDh'] = 380572;
-var __ZTIPKDh = Module['__ZTIPKDh'] = 380580;
-var __ZTSf = Module['__ZTSf'] = 380596;
-var __ZTIf = Module['__ZTIf'] = 380600;
-var __ZTSPf = Module['__ZTSPf'] = 380608;
-var __ZTIPf = Module['__ZTIPf'] = 380612;
-var __ZTSPKf = Module['__ZTSPKf'] = 380628;
-var __ZTIPKf = Module['__ZTIPKf'] = 380632;
-var __ZTSd = Module['__ZTSd'] = 380648;
-var __ZTId = Module['__ZTId'] = 380652;
-var __ZTSPd = Module['__ZTSPd'] = 380660;
-var __ZTIPd = Module['__ZTIPd'] = 380664;
-var __ZTSPKd = Module['__ZTSPKd'] = 380680;
-var __ZTIPKd = Module['__ZTIPKd'] = 380684;
-var __ZTSe = Module['__ZTSe'] = 380700;
-var __ZTIe = Module['__ZTIe'] = 380704;
-var __ZTSPe = Module['__ZTSPe'] = 380712;
-var __ZTIPe = Module['__ZTIPe'] = 380716;
-var __ZTSPKe = Module['__ZTSPKe'] = 380732;
-var __ZTIPKe = Module['__ZTIPKe'] = 380736;
-var __ZTSg = Module['__ZTSg'] = 380752;
-var __ZTIg = Module['__ZTIg'] = 380756;
-var __ZTSPg = Module['__ZTSPg'] = 380764;
-var __ZTIPg = Module['__ZTIPg'] = 380768;
-var __ZTSPKg = Module['__ZTSPKg'] = 380784;
-var __ZTIPKg = Module['__ZTIPKg'] = 380788;
-var __ZTSDu = Module['__ZTSDu'] = 380804;
-var __ZTIDu = Module['__ZTIDu'] = 380808;
-var __ZTSPDu = Module['__ZTSPDu'] = 380816;
-var __ZTIPDu = Module['__ZTIPDu'] = 380820;
-var __ZTSPKDu = Module['__ZTSPKDu'] = 380836;
-var __ZTIPKDu = Module['__ZTIPKDu'] = 380844;
-var __ZTSDs = Module['__ZTSDs'] = 380860;
-var __ZTIDs = Module['__ZTIDs'] = 380864;
-var __ZTSPDs = Module['__ZTSPDs'] = 380872;
-var __ZTIPDs = Module['__ZTIPDs'] = 380876;
-var __ZTSPKDs = Module['__ZTSPKDs'] = 380892;
-var __ZTIPKDs = Module['__ZTIPKDs'] = 380900;
-var __ZTSDi = Module['__ZTSDi'] = 380916;
-var __ZTIDi = Module['__ZTIDi'] = 380920;
-var __ZTSPDi = Module['__ZTSPDi'] = 380928;
-var __ZTIPDi = Module['__ZTIPDi'] = 380932;
-var __ZTSPKDi = Module['__ZTSPKDi'] = 380948;
-var __ZTIPKDi = Module['__ZTIPKDi'] = 380956;
-var __ZTVN10__cxxabiv117__array_type_infoE = Module['__ZTVN10__cxxabiv117__array_type_infoE'] = 380972;
-var __ZTIN10__cxxabiv117__array_type_infoE = Module['__ZTIN10__cxxabiv117__array_type_infoE'] = 381036;
-var __ZTSN10__cxxabiv117__array_type_infoE = Module['__ZTSN10__cxxabiv117__array_type_infoE'] = 381000;
-var __ZTVN10__cxxabiv120__function_type_infoE = Module['__ZTVN10__cxxabiv120__function_type_infoE'] = 381048;
-var __ZTVN10__cxxabiv116__enum_type_infoE = Module['__ZTVN10__cxxabiv116__enum_type_infoE'] = 381076;
-var __ZTIN10__cxxabiv116__enum_type_infoE = Module['__ZTIN10__cxxabiv116__enum_type_infoE'] = 381140;
-var __ZTSN10__cxxabiv116__enum_type_infoE = Module['__ZTSN10__cxxabiv116__enum_type_infoE'] = 381104;
-var __ZTIN10__cxxabiv120__si_class_type_infoE = Module['__ZTIN10__cxxabiv120__si_class_type_infoE'] = 381272;
-var __ZTSN10__cxxabiv120__si_class_type_infoE = Module['__ZTSN10__cxxabiv120__si_class_type_infoE'] = 381232;
-var __ZTIN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTIN10__cxxabiv121__vmi_class_type_infoE'] = 381364;
-var __ZTSN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTSN10__cxxabiv121__vmi_class_type_infoE'] = 381324;
-var __ZTVN10__cxxabiv117__pbase_type_infoE = Module['__ZTVN10__cxxabiv117__pbase_type_infoE'] = 381376;
-var __ZTVN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTVN10__cxxabiv129__pointer_to_member_type_infoE'] = 381432;
-var __ZTVSt9bad_alloc = Module['__ZTVSt9bad_alloc'] = 381460;
-var __ZTVSt20bad_array_new_length = Module['__ZTVSt20bad_array_new_length'] = 381480;
-var __ZTISt9bad_alloc = Module['__ZTISt9bad_alloc'] = 381612;
-var __ZTSSt9exception = Module['__ZTSSt9exception'] = 381520;
-var __ZTVSt13bad_exception = Module['__ZTVSt13bad_exception'] = 381544;
-var __ZTISt13bad_exception = Module['__ZTISt13bad_exception'] = 381584;
-var __ZTSSt13bad_exception = Module['__ZTSSt13bad_exception'] = 381564;
-var __ZTSSt9bad_alloc = Module['__ZTSSt9bad_alloc'] = 381596;
-var __ZTSSt20bad_array_new_length = Module['__ZTSSt20bad_array_new_length'] = 381624;
-var __ZTVSt12domain_error = Module['__ZTVSt12domain_error'] = 381704;
-var __ZTISt12domain_error = Module['__ZTISt12domain_error'] = 381772;
-var __ZTSSt12domain_error = Module['__ZTSSt12domain_error'] = 381724;
-var __ZTSSt11logic_error = Module['__ZTSSt11logic_error'] = 381741;
-var __ZTVSt16invalid_argument = Module['__ZTVSt16invalid_argument'] = 381784;
-var __ZTISt16invalid_argument = Module['__ZTISt16invalid_argument'] = 381828;
-var __ZTSSt16invalid_argument = Module['__ZTSSt16invalid_argument'] = 381804;
-var __ZTSSt12length_error = Module['__ZTSSt12length_error'] = 381860;
-var __ZTVSt12out_of_range = Module['__ZTVSt12out_of_range'] = 381892;
-var __ZTISt12out_of_range = Module['__ZTISt12out_of_range'] = 381932;
-var __ZTSSt12out_of_range = Module['__ZTSSt12out_of_range'] = 381912;
-var __ZTVSt11range_error = Module['__ZTVSt11range_error'] = 381944;
-var __ZTISt11range_error = Module['__ZTISt11range_error'] = 382012;
-var __ZTSSt11range_error = Module['__ZTSSt11range_error'] = 381964;
-var __ZTSSt13runtime_error = Module['__ZTSSt13runtime_error'] = 381980;
-var __ZTVSt14overflow_error = Module['__ZTVSt14overflow_error'] = 382024;
-var __ZTISt14overflow_error = Module['__ZTISt14overflow_error'] = 382064;
-var __ZTSSt14overflow_error = Module['__ZTSSt14overflow_error'] = 382044;
-var __ZTVSt15underflow_error = Module['__ZTVSt15underflow_error'] = 382076;
-var __ZTISt15underflow_error = Module['__ZTISt15underflow_error'] = 382116;
-var __ZTSSt15underflow_error = Module['__ZTSSt15underflow_error'] = 382096;
-var __ZTVSt8bad_cast = Module['__ZTVSt8bad_cast'] = 382128;
-var __ZTVSt10bad_typeid = Module['__ZTVSt10bad_typeid'] = 382148;
-var __ZTISt10bad_typeid = Module['__ZTISt10bad_typeid'] = 382248;
-var __ZTVSt9type_info = Module['__ZTVSt9type_info'] = 382168;
-var __ZTSSt9type_info = Module['__ZTSSt9type_info'] = 382184;
-var __ZTSSt8bad_cast = Module['__ZTSSt8bad_cast'] = 382208;
-var __ZTSSt10bad_typeid = Module['__ZTSSt10bad_typeid'] = 382232;
-var _in6addr_any = Module['_in6addr_any'] = 382260;
-var _in6addr_loopback = Module['_in6addr_loopback'] = 382276;
+var _graph = Module['_graph'] = 382664;
+var _camera = Module['_camera'] = 382688;
+var _universe = Module['_universe'] = 382912;
+var _projection = Module['_projection'] = 382780;
+var _view = Module['_view'] = 382844;
+var __ZNSt3__24coutE = Module['__ZNSt3__24coutE'] = 422580;
+var _yLocation = Module['_yLocation'] = 382660;
+var _mouseDown = Module['_mouseDown'] = 382776;
+var _mouseDownFirst = Module['_mouseDownFirst'] = 382777;
+var _loop = Module['_loop'] = 382976;
+var _stderr = Module['_stderr'] = 216416;
+var _autoRotateX = Module['_autoRotateX'] = 382778;
+var _mouseX = Module['_mouseX'] = 382752;
+var _mouseY = Module['_mouseY'] = 382760;
+var __ZTISt12length_error = Module['__ZTISt12length_error'] = 381240;
+var __ZTVSt12length_error = Module['__ZTVSt12length_error'] = 381200;
+var __ZTISt20bad_array_new_length = Module['__ZTISt20bad_array_new_length'] = 381012;
+var __ZNSt3__25ctypeIcE2idE = Module['__ZNSt3__25ctypeIcE2idE'] = 423648;
+var __ZTINSt3__217bad_function_callE = Module['__ZTINSt3__217bad_function_callE'] = 351924;
+var __ZTVNSt3__217bad_function_callE = Module['__ZTVNSt3__217bad_function_callE'] = 351876;
+var __ZTVSt9exception = Module['__ZTVSt9exception'] = 380860;
+var __ZTVNSt3__210__function6__baseIFvvEEE = Module['__ZTVNSt3__210__function6__baseIFvvEEE'] = 24968;
+var _n_iterations = Module['_n_iterations'] = 381664;
+var _movingUp = Module['_movingUp'] = 382656;
+var _mouseScroll = Module['_mouseScroll'] = 382768;
+var __ZTSNSt3__210__function6__baseIFvvEEE = Module['__ZTSNSt3__210__function6__baseIFvvEEE'] = 24912;
+var __ZTINSt3__210__function6__baseIFvvEEE = Module['__ZTINSt3__210__function6__baseIFvvEEE'] = 24948;
+var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 380512;
+var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 380552;
+var ___environ = Module['___environ'] = 383004;
+var ____environ = Module['____environ'] = 383004;
+var __environ = Module['__environ'] = 383004;
+var _environ = Module['_environ'] = 383004;
+var _timezone = Module['_timezone'] = 383544;
+var _daylight = Module['_daylight'] = 383548;
+var _tzname = Module['_tzname'] = 383552;
+var ___progname = Module['___progname'] = 384768;
+var _optind = Module['_optind'] = 381688;
+var ___optreset = Module['___optreset'] = 383732;
+var ___optpos = Module['___optpos'] = 383736;
+var _optarg = Module['_optarg'] = 383740;
+var _optopt = Module['_optopt'] = 383744;
+var _opterr = Module['_opterr'] = 381692;
+var _optreset = Module['_optreset'] = 383732;
+var _h_errno = Module['_h_errno'] = 383868;
+var ___signgam = Module['___signgam'] = 399068;
+var __ns_flagdata = Module['__ns_flagdata'] = 211040;
+var ___progname_full = Module['___progname_full'] = 384772;
+var _program_invocation_short_name = Module['_program_invocation_short_name'] = 384768;
+var _program_invocation_name = Module['_program_invocation_name'] = 384772;
+var ___sig_pending = Module['___sig_pending'] = 389120;
+var ___sig_actions = Module['___sig_actions'] = 389968;
+var _signgam = Module['_signgam'] = 399068;
+var _stdin = Module['_stdin'] = 216420;
+var _stdout = Module['_stdout'] = 216424;
+var ___THREW__ = Module['___THREW__'] = 405872;
+var ___threwValue = Module['___threwValue'] = 405876;
+var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 230352;
+var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 230392;
+var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 230372;
+var __ZTISt8bad_cast = Module['__ZTISt8bad_cast'] = 381580;
+var __ZTVNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTVNSt12experimental15fundamentals_v112bad_any_castE'] = 230404;
+var __ZTINSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTINSt12experimental15fundamentals_v112bad_any_castE'] = 230476;
+var __ZTSNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTSNSt12experimental15fundamentals_v112bad_any_castE'] = 230424;
+var __ZNSt3__212placeholders2_1E = Module['__ZNSt3__212placeholders2_1E'] = 230488;
+var __ZNSt3__212placeholders2_2E = Module['__ZNSt3__212placeholders2_2E'] = 230489;
+var __ZNSt3__212placeholders2_3E = Module['__ZNSt3__212placeholders2_3E'] = 230490;
+var __ZNSt3__212placeholders2_4E = Module['__ZNSt3__212placeholders2_4E'] = 230491;
+var __ZNSt3__212placeholders2_5E = Module['__ZNSt3__212placeholders2_5E'] = 230492;
+var __ZNSt3__212placeholders2_6E = Module['__ZNSt3__212placeholders2_6E'] = 230493;
+var __ZNSt3__212placeholders2_7E = Module['__ZNSt3__212placeholders2_7E'] = 230494;
+var __ZNSt3__212placeholders2_8E = Module['__ZNSt3__212placeholders2_8E'] = 230495;
+var __ZNSt3__212placeholders2_9E = Module['__ZNSt3__212placeholders2_9E'] = 230496;
+var __ZNSt3__212placeholders3_10E = Module['__ZNSt3__212placeholders3_10E'] = 230497;
+var __ZNSt3__213__DIGIT_TABLEE = Module['__ZNSt3__213__DIGIT_TABLEE'] = 230512;
+var __ZNSt3__26__itoa16_Charconv_digitsE = Module['__ZNSt3__26__itoa16_Charconv_digitsE'] = 230720;
+var __ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE'] = 230816;
+var __ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE'] = 231072;
+var __ZNSt3__225_General_precision_tablesIfE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIfE6_Max_PE'] = 231248;
+var __ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE'] = 231264;
+var __ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE'] = 232832;
+var __ZNSt3__225_General_precision_tablesIdE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIdE6_Max_PE'] = 235344;
+var __ZNSt3__26chrono12system_clock9is_steadyE = Module['__ZNSt3__26chrono12system_clock9is_steadyE'] = 235348;
+var __ZNSt3__26chrono12steady_clock9is_steadyE = Module['__ZNSt3__26chrono12steady_clock9is_steadyE'] = 235349;
+var __ZNSt3__214__POW10_OFFSETE = Module['__ZNSt3__214__POW10_OFFSETE'] = 264736;
+var __ZNSt3__213__POW10_SPLITE = Module['__ZNSt3__213__POW10_SPLITE'] = 235360;
+var __ZNSt3__213__MIN_BLOCK_2E = Module['__ZNSt3__213__MIN_BLOCK_2E'] = 264864;
+var __ZNSt3__216__POW10_OFFSET_2E = Module['__ZNSt3__216__POW10_OFFSET_2E'] = 264944;
+var __ZNSt3__215__POW10_SPLIT_2E = Module['__ZNSt3__215__POW10_SPLIT_2E'] = 265088;
+var __ZNSt3__223__DOUBLE_POW5_INV_SPLITE = Module['__ZNSt3__223__DOUBLE_POW5_INV_SPLITE'] = 340288;
+var __ZNSt3__219__DOUBLE_POW5_SPLITE = Module['__ZNSt3__219__DOUBLE_POW5_SPLITE'] = 344960;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment'] = 350176;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa'] = 350496;
+var __ZNSt3__223__libcpp_debug_functionE = Module['__ZNSt3__223__libcpp_debug_functionE'] = 382300;
+var __ZTVNSt3__28__c_nodeE = Module['__ZTVNSt3__28__c_nodeE'] = 350680;
+var __ZTINSt3__28__c_nodeE = Module['__ZTINSt3__28__c_nodeE'] = 350732;
+var __ZTSNSt3__28__c_nodeE = Module['__ZTSNSt3__28__c_nodeE'] = 350712;
+var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 350740;
+var __ZTVNSt3__219__shared_weak_countE = Module['__ZTVNSt3__219__shared_weak_countE'] = 366892;
+var __ZTVNSt3__214__shared_countE = Module['__ZTVNSt3__214__shared_countE'] = 366836;
+var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 350868;
+var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 350856;
+var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 350768;
+var __ZTINSt3__219__shared_weak_countE = Module['__ZTINSt3__219__shared_weak_countE'] = 366952;
+var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351016;
+var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 350896;
+var __ZTVSt16nested_exception = Module['__ZTVSt16nested_exception'] = 351040;
+var __ZTISt16nested_exception = Module['__ZTISt16nested_exception'] = 351080;
+var __ZTSSt16nested_exception = Module['__ZTSSt16nested_exception'] = 351056;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment'] = 351728;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa'] = 351776;
+var __ZNSt3__222__FLOAT_POW5_INV_SPLITE = Module['__ZNSt3__222__FLOAT_POW5_INV_SPLITE'] = 351088;
+var __ZNSt3__218__FLOAT_POW5_SPLITE = Module['__ZNSt3__218__FLOAT_POW5_SPLITE'] = 351344;
+var __ZTVNSt3__212format_errorE = Module['__ZTVNSt3__212format_errorE'] = 351820;
+var __ZTINSt3__212format_errorE = Module['__ZTINSt3__212format_errorE'] = 351864;
+var __ZTSNSt3__212format_errorE = Module['__ZTSNSt3__212format_errorE'] = 351840;
+var __ZTISt13runtime_error = Module['__ZTISt13runtime_error'] = 381360;
+var __ZTSNSt3__217bad_function_callE = Module['__ZTSNSt3__217bad_function_callE'] = 351896;
+var __ZTISt9exception = Module['__ZTISt9exception'] = 380896;
+var __ZTVNSt3__212future_errorE = Module['__ZTVNSt3__212future_errorE'] = 351972;
+var __ZTVNSt3__217__assoc_sub_stateE = Module['__ZTVNSt3__217__assoc_sub_stateE'] = 351992;
+var __ZTVNSt3__223__future_error_categoryE = Module['__ZTVNSt3__223__future_error_categoryE'] = 351936;
+var __ZTINSt3__223__future_error_categoryE = Module['__ZTINSt3__223__future_error_categoryE'] = 352092;
+var __ZTINSt3__212future_errorE = Module['__ZTINSt3__212future_errorE'] = 352128;
+var __ZTINSt3__217__assoc_sub_stateE = Module['__ZTINSt3__217__assoc_sub_stateE'] = 352044;
+var __ZTSNSt3__217__assoc_sub_stateE = Module['__ZTSNSt3__217__assoc_sub_stateE'] = 352016;
+var __ZTINSt3__214__shared_countE = Module['__ZTINSt3__214__shared_countE'] = 366884;
+var __ZTSNSt3__223__future_error_categoryE = Module['__ZTSNSt3__223__future_error_categoryE'] = 352056;
+var __ZTINSt3__212__do_messageE = Module['__ZTINSt3__212__do_messageE'] = 369852;
+var __ZTSNSt3__212future_errorE = Module['__ZTSNSt3__212future_errorE'] = 352104;
+var __ZTISt11logic_error = Module['__ZTISt11logic_error'] = 381120;
+var __ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 352544;
+var __ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 352648;
+var __ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 352696;
+var __ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423476;
+var __ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 352764;
+var __ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 352792;
+var __ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 352896;
+var __ZNSt3__25ctypeIwE2idE = Module['__ZNSt3__25ctypeIwE2idE'] = 423640;
+var __ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 352944;
+var __ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423484;
+var __ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 352952;
+var __ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 353016;
+var __ZNSt3__27codecvtIcc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIcc11__mbstate_tE2idE'] = 423656;
+var __ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353932;
+var __ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354236;
+var __ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354416;
+var __ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 354596;
+var __ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 354752;
+var __ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423460;
+var __ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423468;
+var __ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353204;
+var __ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 352608;
+var __ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353260;
+var __ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 352656;
+var __ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353332;
+var __ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 352704;
+var __ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353484;
+var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 353356;
+var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 353396;
+var __ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 353640;
+var __ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 352856;
+var __ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353696;
+var __ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 352904;
+var __ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353768;
+var __ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353860;
+var __ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 354916;
+var __ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353080;
+var __ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353140;
+var __ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353096;
+var __ZTINSt3__28ios_baseE = Module['__ZTINSt3__28ios_baseE'] = 355132;
+var __ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353152;
+var __ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353212;
+var __ZTVN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTVN10__cxxabiv121__vmi_class_type_infoE'] = 380644;
+var __ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353284;
+var __ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353436;
+var __ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 353516;
+var __ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 353576;
+var __ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 353532;
+var __ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 353588;
+var __ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353648;
+var __ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353720;
+var __ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353792;
+var __ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353872;
+var __ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354184;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE'] = 353972;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354032;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 354072;
+var __ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354112;
+var __ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354196;
+var __ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354364;
+var __ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 354252;
+var __ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354292;
+var __ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354376;
+var __ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354544;
+var __ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354432;
+var __ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354472;
+var __ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 354556;
+var __ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 354700;
+var __ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354612;
+var __ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 354652;
+var __ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 354712;
+var __ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 354856;
+var __ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 354768;
+var __ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 354808;
+var __ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 354868;
+var __ZTVNSt3__28ios_base7failureE = Module['__ZTVNSt3__28ios_base7failureE'] = 354964;
+var __ZNSt3__28ios_base9__xindex_E = Module['__ZNSt3__28ios_base9__xindex_E'] = 422392;
+var __ZTVNSt3__28ios_baseE = Module['__ZTVNSt3__28ios_baseE'] = 355096;
+var __ZTVNSt3__219__iostream_categoryE = Module['__ZTVNSt3__219__iostream_categoryE'] = 354928;
+var __ZTINSt3__219__iostream_categoryE = Module['__ZTINSt3__219__iostream_categoryE'] = 355172;
+var __ZTINSt3__28ios_base7failureE = Module['__ZTINSt3__28ios_base7failureE'] = 355212;
+var __ZNSt3__28ios_base9boolalphaE = Module['__ZNSt3__28ios_base9boolalphaE'] = 354984;
+var __ZNSt3__28ios_base3decE = Module['__ZNSt3__28ios_base3decE'] = 354988;
+var __ZNSt3__28ios_base5fixedE = Module['__ZNSt3__28ios_base5fixedE'] = 354992;
+var __ZNSt3__28ios_base3hexE = Module['__ZNSt3__28ios_base3hexE'] = 354996;
+var __ZNSt3__28ios_base8internalE = Module['__ZNSt3__28ios_base8internalE'] = 355000;
+var __ZNSt3__28ios_base4leftE = Module['__ZNSt3__28ios_base4leftE'] = 355004;
+var __ZNSt3__28ios_base3octE = Module['__ZNSt3__28ios_base3octE'] = 355008;
+var __ZNSt3__28ios_base5rightE = Module['__ZNSt3__28ios_base5rightE'] = 355012;
+var __ZNSt3__28ios_base10scientificE = Module['__ZNSt3__28ios_base10scientificE'] = 355016;
+var __ZNSt3__28ios_base8showbaseE = Module['__ZNSt3__28ios_base8showbaseE'] = 355020;
+var __ZNSt3__28ios_base9showpointE = Module['__ZNSt3__28ios_base9showpointE'] = 355024;
+var __ZNSt3__28ios_base7showposE = Module['__ZNSt3__28ios_base7showposE'] = 355028;
+var __ZNSt3__28ios_base6skipwsE = Module['__ZNSt3__28ios_base6skipwsE'] = 355032;
+var __ZNSt3__28ios_base7unitbufE = Module['__ZNSt3__28ios_base7unitbufE'] = 355036;
+var __ZNSt3__28ios_base9uppercaseE = Module['__ZNSt3__28ios_base9uppercaseE'] = 355040;
+var __ZNSt3__28ios_base11adjustfieldE = Module['__ZNSt3__28ios_base11adjustfieldE'] = 355044;
+var __ZNSt3__28ios_base9basefieldE = Module['__ZNSt3__28ios_base9basefieldE'] = 355048;
+var __ZNSt3__28ios_base10floatfieldE = Module['__ZNSt3__28ios_base10floatfieldE'] = 355052;
+var __ZNSt3__28ios_base6badbitE = Module['__ZNSt3__28ios_base6badbitE'] = 355056;
+var __ZNSt3__28ios_base6eofbitE = Module['__ZNSt3__28ios_base6eofbitE'] = 355060;
+var __ZNSt3__28ios_base7failbitE = Module['__ZNSt3__28ios_base7failbitE'] = 355064;
+var __ZNSt3__28ios_base7goodbitE = Module['__ZNSt3__28ios_base7goodbitE'] = 355068;
+var __ZNSt3__28ios_base3appE = Module['__ZNSt3__28ios_base3appE'] = 355072;
+var __ZNSt3__28ios_base3ateE = Module['__ZNSt3__28ios_base3ateE'] = 355076;
+var __ZNSt3__28ios_base6binaryE = Module['__ZNSt3__28ios_base6binaryE'] = 355080;
+var __ZNSt3__28ios_base2inE = Module['__ZNSt3__28ios_base2inE'] = 355084;
+var __ZNSt3__28ios_base3outE = Module['__ZNSt3__28ios_base3outE'] = 355088;
+var __ZNSt3__28ios_base5truncE = Module['__ZNSt3__28ios_base5truncE'] = 355092;
+var __ZTSNSt3__28ios_baseE = Module['__ZTSNSt3__28ios_baseE'] = 355112;
+var __ZTSNSt3__219__iostream_categoryE = Module['__ZTSNSt3__219__iostream_categoryE'] = 355140;
+var __ZTSNSt3__28ios_base7failureE = Module['__ZTSNSt3__28ios_base7failureE'] = 355184;
+var __ZTINSt3__212system_errorE = Module['__ZTINSt3__212system_errorE'] = 369984;
+var __ZNSt3__219__start_std_streamsE = Module['__ZNSt3__219__start_std_streamsE'] = 423084;
+var __ZNSt3__23cinE = Module['__ZNSt3__23cinE'] = 422404;
+var __ZNSt3__24cerrE = Module['__ZNSt3__24cerrE'] = 422748;
+var __ZNSt3__24clogE = Module['__ZNSt3__24clogE'] = 422916;
+var __ZNSt3__24wcinE = Module['__ZNSt3__24wcinE'] = 422492;
+var __ZNSt3__25wcoutE = Module['__ZNSt3__25wcoutE'] = 422664;
+var __ZNSt3__25wcerrE = Module['__ZNSt3__25wcerrE'] = 422832;
+var __ZNSt3__25wclogE = Module['__ZNSt3__25wclogE'] = 423000;
+var __ZTVNSt3__210__stdinbufIcEE = Module['__ZTVNSt3__210__stdinbufIcEE'] = 355224;
+var __ZTVNSt3__211__stdoutbufIcEE = Module['__ZTVNSt3__211__stdoutbufIcEE'] = 355324;
+var __ZTVNSt3__210__stdinbufIwEE = Module['__ZTVNSt3__210__stdinbufIwEE'] = 355428;
+var __ZTVNSt3__211__stdoutbufIwEE = Module['__ZTVNSt3__211__stdoutbufIwEE'] = 355528;
+var __ZNSt3__27codecvtIwc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIwc11__mbstate_tE2idE'] = 423664;
+var __ZTINSt3__210__stdinbufIcEE = Module['__ZTINSt3__210__stdinbufIcEE'] = 355312;
+var __ZTSNSt3__210__stdinbufIcEE = Module['__ZTSNSt3__210__stdinbufIcEE'] = 355288;
+var __ZTINSt3__211__stdoutbufIcEE = Module['__ZTINSt3__211__stdoutbufIcEE'] = 355416;
+var __ZTSNSt3__211__stdoutbufIcEE = Module['__ZTSNSt3__211__stdoutbufIcEE'] = 355388;
+var __ZTINSt3__210__stdinbufIwEE = Module['__ZTINSt3__210__stdinbufIwEE'] = 355516;
+var __ZTSNSt3__210__stdinbufIwEE = Module['__ZTSNSt3__210__stdinbufIwEE'] = 355492;
+var __ZTINSt3__211__stdoutbufIwEE = Module['__ZTINSt3__211__stdoutbufIwEE'] = 355620;
+var __ZTSNSt3__211__stdoutbufIwEE = Module['__ZTSNSt3__211__stdoutbufIwEE'] = 355592;
+var __ZNSt3__28numpunctIcE2idE = Module['__ZNSt3__28numpunctIcE2idE'] = 423704;
+var __ZNSt3__214__num_get_base5__srcE = Module['__ZNSt3__214__num_get_base5__srcE'] = 355632;
+var __ZNSt3__28numpunctIwE2idE = Module['__ZNSt3__28numpunctIwE2idE'] = 423712;
+var __ZNSt3__210moneypunctIcLb1EE2idE = Module['__ZNSt3__210moneypunctIcLb1EE2idE'] = 423532;
+var __ZNSt3__210moneypunctIcLb0EE2idE = Module['__ZNSt3__210moneypunctIcLb0EE2idE'] = 423524;
+var __ZNSt3__210moneypunctIwLb1EE2idE = Module['__ZNSt3__210moneypunctIwLb1EE2idE'] = 423548;
+var __ZNSt3__210moneypunctIwLb0EE2idE = Module['__ZNSt3__210moneypunctIwLb0EE2idE'] = 423540;
+var __ZTVNSt3__26locale5__impE = Module['__ZTVNSt3__26locale5__impE'] = 355908;
+var __ZTVNSt3__26locale5facetE = Module['__ZTVNSt3__26locale5facetE'] = 357708;
+var __ZNSt3__27collateIcE2idE = Module['__ZNSt3__27collateIcE2idE'] = 423444;
+var __ZNSt3__27collateIwE2idE = Module['__ZNSt3__27collateIwE2idE'] = 423452;
+var __ZNSt3__27codecvtIDsc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsc11__mbstate_tE2idE'] = 423672;
+var __ZNSt3__27codecvtIDic11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDic11__mbstate_tE2idE'] = 423688;
+var __ZNSt3__27codecvtIDsDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsDu11__mbstate_tE2idE'] = 423680;
+var __ZNSt3__27codecvtIDiDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDiDu11__mbstate_tE2idE'] = 423696;
+var __ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423556;
+var __ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423564;
+var __ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423572;
+var __ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423580;
+var __ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423492;
+var __ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423500;
+var __ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 423508;
+var __ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 423516;
+var __ZNSt3__28messagesIcE2idE = Module['__ZNSt3__28messagesIcE2idE'] = 423588;
+var __ZNSt3__28messagesIwE2idE = Module['__ZNSt3__28messagesIwE2idE'] = 423596;
+var __ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365044;
+var __ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365148;
+var __ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365252;
+var __ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365356;
+var __ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 365460;
+var __ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 365564;
+var __ZTVNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb0EEE'] = 363612;
+var __ZTVNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb1EEE'] = 363716;
+var __ZTVNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb0EEE'] = 363820;
+var __ZTVNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb1EEE'] = 363924;
+var __ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362036;
+var __ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362332;
+var __ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362884;
+var __ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363000;
+var __ZTVNSt3__215messages_bynameIcEE = Module['__ZTVNSt3__215messages_bynameIcEE'] = 364892;
+var __ZTVNSt3__215messages_bynameIwEE = Module['__ZTVNSt3__215messages_bynameIwEE'] = 364968;
+var __ZNSt3__26locale2id9__next_idE = Module['__ZNSt3__26locale2id9__next_idE'] = 423636;
+var __ZTVNSt3__214collate_bynameIcEE = Module['__ZTVNSt3__214collate_bynameIcEE'] = 355928;
+var __ZTVNSt3__214collate_bynameIwEE = Module['__ZTVNSt3__214collate_bynameIwEE'] = 355960;
+var __ZTVNSt3__25ctypeIcEE = Module['__ZTVNSt3__25ctypeIcEE'] = 356044;
+var __ZTVNSt3__212ctype_bynameIcEE = Module['__ZTVNSt3__212ctype_bynameIcEE'] = 357120;
+var __ZTVNSt3__212ctype_bynameIwEE = Module['__ZTVNSt3__212ctype_bynameIwEE'] = 357172;
+var __ZTVNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIwc11__mbstate_tEE'] = 357240;
+var __ZTVNSt3__28numpunctIcEE = Module['__ZTVNSt3__28numpunctIcEE'] = 357288;
+var __ZTVNSt3__28numpunctIwEE = Module['__ZTVNSt3__28numpunctIwEE'] = 357328;
+var __ZTVNSt3__215numpunct_bynameIcEE = Module['__ZTVNSt3__215numpunct_bynameIcEE'] = 357412;
+var __ZTVNSt3__215numpunct_bynameIwEE = Module['__ZTVNSt3__215numpunct_bynameIwEE'] = 357452;
+var __ZTVNSt3__215__time_get_tempIcEE = Module['__ZTVNSt3__215__time_get_tempIcEE'] = 366624;
+var __ZTVNSt3__215__time_get_tempIwEE = Module['__ZTVNSt3__215__time_get_tempIwEE'] = 366720;
+var __ZTVNSt3__27collateIcEE = Module['__ZTVNSt3__27collateIcEE'] = 360584;
+var __ZTVNSt3__27collateIwEE = Module['__ZTVNSt3__27collateIwEE'] = 360616;
+var __ZTVNSt3__25ctypeIwEE = Module['__ZTVNSt3__25ctypeIwEE'] = 357764;
+var __ZTVNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIcc11__mbstate_tEE'] = 357912;
+var __ZTVNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsc11__mbstate_tEE'] = 358060;
+var __ZTVNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDic11__mbstate_tEE'] = 358292;
+var __ZTVNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358176;
+var __ZTVNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDiDu11__mbstate_tEE'] = 358408;
+var __ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360648;
+var __ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360892;
+var __ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361104;
+var __ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361336;
+var __ZTVNSt3__210moneypunctIcLb0EEE = Module['__ZTVNSt3__210moneypunctIcLb0EEE'] = 363116;
+var __ZTVNSt3__210moneypunctIcLb1EEE = Module['__ZTVNSt3__210moneypunctIcLb1EEE'] = 363264;
+var __ZTVNSt3__210moneypunctIwLb0EEE = Module['__ZTVNSt3__210moneypunctIwLb0EEE'] = 363380;
+var __ZTVNSt3__210moneypunctIwLb1EEE = Module['__ZTVNSt3__210moneypunctIwLb1EEE'] = 363496;
+var __ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364028;
+var __ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364192;
+var __ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364356;
+var __ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364520;
+var __ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361536;
+var __ZTVNSt3__220__time_get_c_storageIcEE = Module['__ZTVNSt3__220__time_get_c_storageIcEE'] = 366552;
+var __ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361800;
+var __ZTVNSt3__220__time_get_c_storageIwEE = Module['__ZTVNSt3__220__time_get_c_storageIwEE'] = 366588;
+var __ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362600;
+var __ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362756;
+var __ZTVNSt3__28messagesIcEE = Module['__ZTVNSt3__28messagesIcEE'] = 364684;
+var __ZTVNSt3__28messagesIwEE = Module['__ZTVNSt3__28messagesIwEE'] = 364804;
+var __ZNSt3__210moneypunctIcLb0EE4intlE = Module['__ZNSt3__210moneypunctIcLb0EE4intlE'] = 355872;
+var __ZNSt3__210moneypunctIcLb1EE4intlE = Module['__ZNSt3__210moneypunctIcLb1EE4intlE'] = 355873;
+var __ZNSt3__210moneypunctIwLb0EE4intlE = Module['__ZNSt3__210moneypunctIwLb0EE4intlE'] = 355874;
+var __ZNSt3__210moneypunctIwLb1EE4intlE = Module['__ZNSt3__210moneypunctIwLb1EE4intlE'] = 355875;
+var __ZNSt3__26locale4noneE = Module['__ZNSt3__26locale4noneE'] = 355876;
+var __ZNSt3__26locale7collateE = Module['__ZNSt3__26locale7collateE'] = 355880;
+var __ZNSt3__26locale5ctypeE = Module['__ZNSt3__26locale5ctypeE'] = 355884;
+var __ZNSt3__26locale8monetaryE = Module['__ZNSt3__26locale8monetaryE'] = 355888;
+var __ZNSt3__26locale7numericE = Module['__ZNSt3__26locale7numericE'] = 355892;
+var __ZNSt3__26locale4timeE = Module['__ZNSt3__26locale4timeE'] = 355896;
+var __ZNSt3__26locale8messagesE = Module['__ZNSt3__26locale8messagesE'] = 355900;
+var __ZNSt3__26locale3allE = Module['__ZNSt3__26locale3allE'] = 355904;
+var __ZTINSt3__26locale5__impE = Module['__ZTINSt3__26locale5__impE'] = 360136;
+var __ZTINSt3__214collate_bynameIcEE = Module['__ZTINSt3__214collate_bynameIcEE'] = 360208;
+var __ZTINSt3__214collate_bynameIwEE = Module['__ZTINSt3__214collate_bynameIwEE'] = 360280;
+var __ZNSt3__210ctype_base5spaceE = Module['__ZNSt3__210ctype_base5spaceE'] = 355992;
+var __ZNSt3__210ctype_base5printE = Module['__ZNSt3__210ctype_base5printE'] = 355996;
+var __ZNSt3__210ctype_base5cntrlE = Module['__ZNSt3__210ctype_base5cntrlE'] = 356000;
+var __ZNSt3__210ctype_base5upperE = Module['__ZNSt3__210ctype_base5upperE'] = 356004;
+var __ZNSt3__210ctype_base5lowerE = Module['__ZNSt3__210ctype_base5lowerE'] = 356008;
+var __ZNSt3__210ctype_base5alphaE = Module['__ZNSt3__210ctype_base5alphaE'] = 356012;
+var __ZNSt3__210ctype_base5digitE = Module['__ZNSt3__210ctype_base5digitE'] = 356016;
+var __ZNSt3__210ctype_base5punctE = Module['__ZNSt3__210ctype_base5punctE'] = 356020;
+var __ZNSt3__210ctype_base6xdigitE = Module['__ZNSt3__210ctype_base6xdigitE'] = 356024;
+var __ZNSt3__210ctype_base5blankE = Module['__ZNSt3__210ctype_base5blankE'] = 356028;
+var __ZNSt3__210ctype_base5alnumE = Module['__ZNSt3__210ctype_base5alnumE'] = 356032;
+var __ZNSt3__210ctype_base5graphE = Module['__ZNSt3__210ctype_base5graphE'] = 356036;
+var __ZNSt3__25ctypeIcE10table_sizeE = Module['__ZNSt3__25ctypeIcE10table_sizeE'] = 356040;
+var __ZTINSt3__25ctypeIcEE = Module['__ZTINSt3__25ctypeIcEE'] = 360312;
+var __ZTINSt3__212ctype_bynameIcEE = Module['__ZTINSt3__212ctype_bynameIcEE'] = 360372;
+var __ZTINSt3__212ctype_bynameIwEE = Module['__ZTINSt3__212ctype_bynameIwEE'] = 360412;
+var __ZTINSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIwc11__mbstate_tEE'] = 359020;
+var __ZTINSt3__28numpunctIcEE = Module['__ZTINSt3__28numpunctIcEE'] = 360448;
+var __ZTINSt3__28numpunctIwEE = Module['__ZTINSt3__28numpunctIwEE'] = 360484;
+var __ZTINSt3__215numpunct_bynameIcEE = Module['__ZTINSt3__215numpunct_bynameIcEE'] = 360528;
+var __ZTINSt3__215numpunct_bynameIwEE = Module['__ZTINSt3__215numpunct_bynameIwEE'] = 360572;
+var __ZTINSt3__26locale5facetE = Module['__ZTINSt3__26locale5facetE'] = 357752;
+var __ZTSNSt3__26locale5facetE = Module['__ZTSNSt3__26locale5facetE'] = 357728;
+var __ZTINSt3__25ctypeIwEE = Module['__ZTINSt3__25ctypeIwEE'] = 357880;
+var __ZTSNSt3__25ctypeIwEE = Module['__ZTSNSt3__25ctypeIwEE'] = 357832;
+var __ZTSNSt3__210ctype_baseE = Module['__ZTSNSt3__210ctype_baseE'] = 357850;
+var __ZTINSt3__210ctype_baseE = Module['__ZTINSt3__210ctype_baseE'] = 357872;
+var __ZTINSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIcc11__mbstate_tEE'] = 358028;
+var __ZTSNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIcc11__mbstate_tEE'] = 357960;
+var __ZTSNSt3__212codecvt_baseE = Module['__ZTSNSt3__212codecvt_baseE'] = 357994;
+var __ZTINSt3__212codecvt_baseE = Module['__ZTINSt3__212codecvt_baseE'] = 358020;
+var __ZTINSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsc11__mbstate_tEE'] = 358144;
+var __ZTSNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsc11__mbstate_tEE'] = 358108;
+var __ZTINSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsDu11__mbstate_tEE'] = 358260;
+var __ZTSNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358224;
+var __ZTINSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDic11__mbstate_tEE'] = 358376;
+var __ZTSNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDic11__mbstate_tEE'] = 358340;
+var __ZTINSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDiDu11__mbstate_tEE'] = 358492;
+var __ZTSNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDiDu11__mbstate_tEE'] = 358456;
+var __ZTVNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm16EEE'] = 358524;
+var __ZTINSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm16EEE'] = 358608;
+var __ZTSNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm16EEE'] = 358572;
+var __ZTVNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm32EEE'] = 358620;
+var __ZTINSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm32EEE'] = 358704;
+var __ZTSNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm32EEE'] = 358668;
+var __ZTVNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm16EEE'] = 358716;
+var __ZTINSt3__217__widen_from_utf8ILm16EEE = Module['__ZTINSt3__217__widen_from_utf8ILm16EEE'] = 358800;
+var __ZTSNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm16EEE'] = 358764;
+var __ZTVNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm32EEE'] = 358812;
+var __ZTINSt3__217__widen_from_utf8ILm32EEE = Module['__ZTINSt3__217__widen_from_utf8ILm32EEE'] = 358896;
+var __ZTSNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm32EEE'] = 358860;
+var __ZTVNSt3__214__codecvt_utf8IwEE = Module['__ZTVNSt3__214__codecvt_utf8IwEE'] = 358908;
+var __ZTINSt3__214__codecvt_utf8IwEE = Module['__ZTINSt3__214__codecvt_utf8IwEE'] = 359052;
+var __ZTSNSt3__214__codecvt_utf8IwEE = Module['__ZTSNSt3__214__codecvt_utf8IwEE'] = 358956;
+var __ZTSNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIwc11__mbstate_tEE'] = 358984;
+var __ZTVNSt3__214__codecvt_utf8IDsEE = Module['__ZTVNSt3__214__codecvt_utf8IDsEE'] = 359064;
+var __ZTINSt3__214__codecvt_utf8IDsEE = Module['__ZTINSt3__214__codecvt_utf8IDsEE'] = 359144;
+var __ZTSNSt3__214__codecvt_utf8IDsEE = Module['__ZTSNSt3__214__codecvt_utf8IDsEE'] = 359112;
+var __ZTVNSt3__214__codecvt_utf8IDiEE = Module['__ZTVNSt3__214__codecvt_utf8IDiEE'] = 359156;
+var __ZTINSt3__214__codecvt_utf8IDiEE = Module['__ZTINSt3__214__codecvt_utf8IDiEE'] = 359236;
+var __ZTSNSt3__214__codecvt_utf8IDiEE = Module['__ZTSNSt3__214__codecvt_utf8IDiEE'] = 359204;
+var __ZTVNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb0EEE'] = 359248;
+var __ZTINSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb0EEE'] = 359332;
+var __ZTSNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb0EEE'] = 359296;
+var __ZTVNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb1EEE'] = 359344;
+var __ZTINSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb1EEE'] = 359428;
+var __ZTSNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb1EEE'] = 359392;
+var __ZTVNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb0EEE'] = 359440;
+var __ZTINSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb0EEE'] = 359524;
+var __ZTSNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb0EEE'] = 359488;
+var __ZTVNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb1EEE'] = 359536;
+var __ZTINSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb1EEE'] = 359620;
+var __ZTSNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb1EEE'] = 359584;
+var __ZTVNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb0EEE'] = 359632;
+var __ZTINSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb0EEE'] = 359716;
+var __ZTSNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb0EEE'] = 359680;
+var __ZTVNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb1EEE'] = 359728;
+var __ZTINSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb1EEE'] = 359812;
+var __ZTSNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb1EEE'] = 359776;
+var __ZTVNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IwEE'] = 359824;
+var __ZTINSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IwEE'] = 359908;
+var __ZTSNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IwEE'] = 359872;
+var __ZTVNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDiEE'] = 359920;
+var __ZTINSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDiEE'] = 360004;
+var __ZTSNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDiEE'] = 359968;
+var __ZTVNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDsEE'] = 360016;
+var __ZTINSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDsEE'] = 360100;
+var __ZTSNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDsEE'] = 360064;
+var __ZTSNSt3__26locale5__impE = Module['__ZTSNSt3__26locale5__impE'] = 360112;
+var __ZTSNSt3__214collate_bynameIcEE = Module['__ZTSNSt3__214collate_bynameIcEE'] = 360148;
+var __ZTSNSt3__27collateIcEE = Module['__ZTSNSt3__27collateIcEE'] = 360176;
+var __ZTINSt3__27collateIcEE = Module['__ZTINSt3__27collateIcEE'] = 360196;
+var __ZTSNSt3__214collate_bynameIwEE = Module['__ZTSNSt3__214collate_bynameIwEE'] = 360220;
+var __ZTSNSt3__27collateIwEE = Module['__ZTSNSt3__27collateIwEE'] = 360248;
+var __ZTINSt3__27collateIwEE = Module['__ZTINSt3__27collateIwEE'] = 360268;
+var __ZTSNSt3__25ctypeIcEE = Module['__ZTSNSt3__25ctypeIcEE'] = 360292;
+var __ZTSNSt3__212ctype_bynameIcEE = Module['__ZTSNSt3__212ctype_bynameIcEE'] = 360344;
+var __ZTSNSt3__212ctype_bynameIwEE = Module['__ZTSNSt3__212ctype_bynameIwEE'] = 360384;
+var __ZTSNSt3__28numpunctIcEE = Module['__ZTSNSt3__28numpunctIcEE'] = 360424;
+var __ZTSNSt3__28numpunctIwEE = Module['__ZTSNSt3__28numpunctIwEE'] = 360460;
+var __ZTSNSt3__215numpunct_bynameIcEE = Module['__ZTSNSt3__215numpunct_bynameIcEE'] = 360496;
+var __ZTSNSt3__215numpunct_bynameIwEE = Module['__ZTSNSt3__215numpunct_bynameIwEE'] = 360540;
+var __ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360860;
+var __ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 360712;
+var __ZTSNSt3__29__num_getIcEE = Module['__ZTSNSt3__29__num_getIcEE'] = 360780;
+var __ZTSNSt3__214__num_get_baseE = Module['__ZTSNSt3__214__num_get_baseE'] = 360802;
+var __ZTINSt3__214__num_get_baseE = Module['__ZTINSt3__214__num_get_baseE'] = 360828;
+var __ZTINSt3__29__num_getIcEE = Module['__ZTINSt3__29__num_getIcEE'] = 360836;
+var __ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361072;
+var __ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 360956;
+var __ZTSNSt3__29__num_getIwEE = Module['__ZTSNSt3__29__num_getIwEE'] = 361024;
+var __ZTINSt3__29__num_getIwEE = Module['__ZTINSt3__29__num_getIwEE'] = 361048;
+var __ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361304;
+var __ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361156;
+var __ZTSNSt3__29__num_putIcEE = Module['__ZTSNSt3__29__num_putIcEE'] = 361224;
+var __ZTSNSt3__214__num_put_baseE = Module['__ZTSNSt3__214__num_put_baseE'] = 361246;
+var __ZTINSt3__214__num_put_baseE = Module['__ZTINSt3__214__num_put_baseE'] = 361272;
+var __ZTINSt3__29__num_putIcEE = Module['__ZTINSt3__29__num_putIcEE'] = 361280;
+var __ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361504;
+var __ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361388;
+var __ZTSNSt3__29__num_putIwEE = Module['__ZTSNSt3__29__num_putIwEE'] = 361456;
+var __ZTINSt3__29__num_putIwEE = Module['__ZTINSt3__29__num_putIwEE'] = 361480;
+var __ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361760;
+var __ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361620;
+var __ZTSNSt3__29time_baseE = Module['__ZTSNSt3__29time_baseE'] = 361689;
+var __ZTINSt3__29time_baseE = Module['__ZTINSt3__29time_baseE'] = 361708;
+var __ZTSNSt3__220__time_get_c_storageIcEE = Module['__ZTSNSt3__220__time_get_c_storageIcEE'] = 361716;
+var __ZTINSt3__220__time_get_c_storageIcEE = Module['__ZTINSt3__220__time_get_c_storageIcEE'] = 361752;
+var __ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361996;
+var __ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361884;
+var __ZTSNSt3__220__time_get_c_storageIwEE = Module['__ZTSNSt3__220__time_get_c_storageIwEE'] = 361953;
+var __ZTINSt3__220__time_get_c_storageIwEE = Module['__ZTINSt3__220__time_get_c_storageIwEE'] = 361988;
+var __ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362300;
+var __ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362148;
+var __ZTSNSt3__218__time_get_storageIcEE = Module['__ZTSNSt3__218__time_get_storageIcEE'] = 362225;
+var __ZTSNSt3__210__time_getE = Module['__ZTSNSt3__210__time_getE'] = 362257;
+var __ZTINSt3__210__time_getE = Module['__ZTINSt3__210__time_getE'] = 362280;
+var __ZTINSt3__218__time_get_storageIcEE = Module['__ZTINSt3__218__time_get_storageIcEE'] = 362288;
+var __ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362568;
+var __ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362444;
+var __ZTSNSt3__218__time_get_storageIwEE = Module['__ZTSNSt3__218__time_get_storageIwEE'] = 362521;
+var __ZTINSt3__218__time_get_storageIwEE = Module['__ZTINSt3__218__time_get_storageIwEE'] = 362556;
+var __ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362724;
+var __ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362624;
+var __ZTSNSt3__210__time_putE = Module['__ZTSNSt3__210__time_putE'] = 362693;
+var __ZTINSt3__210__time_putE = Module['__ZTINSt3__210__time_putE'] = 362716;
+var __ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362852;
+var __ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362780;
+var __ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362988;
+var __ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362908;
+var __ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363104;
+var __ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363024;
+var __ZTINSt3__210moneypunctIcLb0EEE = Module['__ZTINSt3__210moneypunctIcLb0EEE'] = 363232;
+var __ZTSNSt3__210moneypunctIcLb0EEE = Module['__ZTSNSt3__210moneypunctIcLb0EEE'] = 363172;
+var __ZTSNSt3__210money_baseE = Module['__ZTSNSt3__210money_baseE'] = 363200;
+var __ZTINSt3__210money_baseE = Module['__ZTINSt3__210money_baseE'] = 363224;
+var __ZTINSt3__210moneypunctIcLb1EEE = Module['__ZTINSt3__210moneypunctIcLb1EEE'] = 363348;
+var __ZTSNSt3__210moneypunctIcLb1EEE = Module['__ZTSNSt3__210moneypunctIcLb1EEE'] = 363320;
+var __ZTINSt3__210moneypunctIwLb0EEE = Module['__ZTINSt3__210moneypunctIwLb0EEE'] = 363464;
+var __ZTSNSt3__210moneypunctIwLb0EEE = Module['__ZTSNSt3__210moneypunctIwLb0EEE'] = 363436;
+var __ZTINSt3__210moneypunctIwLb1EEE = Module['__ZTINSt3__210moneypunctIwLb1EEE'] = 363580;
+var __ZTSNSt3__210moneypunctIwLb1EEE = Module['__ZTSNSt3__210moneypunctIwLb1EEE'] = 363552;
+var __ZTINSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb0EEE'] = 363704;
+var __ZTSNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb0EEE'] = 363668;
+var __ZTINSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb1EEE'] = 363808;
+var __ZTSNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb1EEE'] = 363772;
+var __ZTINSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb0EEE'] = 363912;
+var __ZTSNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb0EEE'] = 363876;
+var __ZTINSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb1EEE'] = 364016;
+var __ZTSNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb1EEE'] = 363980;
+var __ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364160;
+var __ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364056;
+var __ZTSNSt3__211__money_getIcEE = Module['__ZTSNSt3__211__money_getIcEE'] = 364126;
+var __ZTINSt3__211__money_getIcEE = Module['__ZTINSt3__211__money_getIcEE'] = 364152;
+var __ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364324;
+var __ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364220;
+var __ZTSNSt3__211__money_getIwEE = Module['__ZTSNSt3__211__money_getIwEE'] = 364290;
+var __ZTINSt3__211__money_getIwEE = Module['__ZTINSt3__211__money_getIwEE'] = 364316;
+var __ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364488;
+var __ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364384;
+var __ZTSNSt3__211__money_putIcEE = Module['__ZTSNSt3__211__money_putIcEE'] = 364454;
+var __ZTINSt3__211__money_putIcEE = Module['__ZTINSt3__211__money_putIcEE'] = 364480;
+var __ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364652;
+var __ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364548;
+var __ZTSNSt3__211__money_putIwEE = Module['__ZTSNSt3__211__money_putIwEE'] = 364618;
+var __ZTINSt3__211__money_putIwEE = Module['__ZTINSt3__211__money_putIwEE'] = 364644;
+var __ZTINSt3__28messagesIcEE = Module['__ZTINSt3__28messagesIcEE'] = 364772;
+var __ZTSNSt3__28messagesIcEE = Module['__ZTSNSt3__28messagesIcEE'] = 364716;
+var __ZTSNSt3__213messages_baseE = Module['__ZTSNSt3__213messages_baseE'] = 364737;
+var __ZTINSt3__213messages_baseE = Module['__ZTINSt3__213messages_baseE'] = 364764;
+var __ZTINSt3__28messagesIwEE = Module['__ZTINSt3__28messagesIwEE'] = 364860;
+var __ZTSNSt3__28messagesIwEE = Module['__ZTSNSt3__28messagesIwEE'] = 364836;
+var __ZTINSt3__215messages_bynameIcEE = Module['__ZTINSt3__215messages_bynameIcEE'] = 364956;
+var __ZTSNSt3__215messages_bynameIcEE = Module['__ZTSNSt3__215messages_bynameIcEE'] = 364924;
+var __ZTINSt3__215messages_bynameIwEE = Module['__ZTINSt3__215messages_bynameIwEE'] = 365032;
+var __ZTSNSt3__215messages_bynameIwEE = Module['__ZTSNSt3__215messages_bynameIwEE'] = 365000;
+var __ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365136;
+var __ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365092;
+var __ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365240;
+var __ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365196;
+var __ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365344;
+var __ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365300;
+var __ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365448;
+var __ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365404;
+var __ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 365552;
+var __ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 365508;
+var __ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 365656;
+var __ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 365612;
+var __ZTINSt3__215__time_get_tempIcEE = Module['__ZTINSt3__215__time_get_tempIcEE'] = 366708;
+var __ZTSNSt3__215__time_get_tempIcEE = Module['__ZTSNSt3__215__time_get_tempIcEE'] = 366676;
+var __ZTINSt3__215__time_get_tempIwEE = Module['__ZTINSt3__215__time_get_tempIwEE'] = 366820;
+var __ZTSNSt3__215__time_get_tempIwEE = Module['__ZTSNSt3__215__time_get_tempIwEE'] = 366788;
+var __ZNSt3__213allocator_argE = Module['__ZNSt3__213allocator_argE'] = 366832;
+var __ZTSNSt3__214__shared_countE = Module['__ZTSNSt3__214__shared_countE'] = 366856;
+var __ZTSNSt3__219__shared_weak_countE = Module['__ZTSNSt3__219__shared_weak_countE'] = 366920;
+var __ZTVNSt3__212bad_weak_ptrE = Module['__ZTVNSt3__212bad_weak_ptrE'] = 366976;
+var __ZTINSt3__212bad_weak_ptrE = Module['__ZTINSt3__212bad_weak_ptrE'] = 367020;
+var __ZTSNSt3__212bad_weak_ptrE = Module['__ZTSNSt3__212bad_weak_ptrE'] = 366996;
+var __ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367032;
+var __ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367228;
+var __ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367060;
+var __ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367308;
+var __ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367088;
+var __ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367162;
+var __ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367220;
+var __ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367240;
+var __ZNSt3__210defer_lockE = Module['__ZNSt3__210defer_lockE'] = 367320;
+var __ZNSt3__211try_to_lockE = Module['__ZNSt3__211try_to_lockE'] = 367321;
+var __ZNSt3__210adopt_lockE = Module['__ZNSt3__210adopt_lockE'] = 367322;
+var __ZSt7nothrow = Module['__ZSt7nothrow'] = 367323;
+var __ZTVNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTVNSt3__24__fs10filesystem16filesystem_errorE'] = 367328;
+var __ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE = Module['__ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE'] = 367324;
+var __ZTINSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTINSt3__24__fs10filesystem16filesystem_errorE'] = 367424;
+var __ZNSt3__24__fs10filesystem4path19preferred_separatorE = Module['__ZNSt3__24__fs10filesystem4path19preferred_separatorE'] = 367376;
+var __ZTSNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTSNSt3__24__fs10filesystem16filesystem_errorE'] = 367377;
+var __ZTVSt19bad_optional_access = Module['__ZTVSt19bad_optional_access'] = 367460;
+var __ZTISt19bad_optional_access = Module['__ZTISt19bad_optional_access'] = 367504;
+var __ZTSSt19bad_optional_access = Module['__ZTSSt19bad_optional_access'] = 367480;
+var __ZTVNSt12experimental19bad_optional_accessE = Module['__ZTVNSt12experimental19bad_optional_accessE'] = 367516;
+var __ZTINSt12experimental19bad_optional_accessE = Module['__ZTINSt12experimental19bad_optional_accessE'] = 367576;
+var __ZTSNSt12experimental19bad_optional_accessE = Module['__ZTSNSt12experimental19bad_optional_accessE'] = 367536;
+var __ZNSt3__212__rs_default4__c_E = Module['__ZNSt3__212__rs_default4__c_E'] = 425880;
+var __ZTVNSt3__211regex_errorE = Module['__ZTVNSt3__211regex_errorE'] = 367588;
+var __ZTINSt3__211regex_errorE = Module['__ZTINSt3__211regex_errorE'] = 368656;
+var __ZTSNSt3__211regex_errorE = Module['__ZTSNSt3__211regex_errorE'] = 368632;
+var __ZTVSt11logic_error = Module['__ZTVSt11logic_error'] = 381024;
+var __ZTVSt13runtime_error = Module['__ZTVSt13runtime_error'] = 381044;
+var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE = Module['__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE'] = 368736;
+var __ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE = Module['__ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE'] = 368740;
+var __ZTVNSt3__212strstreambufE = Module['__ZTVNSt3__212strstreambufE'] = 368992;
+var __ZTTNSt3__210istrstreamE = Module['__ZTTNSt3__210istrstreamE'] = 369096;
+var __ZTTNSt3__210ostrstreamE = Module['__ZTTNSt3__210ostrstreamE'] = 369152;
+var __ZTTNSt3__29strstreamE = Module['__ZTTNSt3__29strstreamE'] = 369228;
+var __ZTINSt3__212strstreambufE = Module['__ZTINSt3__212strstreambufE'] = 369292;
+var __ZTVNSt3__210istrstreamE = Module['__ZTVNSt3__210istrstreamE'] = 369056;
+var __ZTINSt3__210istrstreamE = Module['__ZTINSt3__210istrstreamE'] = 369368;
+var __ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 369304;
+var __ZTVNSt3__210ostrstreamE = Module['__ZTVNSt3__210ostrstreamE'] = 369112;
+var __ZTINSt3__210ostrstreamE = Module['__ZTINSt3__210ostrstreamE'] = 369444;
+var __ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 369380;
+var __ZTVNSt3__29strstreamE = Module['__ZTVNSt3__29strstreamE'] = 369168;
+var __ZTINSt3__29strstreamE = Module['__ZTINSt3__29strstreamE'] = 369616;
+var __ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE'] = 369456;
+var __ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 369516;
+var __ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 369556;
+var __ZTSNSt3__212strstreambufE = Module['__ZTSNSt3__212strstreambufE'] = 369268;
+var __ZTSNSt3__210istrstreamE = Module['__ZTSNSt3__210istrstreamE'] = 369344;
+var __ZTSNSt3__210ostrstreamE = Module['__ZTSNSt3__210ostrstreamE'] = 369420;
+var __ZTSNSt3__29strstreamE = Module['__ZTSNSt3__29strstreamE'] = 369596;
+var __ZTVNSt3__212system_errorE = Module['__ZTVNSt3__212system_errorE'] = 369700;
+var __ZTVNSt3__224__generic_error_categoryE = Module['__ZTVNSt3__224__generic_error_categoryE'] = 369628;
+var __ZTINSt3__224__generic_error_categoryE = Module['__ZTINSt3__224__generic_error_categoryE'] = 369900;
+var __ZTVNSt3__223__system_error_categoryE = Module['__ZTVNSt3__223__system_error_categoryE'] = 369664;
+var __ZTINSt3__223__system_error_categoryE = Module['__ZTINSt3__223__system_error_categoryE'] = 369948;
+var __ZTVNSt3__214error_categoryE = Module['__ZTVNSt3__214error_categoryE'] = 369720;
+var __ZTINSt3__214error_categoryE = Module['__ZTINSt3__214error_categoryE'] = 369784;
+var __ZTSNSt3__214error_categoryE = Module['__ZTSNSt3__214error_categoryE'] = 369756;
+var __ZTVNSt3__212__do_messageE = Module['__ZTVNSt3__212__do_messageE'] = 369792;
+var __ZTSNSt3__212__do_messageE = Module['__ZTSNSt3__212__do_messageE'] = 369828;
+var __ZTSNSt3__224__generic_error_categoryE = Module['__ZTSNSt3__224__generic_error_categoryE'] = 369864;
+var __ZTSNSt3__223__system_error_categoryE = Module['__ZTSNSt3__223__system_error_categoryE'] = 369912;
+var __ZTSNSt3__212system_errorE = Module['__ZTSNSt3__212system_errorE'] = 369960;
+var __ZNSt3__219piecewise_constructE = Module['__ZNSt3__219piecewise_constructE'] = 369996;
+var __ZTVSt18bad_variant_access = Module['__ZTVSt18bad_variant_access'] = 370000;
+var __ZTISt18bad_variant_access = Module['__ZTISt18bad_variant_access'] = 370044;
+var __ZTSSt18bad_variant_access = Module['__ZTSSt18bad_variant_access'] = 370020;
+var ___cxa_unexpected_handler = Module['___cxa_unexpected_handler'] = 382408;
+var ___cxa_terminate_handler = Module['___cxa_terminate_handler'] = 382404;
+var ___cxa_new_handler = Module['___cxa_new_handler'] = 428420;
+var __ZTIN10__cxxabiv116__shim_type_infoE = Module['__ZTIN10__cxxabiv116__shim_type_infoE'] = 378624;
+var __ZTIN10__cxxabiv117__class_type_infoE = Module['__ZTIN10__cxxabiv117__class_type_infoE'] = 378672;
+var __ZTIN10__cxxabiv117__pbase_type_infoE = Module['__ZTIN10__cxxabiv117__pbase_type_infoE'] = 378720;
+var __ZTIDn = Module['__ZTIDn'] = 379068;
+var __ZTIN10__cxxabiv119__pointer_type_infoE = Module['__ZTIN10__cxxabiv119__pointer_type_infoE'] = 378768;
+var __ZTIv = Module['__ZTIv'] = 379016;
+var __ZTIN10__cxxabiv120__function_type_infoE = Module['__ZTIN10__cxxabiv120__function_type_infoE'] = 378820;
+var __ZTIN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTIN10__cxxabiv129__pointer_to_member_type_infoE'] = 378880;
+var __ZTSN10__cxxabiv116__shim_type_infoE = Module['__ZTSN10__cxxabiv116__shim_type_infoE'] = 378588;
+var __ZTISt9type_info = Module['__ZTISt9type_info'] = 381560;
+var __ZTSN10__cxxabiv117__class_type_infoE = Module['__ZTSN10__cxxabiv117__class_type_infoE'] = 378636;
+var __ZTSN10__cxxabiv117__pbase_type_infoE = Module['__ZTSN10__cxxabiv117__pbase_type_infoE'] = 378684;
+var __ZTSN10__cxxabiv119__pointer_type_infoE = Module['__ZTSN10__cxxabiv119__pointer_type_infoE'] = 378732;
+var __ZTSN10__cxxabiv120__function_type_infoE = Module['__ZTSN10__cxxabiv120__function_type_infoE'] = 378780;
+var __ZTSN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTSN10__cxxabiv129__pointer_to_member_type_infoE'] = 378832;
+var __ZTVN10__cxxabiv116__shim_type_infoE = Module['__ZTVN10__cxxabiv116__shim_type_infoE'] = 378904;
+var __ZTVN10__cxxabiv123__fundamental_type_infoE = Module['__ZTVN10__cxxabiv123__fundamental_type_infoE'] = 378932;
+var __ZTIN10__cxxabiv123__fundamental_type_infoE = Module['__ZTIN10__cxxabiv123__fundamental_type_infoE'] = 379000;
+var __ZTSN10__cxxabiv123__fundamental_type_infoE = Module['__ZTSN10__cxxabiv123__fundamental_type_infoE'] = 378960;
+var __ZTSv = Module['__ZTSv'] = 379012;
+var __ZTSPv = Module['__ZTSPv'] = 379024;
+var __ZTIPv = Module['__ZTIPv'] = 379028;
+var __ZTVN10__cxxabiv119__pointer_type_infoE = Module['__ZTVN10__cxxabiv119__pointer_type_infoE'] = 380764;
+var __ZTSPKv = Module['__ZTSPKv'] = 379044;
+var __ZTIPKv = Module['__ZTIPKv'] = 379048;
+var __ZTSDn = Module['__ZTSDn'] = 379064;
+var __ZTSPDn = Module['__ZTSPDn'] = 379076;
+var __ZTIPDn = Module['__ZTIPDn'] = 379080;
+var __ZTSPKDn = Module['__ZTSPKDn'] = 379096;
+var __ZTIPKDn = Module['__ZTIPKDn'] = 379104;
+var __ZTSb = Module['__ZTSb'] = 379120;
+var __ZTIb = Module['__ZTIb'] = 379124;
+var __ZTSPb = Module['__ZTSPb'] = 379132;
+var __ZTIPb = Module['__ZTIPb'] = 379136;
+var __ZTSPKb = Module['__ZTSPKb'] = 379152;
+var __ZTIPKb = Module['__ZTIPKb'] = 379156;
+var __ZTSw = Module['__ZTSw'] = 379172;
+var __ZTIw = Module['__ZTIw'] = 379176;
+var __ZTSPw = Module['__ZTSPw'] = 379184;
+var __ZTIPw = Module['__ZTIPw'] = 379188;
+var __ZTSPKw = Module['__ZTSPKw'] = 379204;
+var __ZTIPKw = Module['__ZTIPKw'] = 379208;
+var __ZTSc = Module['__ZTSc'] = 379224;
+var __ZTIc = Module['__ZTIc'] = 379228;
+var __ZTSPc = Module['__ZTSPc'] = 379236;
+var __ZTIPc = Module['__ZTIPc'] = 379240;
+var __ZTSPKc = Module['__ZTSPKc'] = 379256;
+var __ZTIPKc = Module['__ZTIPKc'] = 379260;
+var __ZTSh = Module['__ZTSh'] = 379276;
+var __ZTIh = Module['__ZTIh'] = 379280;
+var __ZTSPh = Module['__ZTSPh'] = 379288;
+var __ZTIPh = Module['__ZTIPh'] = 379292;
+var __ZTSPKh = Module['__ZTSPKh'] = 379308;
+var __ZTIPKh = Module['__ZTIPKh'] = 379312;
+var __ZTSa = Module['__ZTSa'] = 379328;
+var __ZTIa = Module['__ZTIa'] = 379332;
+var __ZTSPa = Module['__ZTSPa'] = 379340;
+var __ZTIPa = Module['__ZTIPa'] = 379344;
+var __ZTSPKa = Module['__ZTSPKa'] = 379360;
+var __ZTIPKa = Module['__ZTIPKa'] = 379364;
+var __ZTSs = Module['__ZTSs'] = 379380;
+var __ZTIs = Module['__ZTIs'] = 379384;
+var __ZTSPs = Module['__ZTSPs'] = 379392;
+var __ZTIPs = Module['__ZTIPs'] = 379396;
+var __ZTSPKs = Module['__ZTSPKs'] = 379412;
+var __ZTIPKs = Module['__ZTIPKs'] = 379416;
+var __ZTSt = Module['__ZTSt'] = 379432;
+var __ZTIt = Module['__ZTIt'] = 379436;
+var __ZTSPt = Module['__ZTSPt'] = 379444;
+var __ZTIPt = Module['__ZTIPt'] = 379448;
+var __ZTSPKt = Module['__ZTSPKt'] = 379464;
+var __ZTIPKt = Module['__ZTIPKt'] = 379468;
+var __ZTSi = Module['__ZTSi'] = 379484;
+var __ZTIi = Module['__ZTIi'] = 379488;
+var __ZTSPi = Module['__ZTSPi'] = 379496;
+var __ZTIPi = Module['__ZTIPi'] = 379500;
+var __ZTSPKi = Module['__ZTSPKi'] = 379516;
+var __ZTIPKi = Module['__ZTIPKi'] = 379520;
+var __ZTSj = Module['__ZTSj'] = 379536;
+var __ZTIj = Module['__ZTIj'] = 379540;
+var __ZTSPj = Module['__ZTSPj'] = 379548;
+var __ZTIPj = Module['__ZTIPj'] = 379552;
+var __ZTSPKj = Module['__ZTSPKj'] = 379568;
+var __ZTIPKj = Module['__ZTIPKj'] = 379572;
+var __ZTSl = Module['__ZTSl'] = 379588;
+var __ZTIl = Module['__ZTIl'] = 379592;
+var __ZTSPl = Module['__ZTSPl'] = 379600;
+var __ZTIPl = Module['__ZTIPl'] = 379604;
+var __ZTSPKl = Module['__ZTSPKl'] = 379620;
+var __ZTIPKl = Module['__ZTIPKl'] = 379624;
+var __ZTSm = Module['__ZTSm'] = 379640;
+var __ZTIm = Module['__ZTIm'] = 379644;
+var __ZTSPm = Module['__ZTSPm'] = 379652;
+var __ZTIPm = Module['__ZTIPm'] = 379656;
+var __ZTSPKm = Module['__ZTSPKm'] = 379672;
+var __ZTIPKm = Module['__ZTIPKm'] = 379676;
+var __ZTSx = Module['__ZTSx'] = 379692;
+var __ZTIx = Module['__ZTIx'] = 379696;
+var __ZTSPx = Module['__ZTSPx'] = 379704;
+var __ZTIPx = Module['__ZTIPx'] = 379708;
+var __ZTSPKx = Module['__ZTSPKx'] = 379724;
+var __ZTIPKx = Module['__ZTIPKx'] = 379728;
+var __ZTSy = Module['__ZTSy'] = 379744;
+var __ZTIy = Module['__ZTIy'] = 379748;
+var __ZTSPy = Module['__ZTSPy'] = 379756;
+var __ZTIPy = Module['__ZTIPy'] = 379760;
+var __ZTSPKy = Module['__ZTSPKy'] = 379776;
+var __ZTIPKy = Module['__ZTIPKy'] = 379780;
+var __ZTSn = Module['__ZTSn'] = 379796;
+var __ZTIn = Module['__ZTIn'] = 379800;
+var __ZTSPn = Module['__ZTSPn'] = 379808;
+var __ZTIPn = Module['__ZTIPn'] = 379812;
+var __ZTSPKn = Module['__ZTSPKn'] = 379828;
+var __ZTIPKn = Module['__ZTIPKn'] = 379832;
+var __ZTSo = Module['__ZTSo'] = 379848;
+var __ZTIo = Module['__ZTIo'] = 379852;
+var __ZTSPo = Module['__ZTSPo'] = 379860;
+var __ZTIPo = Module['__ZTIPo'] = 379864;
+var __ZTSPKo = Module['__ZTSPKo'] = 379880;
+var __ZTIPKo = Module['__ZTIPKo'] = 379884;
+var __ZTSDh = Module['__ZTSDh'] = 379900;
+var __ZTIDh = Module['__ZTIDh'] = 379904;
+var __ZTSPDh = Module['__ZTSPDh'] = 379912;
+var __ZTIPDh = Module['__ZTIPDh'] = 379916;
+var __ZTSPKDh = Module['__ZTSPKDh'] = 379932;
+var __ZTIPKDh = Module['__ZTIPKDh'] = 379940;
+var __ZTSf = Module['__ZTSf'] = 379956;
+var __ZTIf = Module['__ZTIf'] = 379960;
+var __ZTSPf = Module['__ZTSPf'] = 379968;
+var __ZTIPf = Module['__ZTIPf'] = 379972;
+var __ZTSPKf = Module['__ZTSPKf'] = 379988;
+var __ZTIPKf = Module['__ZTIPKf'] = 379992;
+var __ZTSd = Module['__ZTSd'] = 380008;
+var __ZTId = Module['__ZTId'] = 380012;
+var __ZTSPd = Module['__ZTSPd'] = 380020;
+var __ZTIPd = Module['__ZTIPd'] = 380024;
+var __ZTSPKd = Module['__ZTSPKd'] = 380040;
+var __ZTIPKd = Module['__ZTIPKd'] = 380044;
+var __ZTSe = Module['__ZTSe'] = 380060;
+var __ZTIe = Module['__ZTIe'] = 380064;
+var __ZTSPe = Module['__ZTSPe'] = 380072;
+var __ZTIPe = Module['__ZTIPe'] = 380076;
+var __ZTSPKe = Module['__ZTSPKe'] = 380092;
+var __ZTIPKe = Module['__ZTIPKe'] = 380096;
+var __ZTSg = Module['__ZTSg'] = 380112;
+var __ZTIg = Module['__ZTIg'] = 380116;
+var __ZTSPg = Module['__ZTSPg'] = 380124;
+var __ZTIPg = Module['__ZTIPg'] = 380128;
+var __ZTSPKg = Module['__ZTSPKg'] = 380144;
+var __ZTIPKg = Module['__ZTIPKg'] = 380148;
+var __ZTSDu = Module['__ZTSDu'] = 380164;
+var __ZTIDu = Module['__ZTIDu'] = 380168;
+var __ZTSPDu = Module['__ZTSPDu'] = 380176;
+var __ZTIPDu = Module['__ZTIPDu'] = 380180;
+var __ZTSPKDu = Module['__ZTSPKDu'] = 380196;
+var __ZTIPKDu = Module['__ZTIPKDu'] = 380204;
+var __ZTSDs = Module['__ZTSDs'] = 380220;
+var __ZTIDs = Module['__ZTIDs'] = 380224;
+var __ZTSPDs = Module['__ZTSPDs'] = 380232;
+var __ZTIPDs = Module['__ZTIPDs'] = 380236;
+var __ZTSPKDs = Module['__ZTSPKDs'] = 380252;
+var __ZTIPKDs = Module['__ZTIPKDs'] = 380260;
+var __ZTSDi = Module['__ZTSDi'] = 380276;
+var __ZTIDi = Module['__ZTIDi'] = 380280;
+var __ZTSPDi = Module['__ZTSPDi'] = 380288;
+var __ZTIPDi = Module['__ZTIPDi'] = 380292;
+var __ZTSPKDi = Module['__ZTSPKDi'] = 380308;
+var __ZTIPKDi = Module['__ZTIPKDi'] = 380316;
+var __ZTVN10__cxxabiv117__array_type_infoE = Module['__ZTVN10__cxxabiv117__array_type_infoE'] = 380332;
+var __ZTIN10__cxxabiv117__array_type_infoE = Module['__ZTIN10__cxxabiv117__array_type_infoE'] = 380396;
+var __ZTSN10__cxxabiv117__array_type_infoE = Module['__ZTSN10__cxxabiv117__array_type_infoE'] = 380360;
+var __ZTVN10__cxxabiv120__function_type_infoE = Module['__ZTVN10__cxxabiv120__function_type_infoE'] = 380408;
+var __ZTVN10__cxxabiv116__enum_type_infoE = Module['__ZTVN10__cxxabiv116__enum_type_infoE'] = 380436;
+var __ZTIN10__cxxabiv116__enum_type_infoE = Module['__ZTIN10__cxxabiv116__enum_type_infoE'] = 380500;
+var __ZTSN10__cxxabiv116__enum_type_infoE = Module['__ZTSN10__cxxabiv116__enum_type_infoE'] = 380464;
+var __ZTIN10__cxxabiv120__si_class_type_infoE = Module['__ZTIN10__cxxabiv120__si_class_type_infoE'] = 380632;
+var __ZTSN10__cxxabiv120__si_class_type_infoE = Module['__ZTSN10__cxxabiv120__si_class_type_infoE'] = 380592;
+var __ZTIN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTIN10__cxxabiv121__vmi_class_type_infoE'] = 380724;
+var __ZTSN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTSN10__cxxabiv121__vmi_class_type_infoE'] = 380684;
+var __ZTVN10__cxxabiv117__pbase_type_infoE = Module['__ZTVN10__cxxabiv117__pbase_type_infoE'] = 380736;
+var __ZTVN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTVN10__cxxabiv129__pointer_to_member_type_infoE'] = 380792;
+var __ZTVSt9bad_alloc = Module['__ZTVSt9bad_alloc'] = 380820;
+var __ZTVSt20bad_array_new_length = Module['__ZTVSt20bad_array_new_length'] = 380840;
+var __ZTISt9bad_alloc = Module['__ZTISt9bad_alloc'] = 380972;
+var __ZTSSt9exception = Module['__ZTSSt9exception'] = 380880;
+var __ZTVSt13bad_exception = Module['__ZTVSt13bad_exception'] = 380904;
+var __ZTISt13bad_exception = Module['__ZTISt13bad_exception'] = 380944;
+var __ZTSSt13bad_exception = Module['__ZTSSt13bad_exception'] = 380924;
+var __ZTSSt9bad_alloc = Module['__ZTSSt9bad_alloc'] = 380956;
+var __ZTSSt20bad_array_new_length = Module['__ZTSSt20bad_array_new_length'] = 380984;
+var __ZTVSt12domain_error = Module['__ZTVSt12domain_error'] = 381064;
+var __ZTISt12domain_error = Module['__ZTISt12domain_error'] = 381132;
+var __ZTSSt12domain_error = Module['__ZTSSt12domain_error'] = 381084;
+var __ZTSSt11logic_error = Module['__ZTSSt11logic_error'] = 381101;
+var __ZTVSt16invalid_argument = Module['__ZTVSt16invalid_argument'] = 381144;
+var __ZTISt16invalid_argument = Module['__ZTISt16invalid_argument'] = 381188;
+var __ZTSSt16invalid_argument = Module['__ZTSSt16invalid_argument'] = 381164;
+var __ZTSSt12length_error = Module['__ZTSSt12length_error'] = 381220;
+var __ZTVSt12out_of_range = Module['__ZTVSt12out_of_range'] = 381252;
+var __ZTISt12out_of_range = Module['__ZTISt12out_of_range'] = 381292;
+var __ZTSSt12out_of_range = Module['__ZTSSt12out_of_range'] = 381272;
+var __ZTVSt11range_error = Module['__ZTVSt11range_error'] = 381304;
+var __ZTISt11range_error = Module['__ZTISt11range_error'] = 381372;
+var __ZTSSt11range_error = Module['__ZTSSt11range_error'] = 381324;
+var __ZTSSt13runtime_error = Module['__ZTSSt13runtime_error'] = 381340;
+var __ZTVSt14overflow_error = Module['__ZTVSt14overflow_error'] = 381384;
+var __ZTISt14overflow_error = Module['__ZTISt14overflow_error'] = 381424;
+var __ZTSSt14overflow_error = Module['__ZTSSt14overflow_error'] = 381404;
+var __ZTVSt15underflow_error = Module['__ZTVSt15underflow_error'] = 381436;
+var __ZTISt15underflow_error = Module['__ZTISt15underflow_error'] = 381476;
+var __ZTSSt15underflow_error = Module['__ZTSSt15underflow_error'] = 381456;
+var __ZTVSt8bad_cast = Module['__ZTVSt8bad_cast'] = 381488;
+var __ZTVSt10bad_typeid = Module['__ZTVSt10bad_typeid'] = 381508;
+var __ZTISt10bad_typeid = Module['__ZTISt10bad_typeid'] = 381608;
+var __ZTVSt9type_info = Module['__ZTVSt9type_info'] = 381528;
+var __ZTSSt9type_info = Module['__ZTSSt9type_info'] = 381544;
+var __ZTSSt8bad_cast = Module['__ZTSSt8bad_cast'] = 381568;
+var __ZTSSt10bad_typeid = Module['__ZTSSt10bad_typeid'] = 381592;
+var _in6addr_any = Module['_in6addr_any'] = 381620;
+var _in6addr_loopback = Module['_in6addr_loopback'] = 381636;
 
 
 
@@ -42434,6 +37054,8 @@ var unexportedRuntimeSymbols = [
   'webglPrepareUniformLocationsBeforeFirstUse',
   'webglGetLeftBracePos',
   'emscriptenWebGLGetVertexAttrib',
+  'emscriptenWebGLGetBufferBinding',
+  'emscriptenWebGLValidateMapBufferTarget',
   'writeGLArray',
   'AL',
   'SDL_unicode',
@@ -42449,9 +37071,6 @@ var unexportedRuntimeSymbols = [
   'IDBStore',
   'runAndAbortIfError',
   'emscriptenWebGLGetIndexed',
-  'GLEmulation',
-  'GLImmediate',
-  'GLImmediateSetup',
   'ALLOC_NORMAL',
   'ALLOC_STACK',
   'allocate',
