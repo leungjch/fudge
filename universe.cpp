@@ -2,7 +2,9 @@
 #include <iostream>
 #include "universe.h"
 #include "graph.h"
-#include <omp.h>
+#ifndef __EMSCRIPTEN__
+    #include <omp.h>
+#endif
 using namespace std;
 Universe::Universe(Graph graph, 
     double dt,

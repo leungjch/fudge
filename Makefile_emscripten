@@ -1,14 +1,14 @@
-CXX= g++
-CXXFLAGS=-std=c++17 -fopenmp -MMD 
+CXX= emcc
+CXXFLAGS=-std=c++17 -MMD 
 OBJECTS=main.o graph.o node.o vec3d.o universe.o rgb.o mycamera.o
 
 DEPENDS=${OBJECTS:.o=.d}
-EXEC=fdg
+EXEC=fdg.html
 
 
 ${EXEC}: ${OBJECTS}
 	${CXX} ${OBJECTS} -o ${EXEC} -I/usr/X11R6/include -L/usr/X11R6/lib \
-    -lGL -lGLEW -lGLU -fopenmp -lglfw
+    -lGL -lGLEW -lGLU -lglfw -sLINKABLE=1 -sEXPORT_ALL=1 -sLEGACY_GL_EMULATION -s USE_GLFW=3
 
 	rm ${OBJECTS} ${DEPENDS}
 
