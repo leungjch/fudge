@@ -116,9 +116,10 @@ void draw_graph(float yloc)
 
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(nd.pos.x, nd.pos.y, nd.pos.z));
-        glm::vec3 scale = glm::vec3(0.2f, 0.2f, 0.2f);
+        float radius = min(nd.degree/2.5, 1.0);
+        glm::vec3 scale = glm::vec3(radius, radius, radius);
         model = glm::scale(model, scale);
-
+        sphere.setColor(nd.color.color);
         sphere.setMVP(model, view, projection);
         sphere.draw();
     }

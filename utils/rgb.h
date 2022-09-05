@@ -1,16 +1,14 @@
 #ifndef RGB_H
 #define RGB_H
 #include <cstdint>
-
+#include "../glm/glm/ext.hpp"
 
 
 class Rgb
 {
 public:
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
+    glm::vec3 color;
     static Rgb random();
-    Rgb(uint8_t r, uint8_t g, uint8_t b);
+    Rgb(float r, float g, float b);
 };
 #endif

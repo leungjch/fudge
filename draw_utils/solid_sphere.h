@@ -22,5 +22,6 @@ public:
     void draw();
     void init();
     void setMVP(glm::mat4x4 m, glm::mat4x4 v, glm::mat4x4 p);
+    void setColor(glm::vec3 c);
 };
 #endif

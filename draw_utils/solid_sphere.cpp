@@ -167,6 +167,11 @@ void SolidSphere::setMVP(glm::mat4 m, glm::mat4 v, glm::mat4 p)
    projection = p; 
 }
 
+void SolidSphere::setColor(glm::vec3 c)
+{
+    color = c;
+}
+
 void SolidSphere::draw()
 {
     // glMatrixMode(GL_MODELVIEW);
@@ -191,6 +196,6 @@ void SolidSphere::draw()
     glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &color[0]);
 
     glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertices.size());
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertices.size()/3);
 
 }

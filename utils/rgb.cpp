@@ -1,18 +1,20 @@
 #include "rgb.h"
 #include <random>
-#include <time.h>       /* time */
+#include <time.h> /* time */
+#include "../glm/glm/ext.hpp"
 
-Rgb::Rgb(uint8_t r, uint8_t b, uint8_t g) : r{r}, g{g}, b{b} {}
+Rgb::Rgb(float r, float b, float g) : color{glm::vec3(r,g,b)} {}
 
-Rgb Rgb::random() {
+Rgb Rgb::random()
+{
     srand(time(NULL));
-   int lower_bound = 0;
-   int upper_bound = 255;
-   std::uniform_int_distribution unif(lower_bound,upper_bound);
+    float lower_bound = 0.0f;
+    float upper_bound = 1.0f;
     std::random_device rd;  
-    std::mt19937 gen(rd()); 
-   uint8_t rand_r = unif(rd);
-   uint8_t rand_g = unif(rd);
-   uint8_t rand_b = unif(rd);
-    return Rgb((rand_r+255)/2, (rand_g+255)/2, (rand_b+255)/2);
+    std::minstd_rand gen(rd()); 
+    std::uniform_real_distribution<float> unif(lower_bound, upper_bound);
+    float rand_x = unif(rd);
+    float rand_y = unif(rd);
+    float rand_z = unif(rd);
+    return Rgb((rand_x+1.0f)/2.0, (rand_y+1.0f)/2.0, (rand_z+1.0)/2.0);
 }
