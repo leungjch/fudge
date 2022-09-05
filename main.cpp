@@ -36,6 +36,8 @@ MyCamera camera(WIN_WIDTH, WIN_HEIGHT);
 double mouseX = 0;
 double mouseY = 0;
 double mouseScroll = 0;
+float scroll_sensitivity = 0.2f;
+float drag_sensitivity = 1.5;
 bool mouseDown = false;
 bool mouseDownFirst = false;
 bool autoRotateX = false;
@@ -302,8 +304,8 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     // Rotate the camera around the origin
     // Only rotate if user is holding down mouse click
     if (mouseDown) {
-        double dx = xpos - mouseX;
-        double dy = ypos - mouseY;
+        double dx = (xpos - mouseX)*drag_sensitivity;
+        double dy = (ypos - mouseY)*drag_sensitivity;
         mouseX = xpos;
         mouseY = ypos;
         camera.update_view_mat(dx,dy);
@@ -311,8 +313,9 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 }
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
+    // yoffset is -1 or 1
     cout << "Scroll clicked" << endl;
-    camera.pos[2] -= 0.1;
+    camera.pos += (float)yoffset * scroll_sensitivity * camera.view_dir() ;
 }
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
