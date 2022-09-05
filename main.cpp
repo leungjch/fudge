@@ -18,13 +18,20 @@
     #include <omp.h>
 #endif
 
+typedef int32_t i32;
+typedef uint32_t u32;
+typedef int32_t b32;
+
+#define WIN_WIDTH 1000
+#define WIN_HEIGHT 1000
+
 using namespace std;
 bool movingUp = false;  // Whether or not we are moving up or down
 float yLocation = 0.0f; // Keep track of our position on the y axis.
 int n_iterations = 50;
 
 Graph graph;
-MyCamera camera(10.0);
+MyCamera camera(WIN_WIDTH, WIN_HEIGHT);
 
 double mouseX = 0;
 double mouseY = 0;
@@ -248,26 +255,13 @@ void render(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);         // Clear the colour buffer (more buffers later on)
 
     // update camera position (rotating)
-    // camera.position = glm::vec3(10*cos(glm::radians(camera.angle.x)), 10, 10*sin(glm::radians(camera.angle.z)));
-    float camX = sin(camera.angle.x) * camera.distance;
-    float camZ = cos(camera.angle.y) * camera.distance;
 
-
-    camera.position = glm::vec3(camX, 0.0, camZ);
-    view = glm::lookAt(camera.position, 
-    glm::vec3(0,0,0),
-    glm::vec3(0,1,0));
+    view = camera.get_view_mat();
 
 
     draw_graph(yLocation);
 }
 
-typedef int32_t i32;
-typedef uint32_t u32;
-typedef int32_t b32;
-
-#define WIN_WIDTH 1000
-#define WIN_HEIGHT 1000
 
 
 static void error_callback(int error, const char* description)
@@ -280,16 +274,16 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     if (key == GLFW_KEY_W) {
-        camera.angle.x += 0.1;
+        camera.update_view_mat(0.1, 0);
     }
     if (key == GLFW_KEY_S) {
-        camera.angle.x -=  0.1;
+        camera.update_view_mat(-0.1,0);
     }
     if (key == GLFW_KEY_A) {
-        camera.angle.y += 0.1;
+        camera.update_view_mat(0,0.1);
     }
     if (key == GLFW_KEY_D) {
-        camera.angle.y -= 0.1;
+        camera.update_view_mat(0,-0.1);
     }
     if (key == GLFW_KEY_R && action == GLFW_PRESS) {
         autoRotateX = !autoRotateX;
@@ -312,14 +306,13 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
         double dy = ypos - mouseY;
         mouseX = xpos;
         mouseY = ypos;
-        camera.angle.x -= dy/10;
-        camera.angle.y -= dx/10;
+        camera.update_view_mat(dx,dy);
     }
 }
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     cout << "Scroll clicked" << endl;
-    camera.distance = max(0.1, camera.distance-yoffset);
+    camera.pos[2] -= 0.1;
 }
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
@@ -334,6 +327,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
+    camera.set_viewport(width, height);
 }
 
 
@@ -422,10 +416,10 @@ int main(int ArgCount, char **Args)
         }
 
         currentTime = glfwGetTime();
-        cout << "Update time: " << currentTime - startTime << endl;
+        // cout << "Update time: " << currentTime - startTime << endl;
 
         if (autoRotateX) {
-            camera.angle.y += 1.0;
+            camera.update_view_mat(0.1,0);
         }
 
         // glClearColor(0.f, 0.f, 0.f, 0.f);
@@ -433,7 +427,7 @@ int main(int ArgCount, char **Args)
         double renderStart = (float) glfwGetTime();
         render();
         double renderEnd = glfwGetTime();
-        cout << "Render time: " << renderEnd - renderStart << endl;
+        // cout << "Render time: " << renderEnd - renderStart << endl;
         // Render();
         currentTime = glfwGetTime();
         timeAccumulator += currentTime - startTime;
