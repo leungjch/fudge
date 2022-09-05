@@ -1,38 +1,65 @@
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <stdlib.h>
 #include <GL/glew.h>
+#include <GL/glu.h>
 #include <iostream>
 #include "graph.h"
 #include "universe.h"
-#include "vec3d.h"
+#include "utils/vec3d.h"
+#include "draw_utils/line.h"
+#include "draw_utils/solid_sphere.h"
 #include "mycamera.h"
+#include <GLFW/glfw3.h>
 #include <ctime>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
 #include <assert.h>
-#include <omp.h>
+#include <functional>
+#include "glm/glm/ext.hpp"
+#ifndef __EMSCRIPTEN__
+    #include <omp.h>
+#endif
+
+typedef int32_t i32;
+typedef uint32_t u32;
+typedef int32_t b32;
+
+#define WIN_WIDTH 1000
+#define WIN_HEIGHT 1000
 
 using namespace std;
 bool movingUp = false;  // Whether or not we are moving up or down
 float yLocation = 0.0f; // Keep track of our position on the y axis.
-int n_iterations = 200;
+int n_iterations = 500;
 
 Graph graph;
-MyCamera camera(Vec3D(0, 0, 35));
+MyCamera camera(WIN_WIDTH, WIN_HEIGHT);
 
 double mouseX = 0;
 double mouseY = 0;
 double mouseScroll = 0;
+float scroll_sensitivity = 0.5f;
+float drag_sensitivity = 1.5;
 bool mouseDown = false;
+bool mouseDownFirst = false;
 bool autoRotateX = false;
+
+glm::mat4 projection;
+glm::mat4 view;
 
 Universe universe(graph,
                   0.05, // dt
-                  0.5,  // repulsion
+                  1.0,  // repulsion
                   1.0,  // spring
                   1.0   // damping
 );
 
 
+
+SolidSphere sphere(
+        10.0f,12,24
+    );
+Line line(glm::vec3(0,0,0), glm::vec3(0,0,0));
 void init_graph()
 {
     int n1 = graph.add_node("A");
@@ -59,47 +86,41 @@ void draw_graph(float yloc)
 {
     static int n_nodes = universe.graph.adj_list.size();
 
-    glColor3f(1.0, 1.0, 1.0);
+    // glColor3f(1.0, 1.0, 1.0);
     // Populate the edge positions
     for (int i = 0; i < universe.graph.adj_list.size(); i++)
     {
+        
         Node node_i = universe.graph.node_list[i];
         unordered_set<int> neighbors = universe.graph.adj_list[i];
         for (auto j = neighbors.begin(); j != neighbors.end(); ++j)
         {
             // Draw a line from node_i to node_j
             Node node_j = universe.graph.node_list[*j];
-            glBegin(GL_LINES);
-            glVertex3f(node_i.pos.x, node_i.pos.y, node_i.pos.z);
-            glVertex3f(node_j.pos.x, node_j.pos.y, node_j.pos.z);
-            glEnd();
+            // glBegin(GL_LINES);
+            // glVertex3f(node_i.pos.x, node_i.pos.y, node_i.pos.z);
+            // glVertex3f(node_j.pos.x, node_j.pos.y, node_j.pos.z);
+            // glEnd();
+            line.setVertices(
+                glm::vec3(node_i.pos.x, node_i.pos.y, node_i.pos.z),
+                glm::vec3(node_j.pos.x, node_j.pos.y, node_j.pos.z)
+            );
+            line.setMVP(projection * view);
+            line.draw();
+
         }
     }
     for (int i = 0; i < n_nodes; i++)
     { 
         Node nd = universe.graph.node_list[i];
 
-        // Draw as spheres
-        glColor3f(nd.color.r / 255.0,
-                  nd.color.g / 255.0,
-                  nd.color.b / 255.0);
-        GLUquadric *quad;
-        quad = gluNewQuadric();
-        // Radius is determined by a node's degree
-        // Apply nonlinear scaling
-        double radius = log(nd.degree+1)*0.5;
-        glTranslatef(nd.pos.x, nd.pos.y, nd.pos.z);
-        gluSphere(quad, radius, 25, 10);
-        glTranslatef(-nd.pos.x, -nd.pos.y, -nd.pos.z);
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(nd.pos.x, nd.pos.y, nd.pos.z));
+        glm::vec3 scale = glm::vec3(0.2f, 0.2f, 0.2f);
+        model = glm::scale(model, scale);
 
-        // // Draw as points
-        // glPointSize(10);
-        // glColor3f(nd.color.r/255.0,
-        //         nd.color.g/255.0,
-        //         nd.color.b/255.0);
-        // glBegin(GL_POINTS);
-        // glVertex3f(nd.pos.x, nd.pos.y, nd.pos.z);
-        // glEnd();
+        sphere.setMVP(model, view, projection);
+        sphere.draw();
     }
 }
 void render(void)
@@ -107,29 +128,95 @@ void render(void)
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Clear the background of our window to red
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);         // Clear the colour buffer (more buffers later on)
-    glLoadIdentity();                     // Load the Identity Matrix to reset our drawing locations
 
-    // Set the camera
-    gluLookAt(camera.pos.x, 0.0f, camera.pos.z, camera.pos.x, 0.0f, camera.pos.z - 1.0f, 0.0f, 1.0f, 0.0f);
-    glRotatef(camera.angle.x, 1, 0, 0);
-    glRotatef(camera.angle.y, 0, 1, 0);
-    glRotatef(camera.angle.z, 0, 0, 1);
+    // update camera position (rotating)
+
+    view = camera.get_view_mat();
+
 
     draw_graph(yLocation);
-    glTranslatef(0.0f, 0.0f, yLocation); // Translate our object along the y axis
 }
 
-typedef int32_t i32;
-typedef uint32_t u32;
-typedef int32_t b32;
 
-#define WIN_WIDTH 1000
-#define WIN_HEIGHT 1000
+
+static void error_callback(int error, const char* description)
+{
+    fprintf(stderr, "Error: %s\n", description);
+}
+ 
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    if (key == GLFW_KEY_W) {
+        camera.update_view_mat(0.1, 0);
+    }
+    if (key == GLFW_KEY_S) {
+        camera.update_view_mat(-0.1,0);
+    }
+    if (key == GLFW_KEY_A) {
+        camera.update_view_mat(0,0.1);
+    }
+    if (key == GLFW_KEY_D) {
+        camera.update_view_mat(0,-0.1);
+    }
+    if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+        autoRotateX = !autoRotateX;
+    }
+}
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    // If first time mouse down, reset the mouse positions
+    // This prevents the camera from jerking when initially rotating
+    if (mouseDownFirst) {
+    cout << "Mouse clicked" << endl;
+        mouseX = xpos;
+        mouseY = ypos;
+        mouseDownFirst = false;
+    }
+    // Rotate the camera around the origin
+    // Only rotate if user is holding down mouse click
+    if (mouseDown) {
+        double dx = (xpos - mouseX)*drag_sensitivity;
+        double dy = (ypos - mouseY)*drag_sensitivity;
+        mouseX = xpos;
+        mouseY = ypos;
+        camera.update_view_mat(dx,dy);
+    }
+}
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    // yoffset is -1 or 1
+    cout << "Scroll clicked" << endl;
+    camera.pos += (float)yoffset * scroll_sensitivity * camera.view_dir() ;
+}
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+        mouseDown = true;
+        mouseDownFirst = true;
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+        mouseDown = false;
+}
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    // make sure the viewport matches the new window dimensions; note that width and 
+    // height will be significantly larger than specified on retina displays.
+    glViewport(0, 0, width, height);
+    camera.set_viewport(width, height);
+}
+
+
+std::function<void()> loop;
+void main_loop() { loop(); }
+
 
 int main(int ArgCount, char **Args)
 {
-    srand(time(NULL));
 
+    cout << "Starting fudge..." << endl;
+    srand(time(NULL));
+    #ifndef __EMSCRIPTEN__
     // Test if openMP is working
     #pragma omp parallel for
     for (int i = 0; i < 16; ++i)
@@ -137,21 +224,52 @@ int main(int ArgCount, char **Args)
         cout << omp_get_max_threads() << endl;
         printf("Thread %d works with idx %d\n", omp_get_thread_num(), i);
     }
+    #endif
 
+    cout << "Initiating graph..." << endl;
     init_graph();
+    cout << "Done initiating graph with n=" << universe.graph.node_list.size() << endl;
 
-    u32 WindowFlags = SDL_WINDOW_OPENGL;
-    SDL_Window *Window = SDL_CreateWindow("Force graph", 0, 0, WIN_WIDTH, WIN_HEIGHT, WindowFlags);
-    assert(Window);
-    SDL_GLContext Context = SDL_GL_CreateContext(Window);
-    SDL_GL_SetSwapInterval(1);
+
+    GLFWwindow* window;
+    glfwSetErrorCallback(error_callback);
+    if (!glfwInit())
+        exit(EXIT_FAILURE);
+
+    window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "Simple example", NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        exit(EXIT_FAILURE);
+    }
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+
+    glfwMakeContextCurrent(window);
+    glewExperimental = GL_TRUE; //Ensure it get all pointers
+    if ( GLEW_OK != glewInit() )
+    {
+        //glewInit failed, something is seriously wrong.
+        return false; //or any handling here
+    }
+
+
+    // gladLoadGL(glfwGetProcAddress);
+    glfwSwapInterval(1);
 
     /* Set rendering settings */
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(60, (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT, 1.0, 400.0); // Set the Field of view angle (in degrees), the aspect ratio of our window, and the new and far planes
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+    projection = glm::perspective(
+    // FOV & aspect
+    glm::radians<float>(60.0f), (GLfloat)WIN_WIDTH / (GLfloat)WIN_HEIGHT,
+    // Near and far planes
+    0.1f, 100.0f);
+
+    sphere.init();
+    line.init();
+
     glEnable(GL_DEPTH_TEST);
 
     b32 running = 1;
@@ -161,14 +279,14 @@ int main(int ArgCount, char **Args)
     double timeAccumulator = 0;
     double timeSimulatedThisIteration = 0;
     u32 frames = 0;
-    u32 currentTime = SDL_GetTicks();
-    u32 startTime = SDL_GetTicks();
-    u32 initTime = SDL_GetTicks();
+    double currentTime = glfwGetTime();
+    double startTime = glfwGetTime();
+    double initTime = glfwGetTime();
 
-    while (running)
-    {
+    // Render loop
+    loop = [&] {
         timeSimulatedThisIteration = 0;
-        startTime = SDL_GetTicks();
+        startTime = glfwGetTime();
         ++frames;
 
         // Run update logic
@@ -177,104 +295,42 @@ int main(int ArgCount, char **Args)
             universe.update(1.0 / timeDelta);
         }
 
-        currentTime = SDL_GetTicks();
-        cout << "Update time: " << currentTime - startTime << endl;
+        currentTime = glfwGetTime();
+        // cout << "Update time: " << currentTime - startTime << endl;
 
-        // Handle user input
-        SDL_Event Event;
-        while (SDL_PollEvent(&Event))
-        {
-            if (Event.type == SDL_MOUSEBUTTONDOWN) 
-            {
-                mouseX = Event.motion.x;
-                mouseY = Event.motion.y;
-                mouseDown = true;
-            }
-            if (Event.type == SDL_MOUSEBUTTONUP) 
-            {
-                mouseDown = false;
-            }
-            if (Event.type == SDL_MOUSEMOTION && mouseDown)
-            {
-                cout << "Moved mouse " << Event.motion.x << endl;
-                cout << "Moved mouse " << Event.motion.y << endl;
-                
-                double dx = mouseX - Event.motion.x;
-                double dy = mouseY - Event.motion.y;
-                mouseX = Event.motion.x;
-                mouseY = Event.motion.y;
-                camera.angle.y -= dx;
-                camera.angle.x += dy;
-            }
-
-            if (Event.type == SDL_MOUSEWHEEL)
-            {
-                camera.pos.z -= Event.wheel.y;
-            }
-            if (Event.type == SDL_KEYDOWN)
-            {
-                switch (Event.key.keysym.sym)
-                {
-                case SDLK_ESCAPE:
-                    running = 0;
-                    break;
-                case 'w':
-                    camera.angle.x += 1.0;
-                    break;
-                case 's':
-                    camera.angle.x -= 1.0;
-                    break;
-                case 'd':
-                    camera.angle.y += 1.0;
-                    break;
-                case 'a':
-                    camera.angle.y -= 1.0;
-                    break;
-                case 'r':
-                    autoRotateX = not autoRotateX;
-                    break;
-                case 'f':
-                    fullScreen = !fullScreen;
-                    if (fullScreen)
-                    {
-                        SDL_SetWindowFullscreen(Window, WindowFlags | SDL_WINDOW_FULLSCREEN_DESKTOP);
-                    }
-                    else
-                    {
-                        SDL_SetWindowFullscreen(Window, WindowFlags);
-                    }
-                    break;
-                default:
-                    break;
-                }
-            }
-            else if (Event.type == SDL_QUIT)
-            {
-                running = 0;
-            }
-        }
         if (autoRotateX) {
-            camera.angle.y += 1.0;
+            camera.update_view_mat(0.1,0);
         }
 
-        glViewport(0, 0, WIN_WIDTH, WIN_HEIGHT);
         // glClearColor(0.f, 0.f, 0.f, 0.f);
         // glClear(GL_COLOR_BUFFER_BIT);
-        u32 renderStart = SDL_GetTicks();
+        double renderStart = (float) glfwGetTime();
         render();
-        u32 renderEnd = SDL_GetTicks();
-        cout << "Render time: " << renderEnd - renderStart << endl;
+        double renderEnd = glfwGetTime();
+        // cout << "Render time: " << renderEnd - renderStart << endl;
         // Render();
-        SDL_GL_SwapWindow(Window);
-        currentTime = SDL_GetTicks();
+        currentTime = glfwGetTime();
         timeAccumulator += currentTime - startTime;
-    }
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    };
 
-    currentTime = SDL_GetTicks();
+    #ifdef __EMSCRIPTEN__
+        emscripten_set_main_loop(main_loop, 0, true);
+    #else 
+        while (!glfwWindowShouldClose(window))
+            main_loop();
+    #endif
+
+    
+    currentTime = glfwGetTime();
     if (currentTime > initTime)
     {
         printf("%2.2f frames per second\n",
                ((double)frames * 1000) / (currentTime - initTime));
     }
-    return 0;
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    exit(EXIT_SUCCESS);
 }

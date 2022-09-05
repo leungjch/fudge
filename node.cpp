@@ -1,5 +1,5 @@
 #include "node.h"
-#include "rgb.h"
+#include "utils/rgb.h"
 #include <string>
 using namespace std;
 Node::Node(int id, string data) : 

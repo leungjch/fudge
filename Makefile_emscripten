@@ -1,17 +1,16 @@
-CXX= g++
-CXXFLAGS=-std=c++17 -fopenmp -MMD 
+CXX= emcc
+CXXFLAGS=-std=c++17 -MMD 
 OBJECTS=main.o graph.o node.o utils/vec3d.o utils/rgb.o \
 	 universe.o  mycamera.o \
 	 draw_utils/solid_sphere.o draw_utils/line.o
 
-
 DEPENDS=${OBJECTS:.o=.d}
-EXEC=fdg
+EXEC=fdg.html
 
 
 ${EXEC}: ${OBJECTS}
 	${CXX} ${OBJECTS} -o ${EXEC} -I/usr/X11R6/include -L/usr/X11R6/lib \
-    -lGL -lGLEW -lGLU -fopenmp -lglfw
+    -lGL -lGLEW -lGLU -lglfw -s FULL_ES3=1 -s USE_WEBGL2=1 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -s USE_GLFW=3 -s WASM=1 -sLINKABLE=1 -sEXPORT_ALL=1 
 
 	rm ${OBJECTS} ${DEPENDS}
 

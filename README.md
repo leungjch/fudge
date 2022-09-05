@@ -1,4 +1,4 @@
-# Fudge: A 3D Force Directed Graph Visualizer
+# fudge - 3D force directed graph explorer
 
 ## Build
 ```make && ./fdg```
