@@ -48,14 +48,16 @@ float zoom = 0.0f;
 bool mouseDown = false;
 bool mouseDownFirst = false;
 bool autoRotateX = true;
-bool show_degree = false;
+bool show_degree = true;
 float MIN_DISTANCE_ORIGIN = 5.0f;
 float zoom_step = 2.5f;
 glm::mat4 projection;
 glm::mat4 view;
 
+int n_random_nodes = 100;
+
 // Universe settings
-float timeDelta = 1.0f / (1000.0/60.0);
+float timeDelta = 0.2;
 float repulsion_force = 1.0f;
 float spring_force = 1.0f;
 float damping_coefficient = 0.5f;
@@ -77,17 +79,13 @@ void init_graph()
     graph.adj_list.clear();
     graph.node_list.clear();
 
-    int n1 = graph.add_node("A");
-    int n2 = graph.add_node("B");
     std::srand(time(NULL));
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < n_random_nodes; i++)
     {
         int n3 = graph.add_node("C");
         int rd = rand() % (graph.node_list.size());
         graph.add_edge(n3, rd);
     }
-
-    graph.add_edge(n1, n2);
 
     universe.set_graph(graph);
 }
@@ -380,7 +378,7 @@ int main(int ArgCount, char **Args)
         ImGui::Text("Zoom");
 
         
-        ImGui::Checkbox("Vertex degree", &show_degree);
+        ImGui::Checkbox("Show vertex degree", &show_degree);
         ImGui::Checkbox("Orbit camera", &autoRotateX);
         if (ImGui::Button("Random graph"))
         {
