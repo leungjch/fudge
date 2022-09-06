@@ -1,6 +1,6 @@
 # fudge - 3D force directed graph explorer
 
-### **[Try the demo here!](https://justinleung.me/fudge)**
+### **[Try the WebGL app here!](https://justinleung.me/fudge)**
 
 [demo_video.webm](https://user-images.githubusercontent.com/28817028/188521947-5a06ec75-d847-4001-9804-0318c9ab3ac6.webm)
 
