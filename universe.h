@@ -9,6 +9,7 @@ public:
   double default_repulsion;
   double default_spring_k;
   double default_damping;
+  int n_iterations;
   Graph graph;
   Universe(Graph graph, 
     double dt,

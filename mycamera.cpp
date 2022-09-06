@@ -1,7 +1,7 @@
 #include "mycamera.h"
 #include "glm/glm/ext.hpp"
 
-MyCamera::MyCamera(int vh, int vw) : pos{glm::vec3(0, 0, 10.0)}, target_pos{glm::vec3(0, 0, 0)}, angle{glm::vec3(0, 0, 0)}, view_mat{glm::mat4x4()} {
+MyCamera::MyCamera(int vh, int vw) : pos{glm::vec3(0, 0, 25.0)}, target_pos{glm::vec3(0, 0, 0)}, angle{glm::vec3(0, 0, 0)}, view_mat{glm::mat4x4()} {
     view_mat = get_view_mat();
     set_viewport(vw, vh);
 }

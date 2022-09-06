@@ -1163,8 +1163,8 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  382796: ($0) => { if (!$0) { AL.alcErr = 0xA004 ; return 1; } },  
- 382844: ($0) => { if (!AL.currentCtx) { err("alGetProcAddress() called without a valid context"); return 1; } if (!$0) { AL.currentCtx.err = 0xA003 ; return 1; } }
+  454076: ($0) => { if (!$0) { AL.alcErr = 0xA004 ; return 1; } },  
+ 454124: ($0) => { if (!AL.currentCtx) { err("alGetProcAddress() called without a valid context"); return 1; } if (!$0) { AL.currentCtx.err = 0xA003 ; return 1; } }
 };
 
 
@@ -14282,6 +14282,9 @@ var ASM_CONSTS = {
     }
   Module["_getnameinfo"] = _getnameinfo;
 
+  function _glActiveTexture(x0) { GLctx['activeTexture'](x0) }
+  Module["_glActiveTexture"] = _glActiveTexture;
+
   function _glAttachShader(program, shader) {
       GLctx.attachShader(GL.programs[program], GL.shaders[shader]);
     }
@@ -14311,12 +14314,26 @@ var ASM_CONSTS = {
     }
   Module["_glBindBuffer"] = _glBindBuffer;
 
+  function _glBindTexture(target, texture) {
+      GLctx.bindTexture(target, GL.textures[texture]);
+    }
+  Module["_glBindTexture"] = _glBindTexture;
+
   function _glBindVertexArray(vao) {
       GLctx['bindVertexArray'](GL.vaos[vao]);
       var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
       GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
     }
   Module["_glBindVertexArray"] = _glBindVertexArray;
+
+  function _glBlendEquation(x0) { GLctx['blendEquation'](x0) }
+  Module["_glBlendEquation"] = _glBlendEquation;
+
+  function _glBlendEquationSeparate(x0, x1) { GLctx['blendEquationSeparate'](x0, x1) }
+  Module["_glBlendEquationSeparate"] = _glBlendEquationSeparate;
+
+  function _glBlendFuncSeparate(x0, x1, x2, x3) { GLctx['blendFuncSeparate'](x0, x1, x2, x3) }
+  Module["_glBlendFuncSeparate"] = _glBlendFuncSeparate;
 
   function _glBufferData(target, size, data, usage) {
   
@@ -14336,6 +14353,15 @@ var ASM_CONSTS = {
       }
     }
   Module["_glBufferData"] = _glBufferData;
+
+  function _glBufferSubData(target, offset, size, data) {
+      if (true) { // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        size && GLctx.bufferSubData(target, offset, HEAPU8, data, size);
+        return;
+      }
+      GLctx.bufferSubData(target, offset, HEAPU8.subarray(data, data+size));
+    }
+  Module["_glBufferSubData"] = _glBufferSubData;
 
   function _glClear(x0) { GLctx['clear'](x0) }
   Module["_glClear"] = _glClear;
@@ -14415,6 +14441,18 @@ var ASM_CONSTS = {
     }
   Module["_glDeleteShader"] = _glDeleteShader;
 
+  function _glDeleteTextures(n, textures) {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((textures)+(i*4))>>2)];
+        var texture = GL.textures[id];
+        if (!texture) continue; // GL spec: "glDeleteTextures silently ignores 0s and names that do not correspond to existing textures".
+        GLctx.deleteTexture(texture);
+        texture.name = 0;
+        GL.textures[id] = null;
+      }
+    }
+  Module["_glDeleteTextures"] = _glDeleteTextures;
+
   function _glDeleteVertexArrays(n, vaos) {
       for (var i = 0; i < n; i++) {
         var id = HEAP32[(((vaos)+(i*4))>>2)];
@@ -14423,6 +14461,14 @@ var ASM_CONSTS = {
       }
     }
   Module["_glDeleteVertexArrays"] = _glDeleteVertexArrays;
+
+  function _glDetachShader(program, shader) {
+      GLctx.detachShader(GL.programs[program], GL.shaders[shader]);
+    }
+  Module["_glDetachShader"] = _glDetachShader;
+
+  function _glDisable(x0) { GLctx['disable'](x0) }
+  Module["_glDisable"] = _glDisable;
 
   function _glDrawArrays(mode, first, count) {
       // bind any client-side buffers
@@ -14450,6 +14496,7 @@ var ASM_CONSTS = {
     }
   Module["_glDrawBuffers"] = _glDrawBuffers;
 
+
   function _glDrawElementsInstanced(mode, count, type, indices, primcount) {
       GLctx['drawElementsInstanced'](mode, count, type, indices, primcount);
     }
@@ -14471,11 +14518,81 @@ var ASM_CONSTS = {
     }
   Module["_glGenBuffers"] = _glGenBuffers;
 
+  function _glGenTextures(n, textures) {
+      __glGenObject(n, textures, 'createTexture', GL.textures
+        );
+    }
+  Module["_glGenTextures"] = _glGenTextures;
+
   function _glGenVertexArrays(n, arrays) {
       __glGenObject(n, arrays, 'createVertexArray', GL.vaos
         );
     }
   Module["_glGenVertexArrays"] = _glGenVertexArrays;
+
+  function _glGetAttribLocation(program, name) {
+      return GLctx.getAttribLocation(GL.programs[program], UTF8ToString(name));
+    }
+  Module["_glGetAttribLocation"] = _glGetAttribLocation;
+
+  function _glGetIntegerv(name_, p) {
+      emscriptenWebGLGet(name_, p, 0);
+    }
+  Module["_glGetIntegerv"] = _glGetIntegerv;
+
+  function _glGetProgramInfoLog(program, maxLength, length, infoLog) {
+      var log = GLctx.getProgramInfoLog(GL.programs[program]);
+      if (log === null) log = '(unknown error)';
+      var numBytesWrittenExclNull = (maxLength > 0 && infoLog) ? stringToUTF8(log, infoLog, maxLength) : 0;
+      if (length) HEAP32[((length)>>2)] = numBytesWrittenExclNull;
+    }
+  Module["_glGetProgramInfoLog"] = _glGetProgramInfoLog;
+
+  function _glGetProgramiv(program, pname, p) {
+      if (!p) {
+        // GLES2 specification does not specify how to behave if p is a null pointer. Since calling this function does not make sense
+        // if p == null, issue a GL error to notify user about it.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+  
+      if (program >= GL.counter) {
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+  
+      program = GL.programs[program];
+  
+      if (pname == 0x8B84) { // GL_INFO_LOG_LENGTH
+        var log = GLctx.getProgramInfoLog(program);
+        if (log === null) log = '(unknown error)';
+        HEAP32[((p)>>2)] = log.length + 1;
+      } else if (pname == 0x8B87 /* GL_ACTIVE_UNIFORM_MAX_LENGTH */) {
+        if (!program.maxUniformLength) {
+          for (var i = 0; i < GLctx.getProgramParameter(program, 0x8B86/*GL_ACTIVE_UNIFORMS*/); ++i) {
+            program.maxUniformLength = Math.max(program.maxUniformLength, GLctx.getActiveUniform(program, i).name.length+1);
+          }
+        }
+        HEAP32[((p)>>2)] = program.maxUniformLength;
+      } else if (pname == 0x8B8A /* GL_ACTIVE_ATTRIBUTE_MAX_LENGTH */) {
+        if (!program.maxAttributeLength) {
+          for (var i = 0; i < GLctx.getProgramParameter(program, 0x8B89/*GL_ACTIVE_ATTRIBUTES*/); ++i) {
+            program.maxAttributeLength = Math.max(program.maxAttributeLength, GLctx.getActiveAttrib(program, i).name.length+1);
+          }
+        }
+        HEAP32[((p)>>2)] = program.maxAttributeLength;
+      } else if (pname == 0x8A35 /* GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH */) {
+        if (!program.maxUniformBlockNameLength) {
+          for (var i = 0; i < GLctx.getProgramParameter(program, 0x8A36/*GL_ACTIVE_UNIFORM_BLOCKS*/); ++i) {
+            program.maxUniformBlockNameLength = Math.max(program.maxUniformBlockNameLength, GLctx.getActiveUniformBlockName(program, i).length+1);
+          }
+        }
+        HEAP32[((p)>>2)] = program.maxUniformBlockNameLength;
+      } else {
+        HEAP32[((p)>>2)] = GLctx.getProgramParameter(program, pname);
+      }
+    }
+  Module["_glGetProgramiv"] = _glGetProgramiv;
 
   function _glGetShaderInfoLog(shader, maxLength, length, infoLog) {
       var log = GLctx.getShaderInfoLog(GL.shaders[shader]);
@@ -14557,6 +14674,9 @@ var ASM_CONSTS = {
     }
   Module["_glGetUniformLocation"] = _glGetUniformLocation;
 
+  function _glIsEnabled(x0) { return GLctx['isEnabled'](x0) }
+  Module["_glIsEnabled"] = _glIsEnabled;
+
   function _glIsVertexArray(array) {
   
       var vao = GL.vaos[array];
@@ -14575,12 +14695,40 @@ var ASM_CONSTS = {
     }
   Module["_glLinkProgram"] = _glLinkProgram;
 
+  function _glScissor(x0, x1, x2, x3) { GLctx['scissor'](x0, x1, x2, x3) }
+  Module["_glScissor"] = _glScissor;
+
   function _glShaderSource(shader, count, string, length) {
       var source = GL.getSource(shader, count, string, length);
   
       GLctx.shaderSource(GL.shaders[shader], source);
     }
   Module["_glShaderSource"] = _glShaderSource;
+
+  function _glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels) {
+      if (true) {
+        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
+        if (GLctx.currentPixelUnpackBufferBinding) {
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
+        } else if (pixels) {
+          var heap = heapObjectForWebGLType(type);
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, heap, pixels >> heapAccessShiftForWebGLHeap(heap));
+        } else {
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, null);
+        }
+        return;
+      }
+      GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels ? emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, internalFormat) : null);
+    }
+  Module["_glTexImage2D"] = _glTexImage2D;
+
+  function _glTexParameteri(x0, x1, x2) { GLctx['texParameteri'](x0, x1, x2) }
+  Module["_glTexParameteri"] = _glTexParameteri;
+
+  function _glUniform1i(location, v0) {
+      GLctx.uniform1i(webglGetUniformLocation(location), v0);
+    }
+  Module["_glUniform1i"] = _glUniform1i;
 
   function _glUniform3fv(location, count, value) {
   
@@ -15494,20 +15642,105 @@ var ASM_CONSTS = {
         return table[param];
       }};
   Module["GLFW"] = GLFW;
+  function _glfwCreateStandardCursor(shape) {}
+  Module["_glfwCreateStandardCursor"] = _glfwCreateStandardCursor;
+
   function _glfwCreateWindow(width, height, title, monitor, share) {
       return GLFW.createWindow(width, height, title, monitor, share);
     }
   Module["_glfwCreateWindow"] = _glfwCreateWindow;
+
+  function _glfwDestroyCursor(cursor) {}
+  Module["_glfwDestroyCursor"] = _glfwDestroyCursor;
 
   function _glfwDestroyWindow(winid) {
       return GLFW.destroyWindow(winid);
     }
   Module["_glfwDestroyWindow"] = _glfwDestroyWindow;
 
+  function _glfwGetClipboardString(win) {}
+  Module["_glfwGetClipboardString"] = _glfwGetClipboardString;
+
+  function _glfwGetCursorPos(winid, x, y) {
+      GLFW.getCursorPos(winid, x, y);
+    }
+  Module["_glfwGetCursorPos"] = _glfwGetCursorPos;
+
+  function _glfwGetFramebufferSize(winid, width, height) {
+      var ww = 0;
+      var wh = 0;
+  
+      var win = GLFW.WindowFromId(winid);
+      if (win) {
+        ww = win.width;
+        wh = win.height;
+      }
+  
+      if (width) {
+        HEAP32[((width)>>2)] = ww;
+      }
+  
+      if (height) {
+        HEAP32[((height)>>2)] = wh;
+      }
+    }
+  Module["_glfwGetFramebufferSize"] = _glfwGetFramebufferSize;
+
+  function _glfwGetInputMode(winid, mode) {
+      var win = GLFW.WindowFromId(winid);
+      if (!win) return;
+  
+      switch (mode) {
+        case 0x00033001: { // GLFW_CURSOR
+          if (Browser.pointerLock) {
+            win.inputModes[mode] = 0x00034003; // GLFW_CURSOR_DISABLED
+          } else {
+            win.inputModes[mode] = 0x00034001; // GLFW_CURSOR_NORMAL
+          }
+        }
+      }
+  
+      return win.inputModes[mode];
+    }
+  Module["_glfwGetInputMode"] = _glfwGetInputMode;
+
+  function _glfwGetJoystickAxes(joy, count) {
+      GLFW.refreshJoysticks();
+  
+      var state = GLFW.joys[joy];
+      if (!state || !state.axes) {
+        HEAP32[((count)>>2)] = 0;
+        return;
+      }
+  
+      HEAP32[((count)>>2)] = state.axesCount;
+      return state.axes;
+    }
+  Module["_glfwGetJoystickAxes"] = _glfwGetJoystickAxes;
+
+  function _glfwGetJoystickButtons(joy, count) {
+      GLFW.refreshJoysticks();
+  
+      var state = GLFW.joys[joy];
+      if (!state || !state.buttons) {
+        HEAP32[((count)>>2)] = 0;
+        return;
+      }
+  
+      HEAP32[((count)>>2)] = state.buttonsCount;
+      return state.buttons;
+    }
+  Module["_glfwGetJoystickButtons"] = _glfwGetJoystickButtons;
+
   function _glfwGetTime() {
       return GLFW.getTime() - GLFW.initialTime;
     }
   Module["_glfwGetTime"] = _glfwGetTime;
+
+  function _glfwGetWindowSize(winid, width, height) {
+      GLFW.getWindowSize(winid, width, height);
+    }
+  Module["_glfwGetWindowSize"] = _glfwGetWindowSize;
 
   function _glfwInit() {
       if (GLFW.windows) return 1; // GL_TRUE
@@ -15550,6 +15783,31 @@ var ASM_CONSTS = {
   function _glfwPollEvents() {}
   Module["_glfwPollEvents"] = _glfwPollEvents;
 
+  function _glfwSetCharCallback(winid, cbfun) {
+      return GLFW.setCharCallback(winid, cbfun);
+    }
+  Module["_glfwSetCharCallback"] = _glfwSetCharCallback;
+
+  function _glfwSetClipboardString(win, string) {}
+  Module["_glfwSetClipboardString"] = _glfwSetClipboardString;
+
+  function _glfwSetCursor(winid, cursor) {}
+  Module["_glfwSetCursor"] = _glfwSetCursor;
+
+  function _glfwSetCursorEnterCallback(winid, cbfun) {
+      var win = GLFW.WindowFromId(winid);
+      if (!win) return null;
+      var prevcbfun = win.cursorEnterFunc;
+      win.cursorEnterFunc = cbfun;
+      return prevcbfun;
+    }
+  Module["_glfwSetCursorEnterCallback"] = _glfwSetCursorEnterCallback;
+
+  function _glfwSetCursorPos(winid, x, y) {
+      GLFW.setCursorPos(winid, x, y);
+    }
+  Module["_glfwSetCursorPos"] = _glfwSetCursorPos;
+
   function _glfwSetCursorPosCallback(winid, cbfun) {
       return GLFW.setCursorPosCallback(winid, cbfun);
     }
@@ -15571,10 +15829,22 @@ var ASM_CONSTS = {
     }
   Module["_glfwSetFramebufferSizeCallback"] = _glfwSetFramebufferSizeCallback;
 
+  function _glfwSetInputMode(winid, mode, value) {
+      GLFW.setInputMode(winid, mode, value);
+    }
+  Module["_glfwSetInputMode"] = _glfwSetInputMode;
+
   function _glfwSetKeyCallback(winid, cbfun) {
       return GLFW.setKeyCallback(winid, cbfun);
     }
   Module["_glfwSetKeyCallback"] = _glfwSetKeyCallback;
+
+  function _glfwSetMonitorCallback(cbfun) {
+      var prevcbfun = GLFW.monitorFunc;
+      GLFW.monitorFunc = cbfun;
+      return prevcbfun;
+    }
+  Module["_glfwSetMonitorCallback"] = _glfwSetMonitorCallback;
 
   function _glfwSetMouseButtonCallback(winid, cbfun) {
       return GLFW.setMouseButtonCallback(winid, cbfun);
@@ -15585,6 +15855,15 @@ var ASM_CONSTS = {
       return GLFW.setScrollCallback(winid, cbfun);
     }
   Module["_glfwSetScrollCallback"] = _glfwSetScrollCallback;
+
+  function _glfwSetWindowFocusCallback(winid, cbfun) {
+      var win = GLFW.WindowFromId(winid);
+      if (!win) return null;
+      var prevcbfun = win.windowFocusFunc;
+      win.windowFocusFunc = cbfun;
+      return prevcbfun;
+    }
+  Module["_glfwSetWindowFocusCallback"] = _glfwSetWindowFocusCallback;
 
   function _glfwSetWindowShouldClose(winid, value) {
       var win = GLFW.WindowFromId(winid);
@@ -17116,10 +17395,16 @@ var asmLibraryArg = {
   "fd_write": _fd_write,
   "getentropy": _getentropy,
   "getnameinfo": _getnameinfo,
+  "glActiveTexture": _glActiveTexture,
   "glAttachShader": _glAttachShader,
   "glBindBuffer": _glBindBuffer,
+  "glBindTexture": _glBindTexture,
   "glBindVertexArray": _glBindVertexArray,
+  "glBlendEquation": _glBlendEquation,
+  "glBlendEquationSeparate": _glBlendEquationSeparate,
+  "glBlendFuncSeparate": _glBlendFuncSeparate,
   "glBufferData": _glBufferData,
+  "glBufferSubData": _glBufferSubData,
   "glClear": _glClear,
   "glClearColor": _glClearColor,
   "glCompileShader": _glCompileShader,
@@ -17128,21 +17413,35 @@ var asmLibraryArg = {
   "glDeleteBuffers": _glDeleteBuffers,
   "glDeleteProgram": _glDeleteProgram,
   "glDeleteShader": _glDeleteShader,
+  "glDeleteTextures": _glDeleteTextures,
   "glDeleteVertexArrays": _glDeleteVertexArrays,
+  "glDetachShader": _glDetachShader,
+  "glDisable": _glDisable,
   "glDrawArrays": _glDrawArrays,
   "glDrawArraysInstanced": _glDrawArraysInstanced,
   "glDrawBuffers": _glDrawBuffers,
+  "glDrawElements": _glDrawElements,
   "glDrawElementsInstanced": _glDrawElementsInstanced,
   "glEnable": _glEnable,
   "glEnableVertexAttribArray": _glEnableVertexAttribArray,
   "glGenBuffers": _glGenBuffers,
+  "glGenTextures": _glGenTextures,
   "glGenVertexArrays": _glGenVertexArrays,
+  "glGetAttribLocation": _glGetAttribLocation,
+  "glGetIntegerv": _glGetIntegerv,
+  "glGetProgramInfoLog": _glGetProgramInfoLog,
+  "glGetProgramiv": _glGetProgramiv,
   "glGetShaderInfoLog": _glGetShaderInfoLog,
   "glGetShaderiv": _glGetShaderiv,
   "glGetUniformLocation": _glGetUniformLocation,
+  "glIsEnabled": _glIsEnabled,
   "glIsVertexArray": _glIsVertexArray,
   "glLinkProgram": _glLinkProgram,
+  "glScissor": _glScissor,
   "glShaderSource": _glShaderSource,
+  "glTexImage2D": _glTexImage2D,
+  "glTexParameteri": _glTexParameteri,
+  "glUniform1i": _glUniform1i,
   "glUniform3fv": _glUniform3fv,
   "glUniformMatrix4fv": _glUniformMatrix4fv,
   "glUseProgram": _glUseProgram,
@@ -17150,18 +17449,35 @@ var asmLibraryArg = {
   "glVertexAttribPointer": _glVertexAttribPointer,
   "glViewport": _glViewport,
   "glewInit": _glewInit,
+  "glfwCreateStandardCursor": _glfwCreateStandardCursor,
   "glfwCreateWindow": _glfwCreateWindow,
+  "glfwDestroyCursor": _glfwDestroyCursor,
   "glfwDestroyWindow": _glfwDestroyWindow,
+  "glfwGetClipboardString": _glfwGetClipboardString,
+  "glfwGetCursorPos": _glfwGetCursorPos,
+  "glfwGetFramebufferSize": _glfwGetFramebufferSize,
+  "glfwGetInputMode": _glfwGetInputMode,
+  "glfwGetJoystickAxes": _glfwGetJoystickAxes,
+  "glfwGetJoystickButtons": _glfwGetJoystickButtons,
   "glfwGetTime": _glfwGetTime,
+  "glfwGetWindowSize": _glfwGetWindowSize,
   "glfwInit": _glfwInit,
   "glfwMakeContextCurrent": _glfwMakeContextCurrent,
   "glfwPollEvents": _glfwPollEvents,
+  "glfwSetCharCallback": _glfwSetCharCallback,
+  "glfwSetClipboardString": _glfwSetClipboardString,
+  "glfwSetCursor": _glfwSetCursor,
+  "glfwSetCursorEnterCallback": _glfwSetCursorEnterCallback,
+  "glfwSetCursorPos": _glfwSetCursorPos,
   "glfwSetCursorPosCallback": _glfwSetCursorPosCallback,
   "glfwSetErrorCallback": _glfwSetErrorCallback,
   "glfwSetFramebufferSizeCallback": _glfwSetFramebufferSizeCallback,
+  "glfwSetInputMode": _glfwSetInputMode,
   "glfwSetKeyCallback": _glfwSetKeyCallback,
+  "glfwSetMonitorCallback": _glfwSetMonitorCallback,
   "glfwSetMouseButtonCallback": _glfwSetMouseButtonCallback,
   "glfwSetScrollCallback": _glfwSetScrollCallback,
+  "glfwSetWindowFocusCallback": _glfwSetWindowFocusCallback,
   "glfwSetWindowShouldClose": _glfwSetWindowShouldClose,
   "glfwSwapBuffers": _glfwSwapBuffers,
   "glfwSwapInterval": _glfwSwapInterval,
@@ -17259,34 +17575,16 @@ var __Z10draw_graphf = Module["__Z10draw_graphf"] = createExportWrapper("_Z10dra
 var __ZN4NodeC2ERKS_ = Module["__ZN4NodeC2ERKS_"] = createExportWrapper("_ZN4NodeC2ERKS_");
 
 /** @type {function(...*):?} */
-var __ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_ = Module["__ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_"] = createExportWrapper("_ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_");
-
-/** @type {function(...*):?} */
-var __ZN4NodeD2Ev = Module["__ZN4NodeD2Ev"] = createExportWrapper("_ZN4NodeD2Ev");
+var _memset = Module["_memset"] = createExportWrapper("memset");
 
 /** @type {function(...*):?} */
 var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IdddEET_T0_T1_ = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IdddEET_T0_T1_"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2IdddEET_T0_T1_");
 
 /** @type {function(...*):?} */
-var __ZN4Line11setVerticesEN3glm3vecILi3EfLNS0_9qualifierE0EEES3_ = Module["__ZN4Line11setVerticesEN3glm3vecILi3EfLNS0_9qualifierE0EEES3_"] = createExportWrapper("_ZN4Line11setVerticesEN3glm3vecILi3EfLNS0_9qualifierE0EEES3_");
-
-/** @type {function(...*):?} */
-var __ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_");
+var __ZN3glm9translateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_RKNS_3vecILi3ES3_XT0_EEE = Module["__ZN3glm9translateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_RKNS_3vecILi3ES3_XT0_EEE"] = createExportWrapper("_ZN3glm9translateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_RKNS_3vecILi3ES3_XT0_EEE");
 
 /** @type {function(...*):?} */
 var _memcpy = Module["_memcpy"] = createExportWrapper("memcpy");
-
-/** @type {function(...*):?} */
-var __ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE = Module["__ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE"] = createExportWrapper("_ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE");
-
-/** @type {function(...*):?} */
-var __ZN4Line4drawEv = Module["__ZN4Line4drawEv"] = createExportWrapper("_ZN4Line4drawEv");
-
-/** @type {function(...*):?} */
-var _memset = Module["_memset"] = createExportWrapper("memset");
-
-/** @type {function(...*):?} */
-var __ZN3glm9translateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_RKNS_3vecILi3ES3_XT0_EEE = Module["__ZN3glm9translateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_RKNS_3vecILi3ES3_XT0_EEE"] = createExportWrapper("_ZN3glm9translateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_RKNS_3vecILi3ES3_XT0_EEE");
 
 /** @type {function(...*):?} */
 var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Efff = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Efff"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Efff");
@@ -17302,6 +17600,24 @@ var __ZN11SolidSphere6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEES3_S3_ = Mod
 
 /** @type {function(...*):?} */
 var __ZN11SolidSphere4drawEv = Module["__ZN11SolidSphere4drawEv"] = createExportWrapper("_ZN11SolidSphere4drawEv");
+
+/** @type {function(...*):?} */
+var __ZN4NodeD2Ev = Module["__ZN4NodeD2Ev"] = createExportWrapper("_ZN4NodeD2Ev");
+
+/** @type {function(...*):?} */
+var __ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_ = Module["__ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_"] = createExportWrapper("_ZNSt3__213unordered_setIiNS_4hashIiEENS_8equal_toIiEENS_9allocatorIiEEEC2ERKS7_");
+
+/** @type {function(...*):?} */
+var __ZN4Line11setVerticesEN3glm3vecILi3EfLNS0_9qualifierE0EEES3_ = Module["__ZN4Line11setVerticesEN3glm3vecILi3EfLNS0_9qualifierE0EEES3_"] = createExportWrapper("_ZN4Line11setVerticesEN3glm3vecILi3EfLNS0_9qualifierE0EEES3_");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S6_");
+
+/** @type {function(...*):?} */
+var __ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE = Module["__ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE"] = createExportWrapper("_ZN4Line6setMVPEN3glm3matILi4ELi4EfLNS0_9qualifierE0EEE");
+
+/** @type {function(...*):?} */
+var __ZN4Line4drawEv = Module["__ZN4Line4drawEv"] = createExportWrapper("_ZN4Line4drawEv");
 
 /** @type {function(...*):?} */
 var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEC2ERKS5_ = Module["__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEC2ERKS5_"] = createExportWrapper("_ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEC2ERKS5_");
@@ -17352,6 +17668,12 @@ var __ZNSt3__2lsINS_11char_traitsIcEEEERNS_13basic_ostreamIcT_EES6_PKc = Module[
 var __ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_ = Module["__ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_"] = createExportWrapper("_ZNSt3__24endlIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_");
 
 /** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Ef = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Ef"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEC2Ef");
+
+/** @type {function(...*):?} */
+var __ZN3glm8distanceILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_ = Module["__ZN3glm8distanceILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_"] = createExportWrapper("_ZN3glm8distanceILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_");
+
+/** @type {function(...*):?} */
 var __ZN8MyCamera8view_dirEv = Module["__ZN8MyCamera8view_dirEv"] = createExportWrapper("_ZN8MyCamera8view_dirEv");
 
 /** @type {function(...*):?} */
@@ -17359,6 +17681,12 @@ var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEES3_RKS4_ = Module["__ZN3
 
 /** @type {function(...*):?} */
 var __ZN3glm3vecILi3EfLNS_9qualifierE0EEpLIfEERS2_RKNS0_ILi3ET_LS1_0EEE = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEpLIfEERS2_RKNS0_ILi3ET_LS1_0EEE"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEpLIfEERS2_RKNS0_ILi3ET_LS1_0EEE");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_");
+
+/** @type {function(...*):?} */
+var __ZN3glm3vecILi3EfLNS_9qualifierE0EEmIIfEERS2_RKNS0_ILi3ET_LS1_0EEE = Module["__ZN3glm3vecILi3EfLNS_9qualifierE0EEmIIfEERS2_RKNS0_ILi3ET_LS1_0EEE"] = createExportWrapper("_ZN3glm3vecILi3EfLNS_9qualifierE0EEmIIfEERS2_RKNS0_ILi3ET_LS1_0EEE");
 
 /** @type {function(...*):?} */
 var __ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m = Module["__ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m"] = createExportWrapper("_ZNSt3__224__put_character_sequenceIcNS_11char_traitsIcEEEERNS_13basic_ostreamIT_T0_EES7_PKS4_m");
@@ -17370,7 +17698,16 @@ var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE3putEc = Module["__ZNSt3__21
 var __ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv = Module["__ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv"] = createExportWrapper("_ZNSt3__213basic_ostreamIcNS_11char_traitsIcEEE5flushEv");
 
 /** @type {function(...*):?} */
+var __ZN3glm6detail16compute_distanceILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEES7_ = Module["__ZN3glm6detail16compute_distanceILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEES7_"] = createExportWrapper("_ZN3glm6detail16compute_distanceILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEES7_");
+
+/** @type {function(...*):?} */
 var __Z21mouse_button_callbackP10GLFWwindowiii = Module["__Z21mouse_button_callbackP10GLFWwindowiii"] = createExportWrapper("_Z21mouse_button_callbackP10GLFWwindowiii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5GetIOEv = Module["__ZN5ImGui5GetIOEv"] = createExportWrapper("_ZN5ImGui5GetIOEv");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO19AddMouseButtonEventEib = Module["__ZN7ImGuiIO19AddMouseButtonEventEib"] = createExportWrapper("_ZN7ImGuiIO19AddMouseButtonEventEib");
 
 /** @type {function(...*):?} */
 var __Z25framebuffer_size_callbackP10GLFWwindowii = Module["__Z25framebuffer_size_callbackP10GLFWwindowii"] = createExportWrapper("_Z25framebuffer_size_callbackP10GLFWwindowii");
@@ -17406,7 +17743,25 @@ var __ZN11SolidSphere4initEv = Module["__ZN11SolidSphere4initEv"] = createExport
 var __ZN4Line4initEv = Module["__ZN4Line4initEv"] = createExportWrapper("_ZN4Line4initEv");
 
 /** @type {function(...*):?} */
-var ___small_printf = Module["___small_printf"] = createExportWrapper("__small_printf");
+var __ZN5ImGui30DebugCheckVersionAndDataLayoutEPKcmmmmmm = Module["__ZN5ImGui30DebugCheckVersionAndDataLayoutEPKcmmmmmm"] = createExportWrapper("_ZN5ImGui30DebugCheckVersionAndDataLayoutEPKcmmmmmm");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13CreateContextEP11ImFontAtlas = Module["__ZN5ImGui13CreateContextEP11ImFontAtlas"] = createExportWrapper("_ZN5ImGui13CreateContextEP11ImFontAtlas");
+
+/** @type {function(...*):?} */
+var __Z28ImGui_ImplGlfw_InitForOpenGLP10GLFWwindowb = Module["__Z28ImGui_ImplGlfw_InitForOpenGLP10GLFWwindowb"] = createExportWrapper("_Z28ImGui_ImplGlfw_InitForOpenGLP10GLFWwindowb");
+
+/** @type {function(...*):?} */
+var __Z22ImGui_ImplOpenGL3_InitPKc = Module["__Z22ImGui_ImplOpenGL3_InitPKc"] = createExportWrapper("_Z22ImGui_ImplOpenGL3_InitPKc");
+
+/** @type {function(...*):?} */
+var __Z26ImGui_ImplOpenGL3_Shutdownv = Module["__Z26ImGui_ImplOpenGL3_Shutdownv"] = createExportWrapper("_Z26ImGui_ImplOpenGL3_Shutdownv");
+
+/** @type {function(...*):?} */
+var __Z23ImGui_ImplGlfw_Shutdownv = Module["__Z23ImGui_ImplGlfw_Shutdownv"] = createExportWrapper("_Z23ImGui_ImplGlfw_Shutdownv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14DestroyContextEP12ImGuiContext = Module["__ZN5ImGui14DestroyContextEP12ImGuiContext"] = createExportWrapper("_ZN5ImGui14DestroyContextEP12ImGuiContext");
 
 /** @type {function(...*):?} */
 var _fiprintf = Module["_fiprintf"] = createExportWrapper("fiprintf");
@@ -17688,6 +18043,24 @@ var __ZNKSt3__26locale9use_facetERNS0_2idE = Module["__ZNKSt3__26locale9use_face
 var __ZNSt3__28ios_base5clearEj = Module["__ZNSt3__28ios_base5clearEj"] = createExportWrapper("_ZNSt3__28ios_base5clearEj");
 
 /** @type {function(...*):?} */
+var __ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
+
+/** @type {function(...*):?} */
+var __ZN3glm6lengthILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEE = Module["__ZN3glm6lengthILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEE"] = createExportWrapper("_ZN3glm6lengthILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEE");
+
+/** @type {function(...*):?} */
+var __ZN3glm6detail14compute_lengthILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEE = Module["__ZN3glm6detail14compute_lengthILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEE"] = createExportWrapper("_ZN3glm6detail14compute_lengthILi3EfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfLS2_0EEE");
+
+/** @type {function(...*):?} */
+var __ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_ = Module["__ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_"] = createExportWrapper("_ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_");
+
+/** @type {function(...*):?} */
+var __ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_ = Module["__ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_"] = createExportWrapper("_ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_");
+
+/** @type {function(...*):?} */
+var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
+
+/** @type {function(...*):?} */
 var __ZNSt3__217bad_function_callC2Ev = Module["__ZNSt3__217bad_function_callC2Ev"] = createExportWrapper("_ZNSt3__217bad_function_callC2Ev");
 
 /** @type {function(...*):?} */
@@ -17706,7 +18079,49 @@ var __ZN3glm6detail11compute_absIfLb1EE4callEf = Module["__ZN3glm6detail11comput
 var _tanf = Module["_tanf"] = createExportWrapper("tanf");
 
 /** @type {function(...*):?} */
+var __Z26ImGui_ImplOpenGL3_NewFramev = Module["__Z26ImGui_ImplOpenGL3_NewFramev"] = createExportWrapper("_Z26ImGui_ImplOpenGL3_NewFramev");
+
+/** @type {function(...*):?} */
+var __Z23ImGui_ImplGlfw_NewFramev = Module["__Z23ImGui_ImplGlfw_NewFramev"] = createExportWrapper("_Z23ImGui_ImplGlfw_NewFramev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8NewFrameEv = Module["__ZN5ImGui8NewFrameEv"] = createExportWrapper("_ZN5ImGui8NewFrameEv");
+
+/** @type {function(...*):?} */
 var __ZN8Universe6updateEd = Module["__ZN8Universe6updateEd"] = createExportWrapper("_ZN8Universe6updateEd");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5BeginEPKcPbi = Module["__ZN5ImGui5BeginEPKcPbi"] = createExportWrapper("_ZN5ImGui5BeginEPKcPbi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9SliderIntEPKcPiiiS1_i = Module["__ZN5ImGui9SliderIntEPKcPiiiS1_i"] = createExportWrapper("_ZN5ImGui9SliderIntEPKcPiiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN6ImVec2C2Eff = Module["__ZN6ImVec2C2Eff"] = createExportWrapper("_ZN6ImVec2C2Eff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6ButtonEPKcRK6ImVec2 = Module["__ZN5ImGui6ButtonEPKcRK6ImVec2"] = createExportWrapper("_ZN5ImGui6ButtonEPKcRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8SameLineEff = Module["__ZN5ImGui8SameLineEff"] = createExportWrapper("_ZN5ImGui8SameLineEff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui4TextEPKcz = Module["__ZN5ImGui4TextEPKcz"] = createExportWrapper("_ZN5ImGui4TextEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8CheckboxEPKcPb = Module["__ZN5ImGui8CheckboxEPKcPb"] = createExportWrapper("_ZN5ImGui8CheckboxEPKcPb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui3EndEv = Module["__ZN5ImGui3EndEv"] = createExportWrapper("_ZN5ImGui3EndEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6RenderEv = Module["__ZN5ImGui6RenderEv"] = createExportWrapper("_ZN5ImGui6RenderEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetDrawDataEv = Module["__ZN5ImGui11GetDrawDataEv"] = createExportWrapper("_ZN5ImGui11GetDrawDataEv");
+
+/** @type {function(...*):?} */
+var __Z32ImGui_ImplOpenGL3_RenderDrawDataP10ImDrawData = Module["__Z32ImGui_ImplOpenGL3_RenderDrawDataP10ImDrawData"] = createExportWrapper("_Z32ImGui_ImplOpenGL3_RenderDrawDataP10ImDrawData");
 
 /** @type {function(...*):?} */
 var __ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv = Module["__ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv"] = createExportWrapper("_ZNSt3__210__function12__value_funcIFvvEE9__as_baseEPv");
@@ -18015,9 +18430,6 @@ var __ZN3glm3vecILi4EfLNS_9qualifierE0EEmIIfEERS2_RKNS0_ILi4ET_LS1_0EEE = Module
 var __ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IfffdEET_T0_T1_T2_ = Module["__ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IfffdEET_T0_T1_T2_"] = createExportWrapper("_ZN3glm3vecILi4EfLNS_9qualifierE0EEC2IfffdEET_T0_T1_T2_");
 
 /** @type {function(...*):?} */
-var __ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_ = Module["__ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_"] = createExportWrapper("_ZN3glm3dotILi3EfLNS_9qualifierE0EEET0_RKNS_3vecIXT_ES2_XT1_EEES6_");
-
-/** @type {function(...*):?} */
 var __ZN3glm6rotateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S3_RKNS_3vecILi3ES3_XT0_EEE = Module["__ZN3glm6rotateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S3_RKNS_3vecILi3ES3_XT0_EEE"] = createExportWrapper("_ZN3glm6rotateIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EEERKS4_S3_RKNS_3vecILi3ES3_XT0_EEE");
 
 /** @type {function(...*):?} */
@@ -18025,9 +18437,6 @@ var __ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_S6_ = Module["__ZN3
 
 /** @type {function(...*):?} */
 var __ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EE8col_typeERKS4_RKNS4_8row_typeE = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EE8col_typeERKS4_RKNS4_8row_typeE"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3matILi4ELi4ET_XT0_EE8col_typeERKS4_RKNS4_8row_typeE");
-
-/** @type {function(...*):?} */
-var __ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_ = Module["__ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_"] = createExportWrapper("_ZN3glm6detail11compute_dotINS_3vecILi3EfLNS_9qualifierE0EEEfLb0EE4callERKS4_S7_");
 
 /** @type {function(...*):?} */
 var __ZN3glm9normalizeILi3EfLNS_9qualifierE0EEENS_3vecIXT_ET0_XT1_EEERKS4_ = Module["__ZN3glm9normalizeILi3EfLNS_9qualifierE0EEENS_3vecIXT_ET0_XT1_EEERKS4_"] = createExportWrapper("_ZN3glm9normalizeILi3EfLNS_9qualifierE0EEENS_3vecIXT_ET0_XT1_EEERKS4_");
@@ -18042,9 +18451,6 @@ var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi4ET_XT0_EEERKS4_S6_ = Module["__ZN3
 var __ZN3glm6detail16compute_vec4_subIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_ = Module["__ZN3glm6detail16compute_vec4_subIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_"] = createExportWrapper("_ZN3glm6detail16compute_vec4_subIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi4EfLS2_0EEES7_");
 
 /** @type {function(...*):?} */
-var __ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmiIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
-
-/** @type {function(...*):?} */
 var __ZN3glm5crossIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glm5crossIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glm5crossIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
 
 /** @type {function(...*):?} */
@@ -18055,12 +18461,6 @@ var __ZN3glm6detail13compute_crossIfLNS_9qualifierE0ELb0EE4callERKNS_3vecILi3EfL
 
 /** @type {function(...*):?} */
 var __ZN3glm11inversesqrtIfEET_S1_ = Module["__ZN3glm11inversesqrtIfEET_S1_"] = createExportWrapper("_ZN3glm11inversesqrtIfEET_S1_");
-
-/** @type {function(...*):?} */
-var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S3_");
-
-/** @type {function(...*):?} */
-var __ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_ = Module["__ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_"] = createExportWrapper("_ZN3glmmlIfLNS_9qualifierE0EEENS_3vecILi3ET_XT0_EEERKS4_S6_");
 
 /** @type {function(...*):?} */
 var _cosf = Module["_cosf"] = createExportWrapper("cosf");
@@ -18177,16 +18577,4996 @@ var __ZNSt3__218__unwrap_iter_implIPKfLb1EE7__applyES2_ = Module["__ZNSt3__218__
 var __ZNSt3__218__unwrap_iter_implIPfLb1EE7__applyES1_ = Module["__ZNSt3__218__unwrap_iter_implIPfLb1EE7__applyES1_"] = createExportWrapper("_ZNSt3__218__unwrap_iter_implIPfLb1EE7__applyES1_");
 
 /** @type {function(...*):?} */
-var _emscripten_GetProcAddress = Module["_emscripten_GetProcAddress"] = createExportWrapper("emscripten_GetProcAddress");
+var __ZN10ImGuiStyleC2Ev = Module["__ZN10ImGuiStyleC2Ev"] = createExportWrapper("_ZN10ImGuiStyleC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImVec2C2Ev = Module["__ZN6ImVec2C2Ev"] = createExportWrapper("_ZN6ImVec2C2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImVec4C2Ev = Module["__ZN6ImVec4C2Ev"] = createExportWrapper("_ZN6ImVec4C2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15StyleColorsDarkEP10ImGuiStyle = Module["__ZN5ImGui15StyleColorsDarkEP10ImGuiStyle"] = createExportWrapper("_ZN5ImGui15StyleColorsDarkEP10ImGuiStyle");
+
+/** @type {function(...*):?} */
+var __ZN10ImGuiStyle13ScaleAllSizesEf = Module["__ZN10ImGuiStyle13ScaleAllSizesEf"] = createExportWrapper("_ZN10ImGuiStyle13ScaleAllSizesEf");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIOC2Ev = Module["__ZN7ImGuiIOC2Ev"] = createExportWrapper("_ZN7ImGuiIOC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItEC2Ev = Module["__ZN8ImVectorItEC2Ev"] = createExportWrapper("_ZN8ImVectorItEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIcE5emptyEv = Module["__ZNK8ImVectorIcE5emptyEv"] = createExportWrapper("_ZNK8ImVectorIcE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE5beginEv = Module["__ZN8ImVectorIcE5beginEv"] = createExportWrapper("_ZN8ImVectorIcE5beginEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE5clearEv = Module["__ZN8ImVectorIcE5clearEv"] = createExportWrapper("_ZN8ImVectorIcE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE6resizeEi = Module["__ZN8ImVectorIcE6resizeEi"] = createExportWrapper("_ZN8ImVectorIcE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcEixEi = Module["__ZN8ImVectorIcEixEi"] = createExportWrapper("_ZN8ImVectorIcEixEi");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO17AddInputCharacterEj = Module["__ZN7ImGuiIO17AddInputCharacterEj"] = createExportWrapper("_ZN7ImGuiIO17AddInputCharacterEj");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiInputEventC2Ev = Module["__ZN15ImGuiInputEventC2Ev"] = createExportWrapper("_ZN15ImGuiInputEventC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventE9push_backERKS0_ = Module["__ZN8ImVectorI15ImGuiInputEventE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI15ImGuiInputEventE14_grow_capacityEi = Module["__ZNK8ImVectorI15ImGuiInputEventE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI15ImGuiInputEventE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventE7reserveEi = Module["__ZN8ImVectorI15ImGuiInputEventE7reserveEi"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO22AddInputCharacterUTF16Et = Module["__ZN7ImGuiIO22AddInputCharacterUTF16Et"] = createExportWrapper("_ZN7ImGuiIO22AddInputCharacterUTF16Et");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO22AddInputCharactersUTF8EPKc = Module["__ZN7ImGuiIO22AddInputCharactersUTF8EPKc"] = createExportWrapper("_ZN7ImGuiIO22AddInputCharactersUTF8EPKc");
+
+/** @type {function(...*):?} */
+var __Z18ImTextCharFromUtf8PjPKcS1_ = Module["__Z18ImTextCharFromUtf8PjPKcS1_"] = createExportWrapper("_Z18ImTextCharFromUtf8PjPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO20ClearInputCharactersEv = Module["__ZN7ImGuiIO20ClearInputCharactersEv"] = createExportWrapper("_ZN7ImGuiIO20ClearInputCharactersEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItE6resizeEi = Module["__ZN8ImVectorItE6resizeEi"] = createExportWrapper("_ZN8ImVectorItE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorItE14_grow_capacityEi = Module["__ZNK8ImVectorItE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorItE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItE7reserveEi = Module["__ZN8ImVectorItE7reserveEi"] = createExportWrapper("_ZN8ImVectorItE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO14ClearInputKeysEv = Module["__ZN7ImGuiIO14ClearInputKeysEv"] = createExportWrapper("_ZN7ImGuiIO14ClearInputKeysEv");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO17AddKeyAnalogEventEibf = Module["__ZN7ImGuiIO17AddKeyAnalogEventEibf"] = createExportWrapper("_ZN7ImGuiIO17AddKeyAnalogEventEibf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10IsNamedKeyEi = Module["__ZN5ImGui10IsNamedKeyEi"] = createExportWrapper("_ZN5ImGui10IsNamedKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10IsAliasKeyEi = Module["__ZN5ImGui10IsAliasKeyEi"] = createExportWrapper("_ZN5ImGui10IsAliasKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12IsGamepadKeyEi = Module["__ZN5ImGui12IsGamepadKeyEi"] = createExportWrapper("_ZN5ImGui12IsGamepadKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10GetKeyDataEi = Module["__ZN5ImGui10GetKeyDataEi"] = createExportWrapper("_ZN5ImGui10GetKeyDataEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventEixEi = Module["__ZN8ImVectorI15ImGuiInputEventEixEi"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11IsLegacyKeyEi = Module["__ZN5ImGui11IsLegacyKeyEi"] = createExportWrapper("_ZN5ImGui11IsLegacyKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO11AddKeyEventEib = Module["__ZN7ImGuiIO11AddKeyEventEib"] = createExportWrapper("_ZN7ImGuiIO11AddKeyEventEib");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO21SetKeyEventNativeDataEiiii = Module["__ZN7ImGuiIO21SetKeyEventNativeDataEiiii"] = createExportWrapper("_ZN7ImGuiIO21SetKeyEventNativeDataEiiii");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO21SetAppAcceptingEventsEb = Module["__ZN7ImGuiIO21SetAppAcceptingEventsEb"] = createExportWrapper("_ZN7ImGuiIO21SetAppAcceptingEventsEb");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO16AddMousePosEventEff = Module["__ZN7ImGuiIO16AddMousePosEventEff"] = createExportWrapper("_ZN7ImGuiIO16AddMousePosEventEff");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO18AddMouseWheelEventEff = Module["__ZN7ImGuiIO18AddMouseWheelEventEff"] = createExportWrapper("_ZN7ImGuiIO18AddMouseWheelEventEff");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIO13AddFocusEventEb = Module["__ZN7ImGuiIO13AddFocusEventEb"] = createExportWrapper("_ZN7ImGuiIO13AddFocusEventEb");
+
+/** @type {function(...*):?} */
+var __Z25ImBezierCubicClosestPointRK6ImVec2S1_S1_S1_S1_i = Module["__Z25ImBezierCubicClosestPointRK6ImVec2S1_S1_S1_S1_i"] = createExportWrapper("_Z25ImBezierCubicClosestPointRK6ImVec2S1_S1_S1_S1_i");
+
+/** @type {function(...*):?} */
+var __Z17ImBezierCubicCalcRK6ImVec2S1_S1_S1_f = Module["__Z17ImBezierCubicCalcRK6ImVec2S1_S1_S1_f"] = createExportWrapper("_Z17ImBezierCubicCalcRK6ImVec2S1_S1_S1_f");
+
+/** @type {function(...*):?} */
+var __Z18ImLineClosestPointRK6ImVec2S1_S1_ = Module["__Z18ImLineClosestPointRK6ImVec2S1_S1_"] = createExportWrapper("_Z18ImLineClosestPointRK6ImVec2S1_S1_");
+
+/** @type {function(...*):?} */
+var __Z34ImBezierCubicClosestPointCasteljauRK6ImVec2S1_S1_S1_S1_f = Module["__Z34ImBezierCubicClosestPointCasteljauRK6ImVec2S1_S1_S1_S1_f"] = createExportWrapper("_Z34ImBezierCubicClosestPointCasteljauRK6ImVec2S1_S1_S1_S1_f");
+
+/** @type {function(...*):?} */
+var __Z23ImTriangleContainsPointRK6ImVec2S1_S1_S1_ = Module["__Z23ImTriangleContainsPointRK6ImVec2S1_S1_S1_"] = createExportWrapper("_Z23ImTriangleContainsPointRK6ImVec2S1_S1_S1_");
+
+/** @type {function(...*):?} */
+var __Z27ImTriangleBarycentricCoordsRK6ImVec2S1_S1_S1_RfS2_S2_ = Module["__Z27ImTriangleBarycentricCoordsRK6ImVec2S1_S1_S1_RfS2_S2_"] = createExportWrapper("_Z27ImTriangleBarycentricCoordsRK6ImVec2S1_S1_S1_RfS2_S2_");
+
+/** @type {function(...*):?} */
+var __Z22ImTriangleClosestPointRK6ImVec2S1_S1_S1_ = Module["__Z22ImTriangleClosestPointRK6ImVec2S1_S1_S1_"] = createExportWrapper("_Z22ImTriangleClosestPointRK6ImVec2S1_S1_S1_");
+
+/** @type {function(...*):?} */
+var __Z9ImStricmpPKcS0_ = Module["__Z9ImStricmpPKcS0_"] = createExportWrapper("_Z9ImStricmpPKcS0_");
+
+/** @type {function(...*):?} */
+var _toupper = Module["_toupper"] = createExportWrapper("toupper");
+
+/** @type {function(...*):?} */
+var __Z10ImStrnicmpPKcS0_m = Module["__Z10ImStrnicmpPKcS0_m"] = createExportWrapper("_Z10ImStrnicmpPKcS0_m");
+
+/** @type {function(...*):?} */
+var __Z9ImStrncpyPcPKcm = Module["__Z9ImStrncpyPcPKcm"] = createExportWrapper("_Z9ImStrncpyPcPKcm");
+
+/** @type {function(...*):?} */
+var _strncpy = Module["_strncpy"] = createExportWrapper("strncpy");
+
+/** @type {function(...*):?} */
+var __Z8ImStrdupPKc = Module["__Z8ImStrdupPKc"] = createExportWrapper("_Z8ImStrdupPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8MemAllocEm = Module["__ZN5ImGui8MemAllocEm"] = createExportWrapper("_ZN5ImGui8MemAllocEm");
+
+/** @type {function(...*):?} */
+var __Z11ImStrdupcpyPcPmPKc = Module["__Z11ImStrdupcpyPcPmPKc"] = createExportWrapper("_Z11ImStrdupcpyPcPmPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7MemFreeEPv = Module["__ZN5ImGui7MemFreeEPv"] = createExportWrapper("_ZN5ImGui7MemFreeEPv");
+
+/** @type {function(...*):?} */
+var __Z13ImStrchrRangePKcS0_c = Module["__Z13ImStrchrRangePKcS0_c"] = createExportWrapper("_Z13ImStrchrRangePKcS0_c");
+
+/** @type {function(...*):?} */
+var __Z9ImStrlenWPKt = Module["__Z9ImStrlenWPKt"] = createExportWrapper("_Z9ImStrlenWPKt");
+
+/** @type {function(...*):?} */
+var __Z13ImStreolRangePKcS0_ = Module["__Z13ImStreolRangePKcS0_"] = createExportWrapper("_Z13ImStreolRangePKcS0_");
+
+/** @type {function(...*):?} */
+var __Z9ImStrbolWPKtS0_ = Module["__Z9ImStrbolWPKtS0_"] = createExportWrapper("_Z9ImStrbolWPKtS0_");
+
+/** @type {function(...*):?} */
+var __Z9ImStristrPKcS0_S0_S0_ = Module["__Z9ImStristrPKcS0_S0_S0_"] = createExportWrapper("_Z9ImStristrPKcS0_S0_S0_");
+
+/** @type {function(...*):?} */
+var __Z15ImStrTrimBlanksPc = Module["__Z15ImStrTrimBlanksPc"] = createExportWrapper("_Z15ImStrTrimBlanksPc");
+
+/** @type {function(...*):?} */
+var __Z14ImStrSkipBlankPKc = Module["__Z14ImStrSkipBlankPKc"] = createExportWrapper("_Z14ImStrSkipBlankPKc");
+
+/** @type {function(...*):?} */
+var __Z14ImFormatStringPcmPKcz = Module["__Z14ImFormatStringPcmPKcz"] = createExportWrapper("_Z14ImFormatStringPcmPKcz");
+
+/** @type {function(...*):?} */
+var _vsnprintf = Module["_vsnprintf"] = createExportWrapper("vsnprintf");
+
+/** @type {function(...*):?} */
+var __Z15ImFormatStringVPcmPKcPv = Module["__Z15ImFormatStringVPcmPKcPv"] = createExportWrapper("_Z15ImFormatStringVPcmPKcPv");
+
+/** @type {function(...*):?} */
+var __Z26ImFormatStringToTempBufferPPKcS1_S0_z = Module["__Z26ImFormatStringToTempBufferPPKcS1_S0_z"] = createExportWrapper("_Z26ImFormatStringToTempBufferPPKcS1_S0_z");
+
+/** @type {function(...*):?} */
+var __Z27ImFormatStringToTempBufferVPPKcS1_S0_Pv = Module["__Z27ImFormatStringToTempBufferVPPKcS1_S0_Pv"] = createExportWrapper("_Z27ImFormatStringToTempBufferVPPKcS1_S0_Pv");
+
+/** @type {function(...*):?} */
+var __Z10ImHashDataPKvmj = Module["__Z10ImHashDataPKvmj"] = createExportWrapper("_Z10ImHashDataPKvmj");
+
+/** @type {function(...*):?} */
+var __Z9ImHashStrPKcmj = Module["__Z9ImHashStrPKcmj"] = createExportWrapper("_Z9ImHashStrPKcmj");
+
+/** @type {function(...*):?} */
+var __Z10ImFileOpenPKcS0_ = Module["__Z10ImFileOpenPKcS0_"] = createExportWrapper("_Z10ImFileOpenPKcS0_");
+
+/** @type {function(...*):?} */
+var _fopen = Module["_fopen"] = createExportWrapper("fopen");
+
+/** @type {function(...*):?} */
+var __Z11ImFileCloseP8_IO_FILE = Module["__Z11ImFileCloseP8_IO_FILE"] = createExportWrapper("_Z11ImFileCloseP8_IO_FILE");
+
+/** @type {function(...*):?} */
+var _fclose = Module["_fclose"] = createExportWrapper("fclose");
+
+/** @type {function(...*):?} */
+var __Z13ImFileGetSizeP8_IO_FILE = Module["__Z13ImFileGetSizeP8_IO_FILE"] = createExportWrapper("_Z13ImFileGetSizeP8_IO_FILE");
+
+/** @type {function(...*):?} */
+var _ftell = Module["_ftell"] = createExportWrapper("ftell");
+
+/** @type {function(...*):?} */
+var _fseek = Module["_fseek"] = createExportWrapper("fseek");
+
+/** @type {function(...*):?} */
+var __Z10ImFileReadPvyyP8_IO_FILE = Module["__Z10ImFileReadPvyyP8_IO_FILE"] = createExportWrapper("_Z10ImFileReadPvyyP8_IO_FILE");
+
+/** @type {function(...*):?} */
+var _fread = Module["_fread"] = createExportWrapper("fread");
+
+/** @type {function(...*):?} */
+var __Z11ImFileWritePKvyyP8_IO_FILE = Module["__Z11ImFileWritePKvyyP8_IO_FILE"] = createExportWrapper("_Z11ImFileWritePKvyyP8_IO_FILE");
+
+/** @type {function(...*):?} */
+var _fwrite = Module["_fwrite"] = createExportWrapper("fwrite");
+
+/** @type {function(...*):?} */
+var __Z18ImFileLoadToMemoryPKcS0_Pmi = Module["__Z18ImFileLoadToMemoryPKcS0_Pmi"] = createExportWrapper("_Z18ImFileLoadToMemoryPKcS0_Pmi");
+
+/** @type {function(...*):?} */
+var __Z17ImTextStrFromUtf8PtiPKcS1_PS1_ = Module["__Z17ImTextStrFromUtf8PtiPKcS1_PS1_"] = createExportWrapper("_Z17ImTextStrFromUtf8PtiPKcS1_PS1_");
+
+/** @type {function(...*):?} */
+var __Z24ImTextCountCharsFromUtf8PKcS0_ = Module["__Z24ImTextCountCharsFromUtf8PKcS0_"] = createExportWrapper("_Z24ImTextCountCharsFromUtf8PKcS0_");
+
+/** @type {function(...*):?} */
+var __Z16ImTextCharToUtf8Pcj = Module["__Z16ImTextCharToUtf8Pcj"] = createExportWrapper("_Z16ImTextCharToUtf8Pcj");
+
+/** @type {function(...*):?} */
+var __Z28ImTextCountUtf8BytesFromCharPKcS0_ = Module["__Z28ImTextCountUtf8BytesFromCharPKcS0_"] = createExportWrapper("_Z28ImTextCountUtf8BytesFromCharPKcS0_");
+
+/** @type {function(...*):?} */
+var __Z15ImTextStrToUtf8PciPKtS1_ = Module["__Z15ImTextStrToUtf8PciPKtS1_"] = createExportWrapper("_Z15ImTextStrToUtf8PciPKtS1_");
+
+/** @type {function(...*):?} */
+var __Z27ImTextCountUtf8BytesFromStrPKtS0_ = Module["__Z27ImTextCountUtf8BytesFromStrPKtS0_"] = createExportWrapper("_Z27ImTextCountUtf8BytesFromStrPKtS0_");
+
+/** @type {function(...*):?} */
+var __Z18ImAlphaBlendColorsjj = Module["__Z18ImAlphaBlendColorsjj"] = createExportWrapper("_Z18ImAlphaBlendColorsjj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23ColorConvertU32ToFloat4Ej = Module["__ZN5ImGui23ColorConvertU32ToFloat4Ej"] = createExportWrapper("_ZN5ImGui23ColorConvertU32ToFloat4Ej");
+
+/** @type {function(...*):?} */
+var __ZN6ImVec4C2Effff = Module["__ZN6ImVec4C2Effff"] = createExportWrapper("_ZN6ImVec4C2Effff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23ColorConvertFloat4ToU32ERK6ImVec4 = Module["__ZN5ImGui23ColorConvertFloat4ToU32ERK6ImVec4"] = createExportWrapper("_ZN5ImGui23ColorConvertFloat4ToU32ERK6ImVec4");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ColorConvertRGBtoHSVEfffRfS0_S0_ = Module["__ZN5ImGui20ColorConvertRGBtoHSVEfffRfS0_S0_"] = createExportWrapper("_ZN5ImGui20ColorConvertRGBtoHSVEfffRfS0_S0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ColorConvertHSVtoRGBEfffRfS0_S0_ = Module["__ZN5ImGui20ColorConvertHSVtoRGBEfffRfS0_S0_"] = createExportWrapper("_ZN5ImGui20ColorConvertHSVtoRGBEfffRfS0_S0_");
+
+/** @type {function(...*):?} */
+var _fmodf = Module["_fmodf"] = createExportWrapper("fmodf");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage14BuildSortByKeyEv = Module["__ZN12ImGuiStorage14BuildSortByKeyEv"] = createExportWrapper("_ZN12ImGuiStorage14BuildSortByKeyEv");
+
+/** @type {function(...*):?} */
+var _qsort = Module["_qsort"] = createExportWrapper("qsort");
+
+/** @type {function(...*):?} */
+var __ZNK12ImGuiStorage6GetIntEji = Module["__ZNK12ImGuiStorage6GetIntEji"] = createExportWrapper("_ZNK12ImGuiStorage6GetIntEji");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE3endEv = Module["__ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE3endEv"] = createExportWrapper("_ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE3endEv");
+
+/** @type {function(...*):?} */
+var __ZNK12ImGuiStorage7GetBoolEjb = Module["__ZNK12ImGuiStorage7GetBoolEjb"] = createExportWrapper("_ZNK12ImGuiStorage7GetBoolEjb");
+
+/** @type {function(...*):?} */
+var __ZNK12ImGuiStorage8GetFloatEjf = Module["__ZNK12ImGuiStorage8GetFloatEjf"] = createExportWrapper("_ZNK12ImGuiStorage8GetFloatEjf");
+
+/** @type {function(...*):?} */
+var __ZNK12ImGuiStorage10GetVoidPtrEj = Module["__ZNK12ImGuiStorage10GetVoidPtrEj"] = createExportWrapper("_ZNK12ImGuiStorage10GetVoidPtrEj");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage9GetIntRefEji = Module["__ZN12ImGuiStorage9GetIntRefEji"] = createExportWrapper("_ZN12ImGuiStorage9GetIntRefEji");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE3endEv = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE3endEv"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE3endEv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage16ImGuiStoragePairC2Eji = Module["__ZN12ImGuiStorage16ImGuiStoragePairC2Eji"] = createExportWrapper("_ZN12ImGuiStorage16ImGuiStoragePairC2Eji");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE6insertEPKS1_RS3_ = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE6insertEPKS1_RS3_"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE6insertEPKS1_RS3_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE14_grow_capacityEi = Module["__ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE7reserveEi = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE7reserveEi"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage10GetBoolRefEjb = Module["__ZN12ImGuiStorage10GetBoolRefEjb"] = createExportWrapper("_ZN12ImGuiStorage10GetBoolRefEjb");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage11GetFloatRefEjf = Module["__ZN12ImGuiStorage11GetFloatRefEjf"] = createExportWrapper("_ZN12ImGuiStorage11GetFloatRefEjf");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage16ImGuiStoragePairC2Ejf = Module["__ZN12ImGuiStorage16ImGuiStoragePairC2Ejf"] = createExportWrapper("_ZN12ImGuiStorage16ImGuiStoragePairC2Ejf");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage13GetVoidPtrRefEjPv = Module["__ZN12ImGuiStorage13GetVoidPtrRefEjPv"] = createExportWrapper("_ZN12ImGuiStorage13GetVoidPtrRefEjPv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage16ImGuiStoragePairC2EjPv = Module["__ZN12ImGuiStorage16ImGuiStoragePairC2EjPv"] = createExportWrapper("_ZN12ImGuiStorage16ImGuiStoragePairC2EjPv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage6SetIntEji = Module["__ZN12ImGuiStorage6SetIntEji"] = createExportWrapper("_ZN12ImGuiStorage6SetIntEji");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage7SetBoolEjb = Module["__ZN12ImGuiStorage7SetBoolEjb"] = createExportWrapper("_ZN12ImGuiStorage7SetBoolEjb");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage8SetFloatEjf = Module["__ZN12ImGuiStorage8SetFloatEjf"] = createExportWrapper("_ZN12ImGuiStorage8SetFloatEjf");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage10SetVoidPtrEjPv = Module["__ZN12ImGuiStorage10SetVoidPtrEjPv"] = createExportWrapper("_ZN12ImGuiStorage10SetVoidPtrEjPv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage9SetAllIntEi = Module["__ZN12ImGuiStorage9SetAllIntEi"] = createExportWrapper("_ZN12ImGuiStorage9SetAllIntEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEEixEi = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEEixEi"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEEixEi");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextFilterC2EPKc = Module["__ZN15ImGuiTextFilterC2EPKc"] = createExportWrapper("_ZN15ImGuiTextFilterC2EPKc");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEC2Ev = Module["__ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEC2Ev"] = createExportWrapper("_ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextFilter5BuildEv = Module["__ZN15ImGuiTextFilter5BuildEv"] = createExportWrapper("_ZN15ImGuiTextFilter5BuildEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE6resizeEi = Module["__ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE6resizeEi"] = createExportWrapper("_ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextFilter14ImGuiTextRangeC2EPKcS2_ = Module["__ZN15ImGuiTextFilter14ImGuiTextRangeC2EPKcS2_"] = createExportWrapper("_ZN15ImGuiTextFilter14ImGuiTextRangeC2EPKcS2_");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextFilter14ImGuiTextRange5splitEcP8ImVectorIS0_E = Module["__ZNK15ImGuiTextFilter14ImGuiTextRange5splitEcP8ImVectorIS0_E"] = createExportWrapper("_ZNK15ImGuiTextFilter14ImGuiTextRange5splitEcP8ImVectorIS0_E");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEixEi = Module["__ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEixEi"] = createExportWrapper("_ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextFilter14ImGuiTextRange5emptyEv = Module["__ZNK15ImGuiTextFilter14ImGuiTextRange5emptyEv"] = createExportWrapper("_ZNK15ImGuiTextFilter14ImGuiTextRange5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextFilter4DrawEPKcf = Module["__ZN15ImGuiTextFilter4DrawEPKcf"] = createExportWrapper("_ZN15ImGuiTextFilter4DrawEPKcf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16SetNextItemWidthEf = Module["__ZN5ImGui16SetNextItemWidthEf"] = createExportWrapper("_ZN5ImGui16SetNextItemWidthEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9InputTextEPKcPcmiPFiP26ImGuiInputTextCallbackDataEPv = Module["__ZN5ImGui9InputTextEPKcPcmiPFiP26ImGuiInputTextCallbackDataEPv"] = createExportWrapper("_ZN5ImGui9InputTextEPKcPcmiPFiP26ImGuiInputTextCallbackDataEPv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE9push_backERKS1_ = Module["__ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE9push_backERKS1_"] = createExportWrapper("_ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE9push_backERKS1_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE14_grow_capacityEi = Module["__ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE7reserveEi = Module["__ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE7reserveEi"] = createExportWrapper("_ZN8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextFilter10PassFilterEPKcS1_ = Module["__ZNK15ImGuiTextFilter10PassFilterEPKcS1_"] = createExportWrapper("_ZNK15ImGuiTextFilter10PassFilterEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE5emptyEv = Module["__ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE5emptyEv"] = createExportWrapper("_ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEixEi = Module["__ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEixEi"] = createExportWrapper("_ZNK8ImVectorIN15ImGuiTextFilter14ImGuiTextRangeEEixEi");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBuffer6appendEPKcS1_ = Module["__ZN15ImGuiTextBuffer6appendEPKcS1_"] = createExportWrapper("_ZN15ImGuiTextBuffer6appendEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE7reserveEi = Module["__ZN8ImVectorIcE7reserveEi"] = createExportWrapper("_ZN8ImVectorIcE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIcE14_grow_capacityEi = Module["__ZNK8ImVectorIcE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIcE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBuffer7appendfEPKcz = Module["__ZN15ImGuiTextBuffer7appendfEPKcz"] = createExportWrapper("_ZN15ImGuiTextBuffer7appendfEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBuffer8appendfvEPKcPv = Module["__ZN15ImGuiTextBuffer8appendfvEPKcPv"] = createExportWrapper("_ZN15ImGuiTextBuffer8appendfvEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16CalcListClippingEifPiS0_ = Module["__ZN5ImGui16CalcListClippingEifPiS0_"] = createExportWrapper("_ZN5ImGui16CalcListClippingEifPiS0_");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect3AddERKS_ = Module["__ZN6ImRect3AddERKS_"] = createExportWrapper("_ZN6ImRect3AddERKS_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18WindowRectRelToAbsEP11ImGuiWindowRK6ImRect = Module["__ZN5ImGui18WindowRectRelToAbsEP11ImGuiWindowRK6ImRect"] = createExportWrapper("_ZN5ImGui18WindowRectRelToAbsEP11ImGuiWindowRK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN6ImRectC2Effff = Module["__ZN6ImRectC2Effff"] = createExportWrapper("_ZN6ImRectC2Effff");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipperC2Ev = Module["__ZN16ImGuiListClipperC2Ev"] = createExportWrapper("_ZN16ImGuiListClipperC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipperD2Ev = Module["__ZN16ImGuiListClipperD2Ev"] = createExportWrapper("_ZN16ImGuiListClipperD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipper3EndEv = Module["__ZN16ImGuiListClipper3EndEv"] = createExportWrapper("_ZN16ImGuiListClipper3EndEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8DebugLogEPKcz = Module["__ZN5ImGui8DebugLogEPKcz"] = createExportWrapper("_ZN5ImGui8DebugLogEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataEixEi = Module["__ZN8ImVectorI20ImGuiListClipperDataEixEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipper5BeginEif = Module["__ZN16ImGuiListClipper5BeginEif"] = createExportWrapper("_ZN16ImGuiListClipper5BeginEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TableEndRowEP10ImGuiTable = Module["__ZN5ImGui11TableEndRowEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui11TableEndRowEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN20ImGuiListClipperDataC2Ev = Module["__ZN20ImGuiListClipperDataC2Ev"] = createExportWrapper("_ZN20ImGuiListClipperDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataE6resizeEiRKS0_ = Module["__ZN8ImVectorI20ImGuiListClipperDataE6resizeEiRKS0_"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataE6resizeEiRKS0_");
+
+/** @type {function(...*):?} */
+var __ZN20ImGuiListClipperDataD2Ev = Module["__ZN20ImGuiListClipperDataD2Ev"] = createExportWrapper("_ZN20ImGuiListClipperDataD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN20ImGuiListClipperData5ResetEP16ImGuiListClipper = Module["__ZN20ImGuiListClipperData5ResetEP16ImGuiListClipper"] = createExportWrapper("_ZN20ImGuiListClipperData5ResetEP16ImGuiListClipper");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9DebugLogVEPKcPv = Module["__ZN5ImGui9DebugLogVEPKcPv"] = createExportWrapper("_ZN5ImGui9DebugLogVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI20ImGuiListClipperDataE14_grow_capacityEi = Module["__ZNK8ImVectorI20ImGuiListClipperDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI20ImGuiListClipperDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataE7reserveEi = Module["__ZN8ImVectorI20ImGuiListClipperDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeEC2Ev = Module["__ZN8ImVectorI21ImGuiListClipperRangeEC2Ev"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeED2Ev = Module["__ZN8ImVectorI21ImGuiListClipperRangeED2Ev"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeE6resizeEi = Module["__ZN8ImVectorI21ImGuiListClipperRangeE6resizeEi"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipper26ForceDisplayRangeByIndicesEii = Module["__ZN16ImGuiListClipper26ForceDisplayRangeByIndicesEii"] = createExportWrapper("_ZN16ImGuiListClipper26ForceDisplayRangeByIndicesEii");
+
+/** @type {function(...*):?} */
+var __ZN21ImGuiListClipperRange11FromIndicesEii = Module["__ZN21ImGuiListClipperRange11FromIndicesEii"] = createExportWrapper("_ZN21ImGuiListClipperRange11FromIndicesEii");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeE9push_backERKS0_ = Module["__ZN8ImVectorI21ImGuiListClipperRangeE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI21ImGuiListClipperRangeE14_grow_capacityEi = Module["__ZNK8ImVectorI21ImGuiListClipperRangeE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI21ImGuiListClipperRangeE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeE7reserveEi = Module["__ZN8ImVectorI21ImGuiListClipperRangeE7reserveEi"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipper4StepEv = Module["__ZN16ImGuiListClipper4StepEv"] = createExportWrapper("_ZN16ImGuiListClipper4StepEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeE10push_frontERKS0_ = Module["__ZN8ImVectorI21ImGuiListClipperRangeE10push_frontERKS0_"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeE10push_frontERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeEixEi = Module["__ZN8ImVectorI21ImGuiListClipperRangeEixEi"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeEixEi");
+
+/** @type {function(...*):?} */
+var __ZN21ImGuiListClipperRange13FromPositionsEffii = Module["__ZN21ImGuiListClipperRange13FromPositionsEffii"] = createExportWrapper("_ZN21ImGuiListClipperRange13FromPositionsEffii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8GetStyleEv = Module["__ZN5ImGui8GetStyleEv"] = createExportWrapper("_ZN5ImGui8GetStyleEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetColorU32Eif = Module["__ZN5ImGui11GetColorU32Eif"] = createExportWrapper("_ZN5ImGui11GetColorU32Eif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetColorU32ERK6ImVec4 = Module["__ZN5ImGui11GetColorU32ERK6ImVec4"] = createExportWrapper("_ZN5ImGui11GetColorU32ERK6ImVec4");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetStyleColorVec4Ei = Module["__ZN5ImGui17GetStyleColorVec4Ei"] = createExportWrapper("_ZN5ImGui17GetStyleColorVec4Ei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetColorU32Ej = Module["__ZN5ImGui11GetColorU32Ej"] = createExportWrapper("_ZN5ImGui11GetColorU32Ej");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14PushStyleColorEij = Module["__ZN5ImGui14PushStyleColorEij"] = createExportWrapper("_ZN5ImGui14PushStyleColorEij");
+
+/** @type {function(...*):?} */
+var __ZN13ImGuiColorModC2Ev = Module["__ZN13ImGuiColorModC2Ev"] = createExportWrapper("_ZN13ImGuiColorModC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModE9push_backERKS0_ = Module["__ZN8ImVectorI13ImGuiColorModE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI13ImGuiColorModE14_grow_capacityEi = Module["__ZNK8ImVectorI13ImGuiColorModE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI13ImGuiColorModE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModE7reserveEi = Module["__ZN8ImVectorI13ImGuiColorModE7reserveEi"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14PushStyleColorEiRK6ImVec4 = Module["__ZN5ImGui14PushStyleColorEiRK6ImVec4"] = createExportWrapper("_ZN5ImGui14PushStyleColorEiRK6ImVec4");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13PopStyleColorEi = Module["__ZN5ImGui13PopStyleColorEi"] = createExportWrapper("_ZN5ImGui13PopStyleColorEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModE4backEv = Module["__ZN8ImVectorI13ImGuiColorModE4backEv"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModE8pop_backEv = Module["__ZN8ImVectorI13ImGuiColorModE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12PushStyleVarEif = Module["__ZN5ImGui12PushStyleVarEif"] = createExportWrapper("_ZN5ImGui12PushStyleVarEif");
+
+/** @type {function(...*):?} */
+var __ZNK17ImGuiStyleVarInfo9GetVarPtrEP10ImGuiStyle = Module["__ZNK17ImGuiStyleVarInfo9GetVarPtrEP10ImGuiStyle"] = createExportWrapper("_ZNK17ImGuiStyleVarInfo9GetVarPtrEP10ImGuiStyle");
+
+/** @type {function(...*):?} */
+var __ZN13ImGuiStyleModC2Eif = Module["__ZN13ImGuiStyleModC2Eif"] = createExportWrapper("_ZN13ImGuiStyleModC2Eif");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModE9push_backERKS0_ = Module["__ZN8ImVectorI13ImGuiStyleModE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI13ImGuiStyleModE14_grow_capacityEi = Module["__ZNK8ImVectorI13ImGuiStyleModE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI13ImGuiStyleModE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModE7reserveEi = Module["__ZN8ImVectorI13ImGuiStyleModE7reserveEi"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12PushStyleVarEiRK6ImVec2 = Module["__ZN5ImGui12PushStyleVarEiRK6ImVec2"] = createExportWrapper("_ZN5ImGui12PushStyleVarEiRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN13ImGuiStyleModC2Ei6ImVec2 = Module["__ZN13ImGuiStyleModC2Ei6ImVec2"] = createExportWrapper("_ZN13ImGuiStyleModC2Ei6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11PopStyleVarEi = Module["__ZN5ImGui11PopStyleVarEi"] = createExportWrapper("_ZN5ImGui11PopStyleVarEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModE4backEv = Module["__ZN8ImVectorI13ImGuiStyleModE4backEv"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModE8pop_backEv = Module["__ZN8ImVectorI13ImGuiStyleModE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetStyleColorNameEi = Module["__ZN5ImGui17GetStyleColorNameEi"] = createExportWrapper("_ZN5ImGui17GetStyleColorNameEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19FindRenderedTextEndEPKcS1_ = Module["__ZN5ImGui19FindRenderedTextEndEPKcS1_"] = createExportWrapper("_ZN5ImGui19FindRenderedTextEndEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10RenderTextE6ImVec2PKcS2_b = Module["__ZN5ImGui10RenderTextE6ImVec2PKcS2_b"] = createExportWrapper("_ZN5ImGui10RenderTextE6ImVec2PKcS2_b");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7AddTextEPK6ImFontfRK6ImVec2jPKcS7_fPK6ImVec4 = Module["__ZN10ImDrawList7AddTextEPK6ImFontfRK6ImVec2jPKcS7_fPK6ImVec4"] = createExportWrapper("_ZN10ImDrawList7AddTextEPK6ImFontfRK6ImVec2jPKcS7_fPK6ImVec4");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15LogRenderedTextEPK6ImVec2PKcS4_ = Module["__ZN5ImGui15LogRenderedTextEPK6ImVec2PKcS4_"] = createExportWrapper("_ZN5ImGui15LogRenderedTextEPK6ImVec2PKcS4_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7LogTextEPKcz = Module["__ZN5ImGui7LogTextEPKcz"] = createExportWrapper("_ZN5ImGui7LogTextEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17RenderTextWrappedE6ImVec2PKcS2_f = Module["__ZN5ImGui17RenderTextWrappedE6ImVec2PKcS2_f"] = createExportWrapper("_ZN5ImGui17RenderTextWrappedE6ImVec2PKcS2_f");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19RenderTextClippedExEP10ImDrawListRK6ImVec2S4_PKcS6_PS3_S4_PK6ImRect = Module["__ZN5ImGui19RenderTextClippedExEP10ImDrawListRK6ImVec2S4_PKcS6_PS3_S4_PK6ImRect"] = createExportWrapper("_ZN5ImGui19RenderTextClippedExEP10ImDrawListRK6ImVec2S4_PKcS6_PS3_S4_PK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12CalcTextSizeEPKcS1_bf = Module["__ZN5ImGui12CalcTextSizeEPKcS1_bf"] = createExportWrapper("_ZN5ImGui12CalcTextSizeEPKcS1_bf");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont13CalcTextSizeAEfffPKcS1_PS1_ = Module["__ZNK6ImFont13CalcTextSizeAEfffPKcS1_PS1_"] = createExportWrapper("_ZNK6ImFont13CalcTextSizeAEfffPKcS1_PS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17RenderTextClippedERK6ImVec2S2_PKcS4_PS1_S2_PK6ImRect = Module["__ZN5ImGui17RenderTextClippedERK6ImVec2S2_PKcS4_PS1_S2_PK6ImRect"] = createExportWrapper("_ZN5ImGui17RenderTextClippedERK6ImVec2S2_PKcS4_PS1_S2_PK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18RenderTextEllipsisEP10ImDrawListRK6ImVec2S4_ffPKcS6_PS3_ = Module["__ZN5ImGui18RenderTextEllipsisEP10ImDrawListRK6ImVec2S4_ffPKcS6_PS3_"] = createExportWrapper("_ZN5ImGui18RenderTextEllipsisEP10ImDrawListRK6ImVec2S4_ffPKcS6_PS3_");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont9FindGlyphEt = Module["__ZNK6ImFont9FindGlyphEt"] = createExportWrapper("_ZNK6ImFont9FindGlyphEt");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont10RenderCharEP10ImDrawListfRK6ImVec2jt = Module["__ZNK6ImFont10RenderCharEP10ImDrawListfRK6ImVec2jt"] = createExportWrapper("_ZNK6ImFont10RenderCharEP10ImDrawListfRK6ImVec2jt");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11RenderFrameE6ImVec2S0_jbf = Module["__ZN5ImGui11RenderFrameE6ImVec2S0_jbf"] = createExportWrapper("_ZN5ImGui11RenderFrameE6ImVec2S0_jbf");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList13AddRectFilledERK6ImVec2S2_jfi = Module["__ZN10ImDrawList13AddRectFilledERK6ImVec2S2_jfi"] = createExportWrapper("_ZN10ImDrawList13AddRectFilledERK6ImVec2S2_jfi");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7AddRectERK6ImVec2S2_jfif = Module["__ZN10ImDrawList7AddRectERK6ImVec2S2_jfif"] = createExportWrapper("_ZN10ImDrawList7AddRectERK6ImVec2S2_jfif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17RenderFrameBorderE6ImVec2S0_f = Module["__ZN5ImGui17RenderFrameBorderE6ImVec2S0_f"] = createExportWrapper("_ZN5ImGui17RenderFrameBorderE6ImVec2S0_f");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18RenderNavHighlightERK6ImRectji = Module["__ZN5ImGui18RenderNavHighlightERK6ImRectji"] = createExportWrapper("_ZN5ImGui18RenderNavHighlightERK6ImRectji");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect8ClipWithERKS_ = Module["__ZN6ImRect8ClipWithERKS_"] = createExportWrapper("_ZN6ImRect8ClipWithERKS_");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect6ExpandERK6ImVec2 = Module["__ZN6ImRect6ExpandERK6ImVec2"] = createExportWrapper("_ZN6ImRect6ExpandERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect8ContainsERKS_ = Module["__ZNK6ImRect8ContainsERKS_"] = createExportWrapper("_ZNK6ImRect8ContainsERKS_");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList12PushClipRectERK6ImVec2S2_b = Module["__ZN10ImDrawList12PushClipRectERK6ImVec2S2_b"] = createExportWrapper("_ZN10ImDrawList12PushClipRectERK6ImVec2S2_b");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList11PopClipRectEv = Module["__ZN10ImDrawList11PopClipRectEv"] = createExportWrapper("_ZN10ImDrawList11PopClipRectEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17RenderMouseCursorE6ImVec2fijjj = Module["__ZN5ImGui17RenderMouseCursorE6ImVec2fijjj"] = createExportWrapper("_ZN5ImGui17RenderMouseCursorE6ImVec2fijjj");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPEixEi = Module["__ZN8ImVectorIP14ImGuiViewportPEixEi"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetForegroundDrawListEP13ImGuiViewport = Module["__ZN5ImGui21GetForegroundDrawListEP13ImGuiViewport"] = createExportWrapper("_ZN5ImGui21GetForegroundDrawListEP13ImGuiViewport");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas21GetMouseCursorTexDataEiP6ImVec2S1_S1_S1_ = Module["__ZN11ImFontAtlas21GetMouseCursorTexDataEiP6ImVec2S1_S1_S1_"] = createExportWrapper("_ZN11ImFontAtlas21GetMouseCursorTexDataEiP6ImVec2S1_S1_S1_");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList13PushTextureIDEPv = Module["__ZN10ImDrawList13PushTextureIDEPv"] = createExportWrapper("_ZN10ImDrawList13PushTextureIDEPv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList8AddImageEPvRK6ImVec2S3_S3_S3_j = Module["__ZN10ImDrawList8AddImageEPvRK6ImVec2S3_S3_S3_j"] = createExportWrapper("_ZN10ImDrawList8AddImageEPvRK6ImVec2S3_S3_S3_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList12PopTextureIDEv = Module["__ZN10ImDrawList12PopTextureIDEv"] = createExportWrapper("_ZN10ImDrawList12PopTextureIDEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindowC2EP12ImGuiContextPKc = Module["__ZN11ImGuiWindowC2EP12ImGuiContextPKc"] = createExportWrapper("_ZN11ImGuiWindowC2EP12ImGuiContextPKc");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjEC2Ev = Module["__ZN8ImVectorIjEC2Ev"] = createExportWrapper("_ZN8ImVectorIjEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiWindowTempDataC2Ev = Module["__ZN19ImGuiWindowTempDataC2Ev"] = createExportWrapper("_ZN19ImGuiWindowTempDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImRectC2Ev = Module["__ZN6ImRectC2Ev"] = createExportWrapper("_ZN6ImRectC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVec2ihC2Ev = Module["__ZN8ImVec2ihC2Ev"] = createExportWrapper("_ZN8ImVec2ihC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorageC2Ev = Module["__ZN12ImGuiStorageC2Ev"] = createExportWrapper("_ZN12ImGuiStorageC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsEC2Ev = Module["__ZN8ImVectorI15ImGuiOldColumnsEC2Ev"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawListC2EPK20ImDrawListSharedData = Module["__ZN10ImDrawListC2EPK20ImDrawListSharedData"] = createExportWrapper("_ZN10ImDrawListC2EPK20ImDrawListSharedData");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjE9push_backERKj = Module["__ZN8ImVectorIjE9push_backERKj"] = createExportWrapper("_ZN8ImVectorIjE9push_backERKj");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindow5GetIDEPKcS1_ = Module["__ZN11ImGuiWindow5GetIDEPKcS1_"] = createExportWrapper("_ZN11ImGuiWindow5GetIDEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN6ImVec1C2Ev = Module["__ZN6ImVec1C2Ev"] = createExportWrapper("_ZN6ImVec1C2Ev");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiMenuColumnsC2Ev = Module["__ZN16ImGuiMenuColumnsC2Ev"] = createExportWrapper("_ZN16ImGuiMenuColumnsC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowEC2Ev = Module["__ZN8ImVectorIP11ImGuiWindowEC2Ev"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfEC2Ev = Module["__ZN8ImVectorIfEC2Ev"] = createExportWrapper("_ZN8ImVectorIfEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEEC2Ev = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEEC2Ev"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdEC2Ev = Module["__ZN8ImVectorI9ImDrawCmdEC2Ev"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertEC2Ev = Module["__ZN8ImVectorI10ImDrawVertEC2Ev"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4EC2Ev = Module["__ZN8ImVectorI6ImVec4EC2Ev"] = createExportWrapper("_ZN8ImVectorI6ImVec4EC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvEC2Ev = Module["__ZN8ImVectorIPvEC2Ev"] = createExportWrapper("_ZN8ImVectorIPvEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2EC2Ev = Module["__ZN8ImVectorI6ImVec2EC2Ev"] = createExportWrapper("_ZN8ImVectorI6ImVec2EC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImDrawCmdHeaderC2Ev = Module["__ZN15ImDrawCmdHeaderC2Ev"] = createExportWrapper("_ZN15ImDrawCmdHeaderC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitterC2Ev = Module["__ZN18ImDrawListSplitterC2Ev"] = createExportWrapper("_ZN18ImDrawListSplitterC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIjE14_grow_capacityEi = Module["__ZNK8ImVectorIjE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIjE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjE7reserveEi = Module["__ZN8ImVectorIjE7reserveEi"] = createExportWrapper("_ZN8ImVectorIjE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjE4backEv = Module["__ZN8ImVectorIjE4backEv"] = createExportWrapper("_ZN8ImVectorIjE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DebugHookIdInfoEjiPKvS1_ = Module["__ZN5ImGui15DebugHookIdInfoEjiPKvS1_"] = createExportWrapper("_ZN5ImGui15DebugHookIdInfoEjiPKvS1_");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindowD2Ev = Module["__ZN11ImGuiWindowD2Ev"] = createExportWrapper("_ZN11ImGuiWindowD2Ev");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEIcEvPT_ = Module["__Z9IM_DELETEIcEvPT_"] = createExportWrapper("_Z9IM_DELETEIcEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsE14clear_destructEv = Module["__ZN8ImVectorI15ImGuiOldColumnsE14clear_destructEv"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsE14clear_destructEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawListD2Ev = Module["__ZN10ImDrawListD2Ev"] = createExportWrapper("_ZN10ImDrawListD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsED2Ev = Module["__ZN8ImVectorI15ImGuiOldColumnsED2Ev"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorageD2Ev = Module["__ZN12ImGuiStorageD2Ev"] = createExportWrapper("_ZN12ImGuiStorageD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiWindowTempDataD2Ev = Module["__ZN19ImGuiWindowTempDataD2Ev"] = createExportWrapper("_ZN19ImGuiWindowTempDataD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjED2Ev = Module["__ZN8ImVectorIjED2Ev"] = createExportWrapper("_ZN8ImVectorIjED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsE5clearEv = Module["__ZN8ImVectorI15ImGuiOldColumnsE5clearEv"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiOldColumnsD2Ev = Module["__ZN15ImGuiOldColumnsD2Ev"] = createExportWrapper("_ZN15ImGuiOldColumnsD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList16_ClearFreeMemoryEv = Module["__ZN10ImDrawList16_ClearFreeMemoryEv"] = createExportWrapper("_ZN10ImDrawList16_ClearFreeMemoryEv");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitterD2Ev = Module["__ZN18ImDrawListSplitterD2Ev"] = createExportWrapper("_ZN18ImDrawListSplitterD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2ED2Ev = Module["__ZN8ImVectorI6ImVec2ED2Ev"] = createExportWrapper("_ZN8ImVectorI6ImVec2ED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvED2Ev = Module["__ZN8ImVectorIPvED2Ev"] = createExportWrapper("_ZN8ImVectorIPvED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4ED2Ev = Module["__ZN8ImVectorI6ImVec4ED2Ev"] = createExportWrapper("_ZN8ImVectorI6ImVec4ED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertED2Ev = Module["__ZN8ImVectorI10ImDrawVertED2Ev"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItED2Ev = Module["__ZN8ImVectorItED2Ev"] = createExportWrapper("_ZN8ImVectorItED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdED2Ev = Module["__ZN8ImVectorI9ImDrawCmdED2Ev"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEED2Ev = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEED2Ev"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfED2Ev = Module["__ZN8ImVectorIfED2Ev"] = createExportWrapper("_ZN8ImVectorIfED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowED2Ev = Module["__ZN8ImVectorIP11ImGuiWindowED2Ev"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiStackLevelInfoC2Ev = Module["__ZN19ImGuiStackLevelInfoC2Ev"] = createExportWrapper("_ZN19ImGuiStackLevelInfoC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI19ImGuiStackLevelInfoE6resizeEiRKS0_ = Module["__ZN8ImVectorI19ImGuiStackLevelInfoE6resizeEiRKS0_"] = createExportWrapper("_ZN8ImVectorI19ImGuiStackLevelInfoE6resizeEiRKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjEixEi = Module["__ZN8ImVectorIjEixEi"] = createExportWrapper("_ZN8ImVectorIjEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI19ImGuiStackLevelInfoEixEi = Module["__ZN8ImVectorI19ImGuiStackLevelInfoEixEi"] = createExportWrapper("_ZN8ImVectorI19ImGuiStackLevelInfoEixEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindow5GetIDEPKv = Module["__ZN11ImGuiWindow5GetIDEPKv"] = createExportWrapper("_ZN11ImGuiWindow5GetIDEPKv");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindow5GetIDEi = Module["__ZN11ImGuiWindow5GetIDEi"] = createExportWrapper("_ZN11ImGuiWindow5GetIDEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindow18GetIDFromRectangleERK6ImRect = Module["__ZN11ImGuiWindow18GetIDFromRectangleERK6ImRect"] = createExportWrapper("_ZN11ImGuiWindow18GetIDFromRectangleERK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18WindowRectAbsToRelEP11ImGuiWindowRK6ImRect = Module["__ZN5ImGui18WindowRectAbsToRelEP11ImGuiWindowRK6ImRect"] = createExportWrapper("_ZN5ImGui18WindowRectAbsToRelEP11ImGuiWindowRK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui29GcCompactTransientMiscBuffersEv = Module["__ZN5ImGui29GcCompactTransientMiscBuffersEv"] = createExportWrapper("_ZN5ImGui29GcCompactTransientMiscBuffersEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiE5clearEv = Module["__ZN8ImVectorIiE5clearEv"] = createExportWrapper("_ZN8ImVectorIiE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataE5clearEv = Module["__ZN8ImVectorI14ImGuiGroupDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableGcCompactSettingsEv = Module["__ZN5ImGui22TableGcCompactSettingsEv"] = createExportWrapper("_ZN5ImGui22TableGcCompactSettingsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31GcCompactTransientWindowBuffersEP11ImGuiWindow = Module["__ZN5ImGui31GcCompactTransientWindowBuffersEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui31GcCompactTransientWindowBuffersEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjE5clearEv = Module["__ZN8ImVectorIjE5clearEv"] = createExportWrapper("_ZN8ImVectorIjE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE5clearEv = Module["__ZN8ImVectorIP11ImGuiWindowE5clearEv"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE5clearEv = Module["__ZN8ImVectorIfE5clearEv"] = createExportWrapper("_ZN8ImVectorIfE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui29GcAwakeTransientWindowBuffersEP11ImGuiWindow = Module["__ZN5ImGui29GcAwakeTransientWindowBuffersEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui29GcAwakeTransientWindowBuffersEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertE7reserveEi = Module["__ZN8ImVectorI10ImDrawVertE7reserveEi"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11SetActiveIDEjP11ImGuiWindow = Module["__ZN5ImGui11SetActiveIDEjP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui11SetActiveIDEjP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi140ELin512EE12ClearAllBitsEv = Module["__ZN10ImBitArrayILi140ELin512EE12ClearAllBitsEv"] = createExportWrapper("_ZN10ImBitArrayILi140ELin512EE12ClearAllBitsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ClearActiveIDEv = Module["__ZN5ImGui13ClearActiveIDEv"] = createExportWrapper("_ZN5ImGui13ClearActiveIDEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SetHoveredIDEj = Module["__ZN5ImGui12SetHoveredIDEj"] = createExportWrapper("_ZN5ImGui12SetHoveredIDEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12GetHoveredIDEv = Module["__ZN5ImGui12GetHoveredIDEv"] = createExportWrapper("_ZN5ImGui12GetHoveredIDEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11KeepAliveIDEj = Module["__ZN5ImGui11KeepAliveIDEj"] = createExportWrapper("_ZN5ImGui11KeepAliveIDEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14MarkItemEditedEj = Module["__ZN5ImGui14MarkItemEditedEj"] = createExportWrapper("_ZN5ImGui14MarkItemEditedEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsItemHoveredEi = Module["__ZN5ImGui13IsItemHoveredEi"] = createExportWrapper("_ZN5ImGui13IsItemHoveredEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsItemFocusedEv = Module["__ZN5ImGui13IsItemFocusedEv"] = createExportWrapper("_ZN5ImGui13IsItemFocusedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ItemHoverableERK6ImRectj = Module["__ZN5ImGui13ItemHoverableERK6ImRectj"] = createExportWrapper("_ZN5ImGui13ItemHoverableERK6ImRectj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19IsMouseHoveringRectERK6ImVec2S2_b = Module["__ZN5ImGui19IsMouseHoveringRectERK6ImVec2S2_b"] = createExportWrapper("_ZN5ImGui19IsMouseHoveringRectERK6ImVec2S2_b");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetForegroundDrawListEv = Module["__ZN5ImGui21GetForegroundDrawListEv"] = createExportWrapper("_ZN5ImGui21GetForegroundDrawListEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImRectC2ERK6ImVec2S2_ = Module["__ZN6ImRectC2ERK6ImVec2S2_"] = createExportWrapper("_ZN6ImRectC2ERK6ImVec2S2_");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect8ContainsERK6ImVec2 = Module["__ZNK6ImRect8ContainsERK6ImVec2"] = createExportWrapper("_ZNK6ImRect8ContainsERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11IsClippedExERK6ImRectj = Module["__ZN5ImGui11IsClippedExERK6ImRectj"] = createExportWrapper("_ZN5ImGui11IsClippedExERK6ImRectj");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect8OverlapsERKS_ = Module["__ZNK6ImRect8OverlapsERKS_"] = createExportWrapper("_ZNK6ImRect8OverlapsERKS_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SetLastItemDataEjiiRK6ImRect = Module["__ZN5ImGui15SetLastItemDataEjiiRK6ImRect"] = createExportWrapper("_ZN5ImGui15SetLastItemDataEjiiRK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19CalcWrapWidthForPosERK6ImVec2f = Module["__ZN5ImGui19CalcWrapWidthForPosERK6ImVec2f"] = createExportWrapper("_ZN5ImGui19CalcWrapWidthForPosERK6ImVec2f");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16GetClipboardTextEv = Module["__ZN5ImGui16GetClipboardTextEv"] = createExportWrapper("_ZN5ImGui16GetClipboardTextEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16SetClipboardTextEPKc = Module["__ZN5ImGui16SetClipboardTextEPKc"] = createExportWrapper("_ZN5ImGui16SetClipboardTextEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10GetVersionEv = Module["__ZN5ImGui10GetVersionEv"] = createExportWrapper("_ZN5ImGui10GetVersionEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetCurrentContextEv = Module["__ZN5ImGui17GetCurrentContextEv"] = createExportWrapper("_ZN5ImGui17GetCurrentContextEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetCurrentContextEP12ImGuiContext = Module["__ZN5ImGui17SetCurrentContextEP12ImGuiContext"] = createExportWrapper("_ZN5ImGui17SetCurrentContextEP12ImGuiContext");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21SetAllocatorFunctionsEPFPvmS0_EPFvS0_S0_ES0_ = Module["__ZN5ImGui21SetAllocatorFunctionsEPFPvmS0_EPFvS0_S0_ES0_"] = createExportWrapper("_ZN5ImGui21SetAllocatorFunctionsEPFPvmS0_EPFvS0_S0_ES0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetAllocatorFunctionsEPPFPvmS0_EPPFvS0_S0_EPS0_ = Module["__ZN5ImGui21GetAllocatorFunctionsEPPFPvmS0_EPPFvS0_S0_EPS0_"] = createExportWrapper("_ZN5ImGui21GetAllocatorFunctionsEPPFPvmS0_EPPFvS0_S0_EPS0_");
+
+/** @type {function(...*):?} */
+var __Znwm12ImNewWrapperPv = Module["__Znwm12ImNewWrapperPv"] = createExportWrapper("_Znwm12ImNewWrapperPv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiContextC2EP11ImFontAtlas = Module["__ZN12ImGuiContextC2EP11ImFontAtlas"] = createExportWrapper("_ZN12ImGuiContextC2EP11ImFontAtlas");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10InitializeEv = Module["__ZN5ImGui10InitializeEv"] = createExportWrapper("_ZN5ImGui10InitializeEv");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIOC1Ev = Module["__ZN7ImGuiIOC1Ev"] = createExportWrapper("_ZN7ImGuiIOC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventEC2Ev = Module["__ZN8ImVectorI15ImGuiInputEventEC2Ev"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImGuiStyleC1Ev = Module["__ZN10ImGuiStyleC1Ev"] = createExportWrapper("_ZN10ImGuiStyleC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN20ImDrawListSharedDataC1Ev = Module["__ZN20ImDrawListSharedDataC1Ev"] = createExportWrapper("_ZN20ImDrawListSharedDataC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataEC2Ev = Module["__ZN8ImVectorI20ImGuiWindowStackDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi140ELin512EEC2Ev = Module["__ZN10ImBitArrayILi140ELin512EEC2Ev"] = createExportWrapper("_ZN10ImBitArrayILi140ELin512EEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN17ImGuiNextItemDataC2Ev = Module["__ZN17ImGuiNextItemDataC2Ev"] = createExportWrapper("_ZN17ImGuiNextItemDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN17ImGuiLastItemDataC2Ev = Module["__ZN17ImGuiLastItemDataC2Ev"] = createExportWrapper("_ZN17ImGuiLastItemDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiNextWindowDataC2Ev = Module["__ZN19ImGuiNextWindowDataC2Ev"] = createExportWrapper("_ZN19ImGuiNextWindowDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModEC2Ev = Module["__ZN8ImVectorI13ImGuiColorModEC2Ev"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModEC2Ev = Module["__ZN8ImVectorI13ImGuiStyleModEC2Ev"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontEC2Ev = Module["__ZN8ImVectorIP6ImFontEC2Ev"] = createExportWrapper("_ZN8ImVectorIP6ImFontEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiEC2Ev = Module["__ZN8ImVectorIiEC2Ev"] = createExportWrapper("_ZN8ImVectorIiEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataEC2Ev = Module["__ZN8ImVectorI14ImGuiGroupDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataEC2Ev = Module["__ZN8ImVectorI14ImGuiPopupDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPEC2Ev = Module["__ZN8ImVectorIP14ImGuiViewportPEC2Ev"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiNavItemDataC2Ev = Module["__ZN16ImGuiNavItemDataC2Ev"] = createExportWrapper("_ZN16ImGuiNavItemDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiPayloadC2Ev = Module["__ZN12ImGuiPayloadC2Ev"] = createExportWrapper("_ZN12ImGuiPayloadC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIhEC2Ev = Module["__ZN8ImVectorIhEC2Ev"] = createExportWrapper("_ZN8ImVectorIhEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataEC2Ev = Module["__ZN8ImVectorI20ImGuiListClipperDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataEC2Ev = Module["__ZN8ImVectorI18ImGuiTableTempDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableEC2Ev = Module["__ZN6ImPoolI10ImGuiTableEC2Ev"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImDrawChannelEC2Ev = Module["__ZN8ImVectorI13ImDrawChannelEC2Ev"] = createExportWrapper("_ZN8ImVectorI13ImDrawChannelEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarEC2Ev = Module["__ZN6ImPoolI11ImGuiTabBarEC2Ev"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexEC2Ev = Module["__ZN8ImVectorI15ImGuiPtrOrIndexEC2Ev"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiShrinkWidthItemEC2Ev = Module["__ZN8ImVectorI20ImGuiShrinkWidthItemEC2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiShrinkWidthItemEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextStateC2Ev = Module["__ZN19ImGuiInputTextStateC2Ev"] = createExportWrapper("_ZN19ImGuiInputTextStateC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImFontC1Ev = Module["__ZN6ImFontC1Ev"] = createExportWrapper("_ZN6ImFontC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN21ImGuiComboPreviewDataC2Ev = Module["__ZN21ImGuiComboPreviewDataC2Ev"] = createExportWrapper("_ZN21ImGuiComboPreviewDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcEC2Ev = Module["__ZN8ImVectorIcEC2Ev"] = createExportWrapper("_ZN8ImVectorIcEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN20ImGuiPlatformImeDataC2Ev = Module["__ZN20ImGuiPlatformImeDataC2Ev"] = createExportWrapper("_ZN20ImGuiPlatformImeDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBufferC2Ev = Module["__ZN15ImGuiTextBufferC2Ev"] = createExportWrapper("_ZN15ImGuiTextBufferC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerEC2Ev = Module["__ZN8ImVectorI20ImGuiSettingsHandlerEC2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsEC2Ev = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsEC2Ev"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsEC2Ev = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsEC2Ev"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookEC2Ev = Module["__ZN8ImVectorI16ImGuiContextHookEC2Ev"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiMetricsConfigC2Ev = Module["__ZN18ImGuiMetricsConfigC2Ev"] = createExportWrapper("_ZN18ImGuiMetricsConfigC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN14ImGuiStackToolC2Ev = Module["__ZN14ImGuiStackToolC2Ev"] = createExportWrapper("_ZN14ImGuiStackToolC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlasC1Ev = Module["__ZN11ImFontAtlasC1Ev"] = createExportWrapper("_ZN11ImFontAtlasC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN20ImGuiSettingsHandlerC2Ev = Module["__ZN20ImGuiSettingsHandlerC2Ev"] = createExportWrapper("_ZN20ImGuiSettingsHandlerC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18AddSettingsHandlerEPK20ImGuiSettingsHandler = Module["__ZN5ImGui18AddSettingsHandlerEPK20ImGuiSettingsHandler"] = createExportWrapper("_ZN5ImGui18AddSettingsHandlerEPK20ImGuiSettingsHandler");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31TableSettingsAddSettingsHandlerEv = Module["__ZN5ImGui31TableSettingsAddSettingsHandlerEv"] = createExportWrapper("_ZN5ImGui31TableSettingsAddSettingsHandlerEv");
+
+/** @type {function(...*):?} */
+var __ZN14ImGuiViewportPC2Ev = Module["__ZN14ImGuiViewportPC2Ev"] = createExportWrapper("_ZN14ImGuiViewportPC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPE9push_backERKS1_ = Module["__ZN8ImVectorIP14ImGuiViewportPE9push_backERKS1_"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPE9push_backERKS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE6resizeEiRKc = Module["__ZN8ImVectorIcE6resizeEiRKc"] = createExportWrapper("_ZN8ImVectorIcE6resizeEiRKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8ShutdownEv = Module["__ZN5ImGui8ShutdownEv"] = createExportWrapper("_ZN5ImGui8ShutdownEv");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI12ImGuiContextEvPT_ = Module["__Z9IM_DELETEI12ImGuiContextEvPT_"] = createExportWrapper("_Z9IM_DELETEI12ImGuiContextEvPT_");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI11ImFontAtlasEvPT_ = Module["__Z9IM_DELETEI11ImFontAtlasEvPT_"] = createExportWrapper("_Z9IM_DELETEI11ImFontAtlasEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21SaveIniSettingsToDiskEPKc = Module["__ZN5ImGui21SaveIniSettingsToDiskEPKc"] = createExportWrapper("_ZN5ImGui21SaveIniSettingsToDiskEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16CallContextHooksEP12ImGuiContext20ImGuiContextHookType = Module["__ZN5ImGui16CallContextHooksEP12ImGuiContext20ImGuiContextHookType"] = createExportWrapper("_ZN5ImGui16CallContextHooksEP12ImGuiContext20ImGuiContextHookType");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE12clear_deleteEv = Module["__ZN8ImVectorIP11ImGuiWindowE12clear_deleteEv"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE12clear_deleteEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataE5clearEv = Module["__ZN8ImVectorI20ImGuiWindowStackDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiStorage5ClearEv = Module["__ZN12ImGuiStorage5ClearEv"] = createExportWrapper("_ZN12ImGuiStorage5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModE5clearEv = Module["__ZN8ImVectorI13ImGuiColorModE5clearEv"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModE5clearEv = Module["__ZN8ImVectorI13ImGuiStyleModE5clearEv"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontE5clearEv = Module["__ZN8ImVectorIP6ImFontE5clearEv"] = createExportWrapper("_ZN8ImVectorIP6ImFontE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataE5clearEv = Module["__ZN8ImVectorI14ImGuiPopupDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPE12clear_deleteEv = Module["__ZN8ImVectorIP14ImGuiViewportPE12clear_deleteEv"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPE12clear_deleteEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarE5ClearEv = Module["__ZN6ImPoolI11ImGuiTabBarE5ClearEv"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarE5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexE5clearEv = Module["__ZN8ImVectorI15ImGuiPtrOrIndexE5clearEv"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiShrinkWidthItemE5clearEv = Module["__ZN8ImVectorI20ImGuiShrinkWidthItemE5clearEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiShrinkWidthItemE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataE14clear_destructEv = Module["__ZN8ImVectorI20ImGuiListClipperDataE14clear_destructEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataE14clear_destructEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE5ClearEv = Module["__ZN6ImPoolI10ImGuiTableE5ClearEv"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataE14clear_destructEv = Module["__ZN8ImVectorI18ImGuiTableTempDataE14clear_destructEv"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataE14clear_destructEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImDrawChannelE5clearEv = Module["__ZN8ImVectorI13ImDrawChannelE5clearEv"] = createExportWrapper("_ZN8ImVectorI13ImDrawChannelE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextState15ClearFreeMemoryEv = Module["__ZN19ImGuiInputTextState15ClearFreeMemoryEv"] = createExportWrapper("_ZN19ImGuiInputTextState15ClearFreeMemoryEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE5clearEv = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE5clearEv"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerE5clearEv = Module["__ZN8ImVectorI20ImGuiSettingsHandlerE5clearEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBuffer5clearEv = Module["__ZN15ImGuiTextBuffer5clearEv"] = createExportWrapper("_ZN15ImGuiTextBuffer5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiContextD2Ev = Module["__ZN12ImGuiContextD2Ev"] = createExportWrapper("_ZN12ImGuiContextD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14AddContextHookEP12ImGuiContextPK16ImGuiContextHook = Module["__ZN5ImGui14AddContextHookEP12ImGuiContextPK16ImGuiContextHook"] = createExportWrapper("_ZN5ImGui14AddContextHookEP12ImGuiContextPK16ImGuiContextHook");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookE9push_backERKS0_ = Module["__ZN8ImVectorI16ImGuiContextHookE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookE4backEv = Module["__ZN8ImVectorI16ImGuiContextHookE4backEv"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookE4backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI16ImGuiContextHookE14_grow_capacityEi = Module["__ZNK8ImVectorI16ImGuiContextHookE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI16ImGuiContextHookE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookE7reserveEi = Module["__ZN8ImVectorI16ImGuiContextHookE7reserveEi"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17RemoveContextHookEP12ImGuiContextj = Module["__ZN5ImGui17RemoveContextHookEP12ImGuiContextj"] = createExportWrapper("_ZN5ImGui17RemoveContextHookEP12ImGuiContextj");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookEixEi = Module["__ZN8ImVectorI16ImGuiContextHookEixEi"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7GetTimeEv = Module["__ZN5ImGui7GetTimeEv"] = createExportWrapper("_ZN5ImGui7GetTimeEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetFrameCountEv = Module["__ZN5ImGui13GetFrameCountEv"] = createExportWrapper("_ZN5ImGui13GetFrameCountEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetBackgroundDrawListEP13ImGuiViewport = Module["__ZN5ImGui21GetBackgroundDrawListEP13ImGuiViewport"] = createExportWrapper("_ZN5ImGui21GetBackgroundDrawListEP13ImGuiViewport");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList17_ResetForNewFrameEv = Module["__ZN10ImDrawList17_ResetForNewFrameEv"] = createExportWrapper("_ZN10ImDrawList17_ResetForNewFrameEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetBackgroundDrawListEv = Module["__ZN5ImGui21GetBackgroundDrawListEv"] = createExportWrapper("_ZN5ImGui21GetBackgroundDrawListEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetDrawListSharedDataEv = Module["__ZN5ImGui21GetDrawListSharedDataEv"] = createExportWrapper("_ZN5ImGui21GetDrawListSharedDataEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22StartMouseMovingWindowEP11ImGuiWindow = Module["__ZN5ImGui22StartMouseMovingWindowEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui22StartMouseMovingWindowEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11FocusWindowEP11ImGuiWindow = Module["__ZN5ImGui11FocusWindowEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui11FocusWindowEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31SetActiveIdUsingAllKeyboardKeysEv = Module["__ZN5ImGui31SetActiveIdUsingAllKeyboardKeysEv"] = createExportWrapper("_ZN5ImGui31SetActiveIdUsingAllKeyboardKeysEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SetNavWindowEP11ImGuiWindow = Module["__ZN5ImGui12SetNavWindowEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui12SetNavWindowEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21ClosePopupsOverWindowEP11ImGuiWindowb = Module["__ZN5ImGui21ClosePopupsOverWindowEP11ImGuiWindowb"] = createExportWrapper("_ZN5ImGui21ClosePopupsOverWindowEP11ImGuiWindowb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23BringWindowToFocusFrontEP11ImGuiWindow = Module["__ZN5ImGui23BringWindowToFocusFrontEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui23BringWindowToFocusFrontEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25BringWindowToDisplayFrontEP11ImGuiWindow = Module["__ZN5ImGui25BringWindowToDisplayFrontEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui25BringWindowToDisplayFrontEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi140ELin512EE11SetBitRangeEii = Module["__ZN10ImBitArrayILi140ELin512EE11SetBitRangeEii"] = createExportWrapper("_ZN10ImBitArrayILi140ELin512EE11SetBitRangeEii");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi140ELin512EE6SetBitEi = Module["__ZN10ImBitArrayILi140ELin512EE6SetBitEi"] = createExportWrapper("_ZN10ImBitArrayILi140ELin512EE6SetBitEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20NavMoveRequestCancelEv = Module["__ZN5ImGui20NavMoveRequestCancelEv"] = createExportWrapper("_ZN5ImGui20NavMoveRequestCancelEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31UpdateMouseMovingWindowNewFrameEv = Module["__ZN5ImGui31UpdateMouseMovingWindowNewFrameEv"] = createExportWrapper("_ZN5ImGui31UpdateMouseMovingWindowNewFrameEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsMousePosValidEPK6ImVec2 = Module["__ZN5ImGui15IsMousePosValidEPK6ImVec2"] = createExportWrapper("_ZN5ImGui15IsMousePosValidEPK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SetWindowPosEP11ImGuiWindowRK6ImVec2i = Module["__ZN5ImGui12SetWindowPosEP11ImGuiWindowRK6ImVec2i"] = createExportWrapper("_ZN5ImGui12SetWindowPosEP11ImGuiWindowRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20MarkIniSettingsDirtyEP11ImGuiWindow = Module["__ZN5ImGui20MarkIniSettingsDirtyEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui20MarkIniSettingsDirtyEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31UpdateMouseMovingWindowEndFrameEv = Module["__ZN5ImGui31UpdateMouseMovingWindowEndFrameEv"] = createExportWrapper("_ZN5ImGui31UpdateMouseMovingWindowEndFrameEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11IsPopupOpenEji = Module["__ZN5ImGui11IsPopupOpenEji"] = createExportWrapper("_ZN5ImGui11IsPopupOpenEji");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiWindow12TitleBarRectEv = Module["__ZNK11ImGuiWindow12TitleBarRectEv"] = createExportWrapper("_ZNK11ImGuiWindow12TitleBarRectEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20GetTopMostPopupModalEv = Module["__ZN5ImGui20GetTopMostPopupModalEv"] = createExportWrapper("_ZN5ImGui20GetTopMostPopupModalEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsWindowAboveEP11ImGuiWindowS1_ = Module["__ZN5ImGui13IsWindowAboveEP11ImGuiWindowS1_"] = createExportWrapper("_ZN5ImGui13IsWindowAboveEP11ImGuiWindowS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataEixEi = Module["__ZN8ImVectorI14ImGuiPopupDataEixEi"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiWindow14TitleBarHeightEv = Module["__ZNK11ImGuiWindow14TitleBarHeightEv"] = createExportWrapper("_ZNK11ImGuiWindow14TitleBarHeightEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowEixEi = Module["__ZN8ImVectorIP11ImGuiWindowEixEi"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26IsWindowWithinBeginStackOfEP11ImGuiWindowS1_ = Module["__ZN5ImGui26IsWindowWithinBeginStackOfEP11ImGuiWindowS1_"] = createExportWrapper("_ZN5ImGui26IsWindowWithinBeginStackOfEP11ImGuiWindowS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17ClosePopupToLevelEib = Module["__ZN5ImGui17ClosePopupToLevelEib"] = createExportWrapper("_ZN5ImGui17ClosePopupToLevelEib");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui34UpdateHoveredWindowAndCaptureFlagsEv = Module["__ZN5ImGui34UpdateHoveredWindowAndCaptureFlagsEv"] = createExportWrapper("_ZN5ImGui34UpdateHoveredWindowAndCaptureFlagsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetMergedModFlagsEv = Module["__ZN5ImGui17GetMergedModFlagsEv"] = createExportWrapper("_ZN5ImGui17GetMergedModFlagsEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjE6resizeEi = Module["__ZN8ImVectorIjE6resizeEi"] = createExportWrapper("_ZN8ImVectorIjE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetDefaultFontEv = Module["__ZN5ImGui14GetDefaultFontEv"] = createExportWrapper("_ZN5ImGui14GetDefaultFontEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetCurrentFontEP6ImFont = Module["__ZN5ImGui14SetCurrentFontEP6ImFont"] = createExportWrapper("_ZN5ImGui14SetCurrentFontEP6ImFont");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont8IsLoadedEv = Module["__ZNK6ImFont8IsLoadedEv"] = createExportWrapper("_ZNK6ImFont8IsLoadedEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect6ToVec4Ev = Module["__ZNK6ImRect6ToVec4Ev"] = createExportWrapper("_ZNK6ImRect6ToVec4Ev");
+
+/** @type {function(...*):?} */
+var __ZN20ImDrawListSharedData29SetCircleTessellationMaxErrorEf = Module["__ZN20ImDrawListSharedData29SetCircleTessellationMaxErrorEf"] = createExportWrapper("_ZN20ImDrawListSharedData29SetCircleTessellationMaxErrorEf");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawData5ClearEv = Module["__ZN10ImDrawData5ClearEv"] = createExportWrapper("_ZN10ImDrawData5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZNK14ImGuiViewportP11GetMainRectEv = Module["__ZNK14ImGuiViewportP11GetMainRectEv"] = createExportWrapper("_ZNK14ImGuiViewportP11GetMainRectEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookE5eraseEPKS0_ = Module["__ZN8ImVectorI16ImGuiContextHookE5eraseEPKS0_"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookE5eraseEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19SetActiveIdUsingKeyEi = Module["__ZN5ImGui19SetActiveIdUsingKeyEi"] = createExportWrapper("_ZN5ImGui19SetActiveIdUsingKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventE6resizeEi = Module["__ZN8ImVectorI15ImGuiInputEventE6resizeEi"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17UpdateInputEventsEb = Module["__ZN5ImGui17UpdateInputEventsEb"] = createExportWrapper("_ZN5ImGui17UpdateInputEventsEb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26FocusTopMostWindowUnderOneEP11ImGuiWindowS1_ = Module["__ZN5ImGui26FocusTopMostWindowUnderOneEP11ImGuiWindowS1_"] = createExportWrapper("_ZN5ImGui26FocusTopMostWindowUnderOneEP11ImGuiWindowS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataE6resizeEi = Module["__ZN8ImVectorI20ImGuiWindowStackDataE6resizeEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataE6resizeEi = Module["__ZN8ImVectorI14ImGuiPopupDataE6resizeEi"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiE6resizeEi = Module["__ZN8ImVectorIiE6resizeEi"] = createExportWrapper("_ZN8ImVectorIiE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiE9push_backERKi = Module["__ZN8ImVectorIiE9push_backERKi"] = createExportWrapper("_ZN8ImVectorIiE9push_backERKi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataE6resizeEi = Module["__ZN8ImVectorI14ImGuiGroupDataE6resizeEi"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetNextWindowSizeERK6ImVec2i = Module["__ZN5ImGui17SetNextWindowSizeERK6ImVec2i"] = createExportWrapper("_ZN5ImGui17SetNextWindowSizeERK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataEixEi = Module["__ZN8ImVectorI18ImGuiTableTempDataEixEi"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui30TableGcCompactTransientBuffersEP18ImGuiTableTempData = Module["__ZN5ImGui30TableGcCompactTransientBuffersEP18ImGuiTableTempData"] = createExportWrapper("_ZN5ImGui30TableGcCompactTransientBuffersEP18ImGuiTableTempData");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfEixEi = Module["__ZN8ImVectorIfEixEi"] = createExportWrapper("_ZN8ImVectorIfEixEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE10GetByIndexEi = Module["__ZN6ImPoolI10ImGuiTableE10GetByIndexEi"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE10GetByIndexEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui30TableGcCompactTransientBuffersEP10ImGuiTable = Module["__ZN5ImGui30TableGcCompactTransientBuffersEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui30TableGcCompactTransientBuffersEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZNK11ImFontAtlas7IsBuiltEv = Module["__ZNK11ImFontAtlas7IsBuiltEv"] = createExportWrapper("_ZNK11ImFontAtlas7IsBuiltEv");
+
+/** @type {function(...*):?} */
+var __ZNK13ImChunkStreamI19ImGuiWindowSettingsE5emptyEv = Module["__ZNK13ImChunkStreamI19ImGuiWindowSettingsE5emptyEv"] = createExportWrapper("_ZNK13ImChunkStreamI19ImGuiWindowSettingsE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23LoadIniSettingsFromDiskEPKc = Module["__ZN5ImGui23LoadIniSettingsFromDiskEPKc"] = createExportWrapper("_ZN5ImGui23LoadIniSettingsFromDiskEPKc");
+
+/** @type {function(...*):?} */
+var __ZN14ImGuiViewportP14UpdateWorkRectEv = Module["__ZN14ImGuiViewportP14UpdateWorkRectEv"] = createExportWrapper("_ZN14ImGuiViewportP14UpdateWorkRectEv");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiWindow12CalcFontSizeEv = Module["__ZNK11ImGuiWindow12CalcFontSizeEv"] = createExportWrapper("_ZNK11ImGuiWindow12CalcFontSizeEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontEixEi = Module["__ZN8ImVectorIP6ImFontEixEi"] = createExportWrapper("_ZN8ImVectorIP6ImFontEixEi");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi652ELi0EEC2Ev = Module["__ZN10ImBitArrayILi652ELi0EEC2Ev"] = createExportWrapper("_ZN10ImBitArrayILi652ELi0EEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK10ImBitArrayILi652ELi0EE7TestBitEi = Module["__ZNK10ImBitArrayILi652ELi0EE7TestBitEi"] = createExportWrapper("_ZNK10ImBitArrayILi652ELi0EE7TestBitEi");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi652ELi0EE6SetBitEi = Module["__ZN10ImBitArrayILi652ELi0EE6SetBitEi"] = createExportWrapper("_ZN10ImBitArrayILi652ELi0EE6SetBitEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItE9push_backERKt = Module["__ZN8ImVectorItE9push_backERKt"] = createExportWrapper("_ZN8ImVectorItE9push_backERKt");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventE5eraseEPKS0_S3_ = Module["__ZN8ImVectorI15ImGuiInputEventE5eraseEPKS0_S3_"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventE5eraseEPKS0_S3_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9IsKeyDownEi = Module["__ZN5ImGui9IsKeyDownEi"] = createExportWrapper("_ZN5ImGui9IsKeyDownEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16MouseButtonToKeyEi = Module["__ZN5ImGui16MouseButtonToKeyEi"] = createExportWrapper("_ZN5ImGui16MouseButtonToKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25NavInitRequestApplyResultEv = Module["__ZN5ImGui25NavInitRequestApplyResultEv"] = createExportWrapper("_ZN5ImGui25NavInitRequestApplyResultEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25NavMoveRequestApplyResultEv = Module["__ZN5ImGui25NavMoveRequestApplyResultEv"] = createExportWrapper("_ZN5ImGui25NavMoveRequestApplyResultEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12IsKeyPressedEib = Module["__ZN5ImGui12IsKeyPressedEib"] = createExportWrapper("_ZN5ImGui12IsKeyPressedEib");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SetScrollXEP11ImGuiWindowf = Module["__ZN5ImGui10SetScrollXEP11ImGuiWindowf"] = createExportWrapper("_ZN5ImGui10SetScrollXEP11ImGuiWindowf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SetScrollYEP11ImGuiWindowf = Module["__ZN5ImGui10SetScrollYEP11ImGuiWindowf"] = createExportWrapper("_ZN5ImGui10SetScrollYEP11ImGuiWindowf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetKeyVector2dEiiii = Module["__ZN5ImGui14GetKeyVector2dEiiii"] = createExportWrapper("_ZN5ImGui14GetKeyVector2dEiiii");
+
+/** @type {function(...*):?} */
+var __ZNK10ImBitArrayILi140ELin512EE7TestBitEi = Module["__ZNK10ImBitArrayILi140ELin512EE7TestBitEi"] = createExportWrapper("_ZNK10ImBitArrayILi140ELin512EE7TestBitEi");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect9GetHeightEv = Module["__ZNK6ImRect9GetHeightEv"] = createExportWrapper("_ZNK6ImRect9GetHeightEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect8GetWidthEv = Module["__ZNK6ImRect8GetWidthEv"] = createExportWrapper("_ZNK6ImRect8GetWidthEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImGuiTableEixEi = Module["__ZN8ImVectorI10ImGuiTableEixEi"] = createExportWrapper("_ZN8ImVectorI10ImGuiTableEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI20ImGuiWindowStackDataE14_grow_capacityEi = Module["__ZNK8ImVectorI20ImGuiWindowStackDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI20ImGuiWindowStackDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataE7reserveEi = Module["__ZN8ImVectorI20ImGuiWindowStackDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI14ImGuiPopupDataE14_grow_capacityEi = Module["__ZNK8ImVectorI14ImGuiPopupDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI14ImGuiPopupDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataE7reserveEi = Module["__ZN8ImVectorI14ImGuiPopupDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIiE14_grow_capacityEi = Module["__ZNK8ImVectorIiE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIiE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiE7reserveEi = Module["__ZN8ImVectorIiE7reserveEi"] = createExportWrapper("_ZN8ImVectorIiE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI14ImGuiGroupDataE14_grow_capacityEi = Module["__ZNK8ImVectorI14ImGuiGroupDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI14ImGuiGroupDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataE7reserveEi = Module["__ZN8ImVectorI14ImGuiGroupDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetMouseCursorEi = Module["__ZN5ImGui14SetMouseCursorEi"] = createExportWrapper("_ZN5ImGui14SetMouseCursorEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14IsMouseClickedEib = Module["__ZN5ImGui14IsMouseClickedEib"] = createExportWrapper("_ZN5ImGui14IsMouseClickedEib");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20SetNextWindowBgAlphaEf = Module["__ZN5ImGui20SetNextWindowBgAlphaEf"] = createExportWrapper("_ZN5ImGui20SetNextWindowBgAlphaEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginTooltipEv = Module["__ZN5ImGui12BeginTooltipEv"] = createExportWrapper("_ZN5ImGui12BeginTooltipEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TextColoredERK6ImVec4PKcz = Module["__ZN5ImGui11TextColoredERK6ImVec4PKcz"] = createExportWrapper("_ZN5ImGui11TextColoredERK6ImVec4PKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10EndTooltipEv = Module["__ZN5ImGui10EndTooltipEv"] = createExportWrapper("_ZN5ImGui10EndTooltipEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI19ImGuiStackLevelInfoE6resizeEi = Module["__ZN8ImVectorI19ImGuiStackLevelInfoE6resizeEi"] = createExportWrapper("_ZN8ImVectorI19ImGuiStackLevelInfoE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16FindWindowByNameEPKc = Module["__ZN5ImGui16FindWindowByNameEPKc"] = createExportWrapper("_ZN5ImGui16FindWindowByNameEPKc");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI20ImGuiWindowStackDataE5emptyEv = Module["__ZNK8ImVectorI20ImGuiWindowStackDataE5emptyEv"] = createExportWrapper("_ZNK8ImVectorI20ImGuiWindowStackDataE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataE4backEv = Module["__ZN8ImVectorI20ImGuiWindowStackDataE4backEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN20ImGuiWindowStackDataC2Ev = Module["__ZN20ImGuiWindowStackDataC2Ev"] = createExportWrapper("_ZN20ImGuiWindowStackDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiStackSizes17SetToCurrentStateEv = Module["__ZN15ImGuiStackSizes17SetToCurrentStateEv"] = createExportWrapper("_ZN15ImGuiStackSizes17SetToCurrentStateEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataE9push_backERKS0_ = Module["__ZN8ImVectorI20ImGuiWindowStackDataE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataE9push_backERKS0_ = Module["__ZN8ImVectorI14ImGuiPopupDataE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui30UpdateWindowParentAndRootLinksEP11ImGuiWindowiS1_ = Module["__ZN5ImGui30UpdateWindowParentAndRootLinksEP11ImGuiWindowiS1_"] = createExportWrapper("_ZN5ImGui30UpdateWindowParentAndRootLinksEP11ImGuiWindowiS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13SetWindowSizeEP11ImGuiWindowRK6ImVec2i = Module["__ZN5ImGui13SetWindowSizeEP11ImGuiWindowRK6ImVec2i"] = createExportWrapper("_ZN5ImGui13SetWindowSizeEP11ImGuiWindowRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetWindowCollapsedEP11ImGuiWindowbi = Module["__ZN5ImGui18SetWindowCollapsedEP11ImGuiWindowbi"] = createExportWrapper("_ZN5ImGui18SetWindowCollapsedEP11ImGuiWindowbi");
+
+/** @type {function(...*):?} */
+var __ZN6ImRectC2ERK6ImVec4 = Module["__ZN6ImRectC2ERK6ImVec4"] = createExportWrapper("_ZN6ImRectC2ERK6ImVec4");
+
+/** @type {function(...*):?} */
+var _strcmp = Module["_strcmp"] = createExportWrapper("strcmp");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetMainViewportEv = Module["__ZN5ImGui15GetMainViewportEv"] = createExportWrapper("_ZN5ImGui15GetMainViewportEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetWindowViewportEP11ImGuiWindowP14ImGuiViewportP = Module["__ZN5ImGui17SetWindowViewportEP11ImGuiWindowP14ImGuiViewportP"] = createExportWrapper("_ZN5ImGui17SetWindowViewportEP11ImGuiWindowP14ImGuiViewportP");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect7GetSizeEv = Module["__ZNK6ImRect7GetSizeEv"] = createExportWrapper("_ZNK6ImRect7GetSizeEv");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiWindow13MenuBarHeightEv = Module["__ZNK11ImGuiWindow13MenuBarHeightEv"] = createExportWrapper("_ZNK11ImGuiWindow13MenuBarHeightEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataE4backEv = Module["__ZN8ImVectorI14ImGuiPopupDataE4backEv"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE9push_backERKS1_ = Module["__ZN8ImVectorIP11ImGuiWindowE9push_backERKS1_"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE9push_backERKS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25FindBestWindowPosForPopupEP11ImGuiWindow = Module["__ZN5ImGui25FindBestWindowPosForPopupEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui25FindBestWindowPosForPopupEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZNK14ImGuiViewportP11GetWorkRectEv = Module["__ZNK14ImGuiViewportP11GetWorkRectEv"] = createExportWrapper("_ZNK14ImGuiViewportP11GetWorkRectEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26BringWindowToDisplayBehindEP11ImGuiWindowS1_ = Module["__ZN5ImGui26BringWindowToDisplayBehindEP11ImGuiWindowS1_"] = createExportWrapper("_ZN5ImGui26BringWindowToDisplayBehindEP11ImGuiWindowS1_");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiWindow4RectEv = Module["__ZNK11ImGuiWindow4RectEv"] = createExportWrapper("_ZNK11ImGuiWindow4RectEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect12ClipWithFullERKS_ = Module["__ZN6ImRect12ClipWithFullERKS_"] = createExportWrapper("_ZN6ImRect12ClipWithFullERKS_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdEixEi = Module["__ZN8ImVectorI9ImDrawCmdEixEi"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12PushClipRectERK6ImVec2S2_b = Module["__ZN5ImGui12PushClipRectERK6ImVec2S2_b"] = createExportWrapper("_ZN5ImGui12PushClipRectERK6ImVec2S2_b");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE4backEv = Module["__ZN8ImVectorI9ImDrawCmdE4backEv"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiMenuColumns6UpdateEfb = Module["__ZN16ImGuiMenuColumns6UpdateEfb"] = createExportWrapper("_ZN16ImGuiMenuColumns6UpdateEfb");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE6resizeEi = Module["__ZN8ImVectorIP11ImGuiWindowE6resizeEi"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE6resizeEi = Module["__ZN8ImVectorIfE6resizeEi"] = createExportWrapper("_ZN8ImVectorIfE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13NavInitWindowEP11ImGuiWindowb = Module["__ZN5ImGui13NavInitWindowEP11ImGuiWindowb"] = createExportWrapper("_ZN5ImGui13NavInitWindowEP11ImGuiWindowb");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiNextWindowData10ClearFlagsEv = Module["__ZN19ImGuiNextWindowData10ClearFlagsEv"] = createExportWrapper("_ZN19ImGuiNextWindowData10ClearFlagsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26FindOrCreateWindowSettingsEPKc = Module["__ZN5ImGui26FindOrCreateWindowSettingsEPKc"] = createExportWrapper("_ZN5ImGui26FindOrCreateWindowSettingsEPKc");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiWindowSettingsC2Ev = Module["__ZN19ImGuiWindowSettingsC2Ev"] = createExportWrapper("_ZN19ImGuiWindowSettingsC2Ev");
+
+/** @type {function(...*):?} */
+var _sscanf = Module["_sscanf"] = createExportWrapper("sscanf");
+
+/** @type {function(...*):?} */
+var __ZN8ImVec2ihC2Ess = Module["__ZN8ImVec2ihC2Ess"] = createExportWrapper("_ZN8ImVec2ihC2Ess");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE5beginEv = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE5beginEv"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE5beginEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14FindWindowByIDEj = Module["__ZN5ImGui14FindWindowByIDEj"] = createExportWrapper("_ZN5ImGui14FindWindowByIDEj");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE10next_chunkEPS0_ = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE10next_chunkEPS0_"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE10next_chunkEPS0_");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextBuffer4sizeEv = Module["__ZNK15ImGuiTextBuffer4sizeEv"] = createExportWrapper("_ZNK15ImGuiTextBuffer4sizeEv");
+
+/** @type {function(...*):?} */
+var __ZNK13ImChunkStreamI19ImGuiWindowSettingsE4sizeEv = Module["__ZNK13ImChunkStreamI19ImGuiWindowSettingsE4sizeEv"] = createExportWrapper("_ZNK13ImChunkStreamI19ImGuiWindowSettingsE4sizeEv");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBuffer7reserveEi = Module["__ZN15ImGuiTextBuffer7reserveEi"] = createExportWrapper("_ZN15ImGuiTextBuffer7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiWindowSettings7GetNameEv = Module["__ZN19ImGuiWindowSettings7GetNameEv"] = createExportWrapper("_ZN19ImGuiWindowSettings7GetNameEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE15ptr_from_offsetEi = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE15ptr_from_offsetEi"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE15ptr_from_offsetEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18FindWindowSettingsEj = Module["__ZN5ImGui18FindWindowSettingsEj"] = createExportWrapper("_ZN5ImGui18FindWindowSettingsEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23CreateNewWindowSettingsEPKc = Module["__ZN5ImGui23CreateNewWindowSettingsEPKc"] = createExportWrapper("_ZN5ImGui23CreateNewWindowSettingsEPKc");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE15offset_from_ptrEPKS0_ = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE15offset_from_ptrEPKS0_"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE15offset_from_ptrEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVec2ihC2ERK6ImVec2 = Module["__ZN8ImVec2ihC2ERK6ImVec2"] = createExportWrapper("_ZN8ImVec2ihC2ERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19FindSettingsHandlerEPKc = Module["__ZN5ImGui19FindSettingsHandlerEPKc"] = createExportWrapper("_ZN5ImGui19FindSettingsHandlerEPKc");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerE9push_backERKS0_ = Module["__ZN8ImVectorI20ImGuiSettingsHandlerE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN13ImGuiViewportC2Ev = Module["__ZN13ImGuiViewportC2Ev"] = createExportWrapper("_ZN13ImGuiViewportC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawDataC2Ev = Module["__ZN10ImDrawDataC2Ev"] = createExportWrapper("_ZN10ImDrawDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN17ImDrawDataBuilderC2Ev = Module["__ZN17ImDrawDataBuilderC2Ev"] = createExportWrapper("_ZN17ImDrawDataBuilderC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP14ImGuiViewportPE14_grow_capacityEi = Module["__ZNK8ImVectorIP14ImGuiViewportPE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIP14ImGuiViewportPE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPE7reserveEi = Module["__ZN8ImVectorIP14ImGuiViewportPE7reserveEi"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlasD1Ev = Module["__ZN11ImFontAtlasD1Ev"] = createExportWrapper("_ZN11ImFontAtlasD1Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23SaveIniSettingsToMemoryEPm = Module["__ZN5ImGui23SaveIniSettingsToMemoryEPm"] = createExportWrapper("_ZN5ImGui23SaveIniSettingsToMemoryEPm");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI11ImGuiWindowEvPT_ = Module["__Z9IM_DELETEI11ImGuiWindowEvPT_"] = createExportWrapper("_Z9IM_DELETEI11ImGuiWindowEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE5clearEv = Module["__ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE5clearEv"] = createExportWrapper("_ZN8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPE5clearEv = Module["__ZN8ImVectorIP14ImGuiViewportPE5clearEv"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPE5clearEv");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI14ImGuiViewportPEvPT_ = Module["__Z9IM_DELETEI14ImGuiViewportPEvPT_"] = createExportWrapper("_Z9IM_DELETEI14ImGuiViewportPEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImGuiTabBarEixEi = Module["__ZN8ImVectorI11ImGuiTabBarEixEi"] = createExportWrapper("_ZN8ImVectorI11ImGuiTabBarEixEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiTabBarD2Ev = Module["__ZN11ImGuiTabBarD2Ev"] = createExportWrapper("_ZN11ImGuiTabBarD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImGuiTabBarE5clearEv = Module["__ZN8ImVectorI11ImGuiTabBarE5clearEv"] = createExportWrapper("_ZN8ImVectorI11ImGuiTabBarE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataE5clearEv = Module["__ZN8ImVectorI20ImGuiListClipperDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImGuiTableD2Ev = Module["__ZN10ImGuiTableD2Ev"] = createExportWrapper("_ZN10ImGuiTableD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImGuiTableE5clearEv = Module["__ZN8ImVectorI10ImGuiTableE5clearEv"] = createExportWrapper("_ZN8ImVectorI10ImGuiTableE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataE5clearEv = Module["__ZN8ImVectorI18ImGuiTableTempDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiTableTempDataD2Ev = Module["__ZN18ImGuiTableTempDataD2Ev"] = createExportWrapper("_ZN18ImGuiTableTempDataD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItE5clearEv = Module["__ZN8ImVectorItE5clearEv"] = createExportWrapper("_ZN8ImVectorItE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN17ImDrawDataBuilder22FlattenIntoSingleLayerEv = Module["__ZN17ImDrawDataBuilder22FlattenIntoSingleLayerEv"] = createExportWrapper("_ZN17ImDrawDataBuilder22FlattenIntoSingleLayerEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP10ImDrawListE6resizeEi = Module["__ZN8ImVectorIP10ImDrawListE6resizeEi"] = createExportWrapper("_ZN8ImVectorIP10ImDrawListE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP10ImDrawListE5emptyEv = Module["__ZNK8ImVectorIP10ImDrawListE5emptyEv"] = createExportWrapper("_ZNK8ImVectorIP10ImDrawListE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP10ImDrawListEixEi = Module["__ZN8ImVectorIP10ImDrawListEixEi"] = createExportWrapper("_ZN8ImVectorIP10ImDrawListEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP10ImDrawListE14_grow_capacityEi = Module["__ZNK8ImVectorIP10ImDrawListE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIP10ImDrawListE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP10ImDrawListE7reserveEi = Module["__ZN8ImVectorIP10ImDrawListE7reserveEi"] = createExportWrapper("_ZN8ImVectorIP10ImDrawListE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16GetCurrentWindowEv = Module["__ZN5ImGui16GetCurrentWindowEv"] = createExportWrapper("_ZN5ImGui16GetCurrentWindowEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4E4backEv = Module["__ZN8ImVectorI6ImVec4E4backEv"] = createExportWrapper("_ZN8ImVectorI6ImVec4E4backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11PopClipRectEv = Module["__ZN5ImGui11PopClipRectEv"] = createExportWrapper("_ZN5ImGui11PopClipRectEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui43FindBottomMostVisibleWindowWithinBeginStackEP11ImGuiWindow = Module["__ZN5ImGui43FindBottomMostVisibleWindowWithinBeginStackEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui43FindBottomMostVisibleWindowWithinBeginStackEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22FindWindowDisplayIndexEP11ImGuiWindow = Module["__ZN5ImGui22FindWindowDisplayIndexEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui22FindWindowDisplayIndexEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE4findERKS1_ = Module["__ZN8ImVectorIP11ImGuiWindowE4findERKS1_"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE4findERKS1_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP11ImGuiWindowE14index_from_ptrEPKS1_ = Module["__ZNK8ImVectorIP11ImGuiWindowE14index_from_ptrEPKS1_"] = createExportWrapper("_ZNK8ImVectorIP11ImGuiWindowE14index_from_ptrEPKS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8EndFrameEv = Module["__ZN5ImGui8EndFrameEv"] = createExportWrapper("_ZN5ImGui8EndFrameEv");
+
+/** @type {function(...*):?} */
+var _memcmp = Module["_memcmp"] = createExportWrapper("memcmp");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11IsMouseDownEi = Module["__ZN5ImGui11IsMouseDownEi"] = createExportWrapper("_ZN5ImGui11IsMouseDownEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ClearDragDropEv = Module["__ZN5ImGui13ClearDragDropEv"] = createExportWrapper("_ZN5ImGui13ClearDragDropEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SetTooltipEPKcz = Module["__ZN5ImGui10SetTooltipEPKcz"] = createExportWrapper("_ZN5ImGui10SetTooltipEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE7reserveEi = Module["__ZN8ImVectorIP11ImGuiWindowE7reserveEi"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE4swapERS2_ = Module["__ZN8ImVectorIP11ImGuiWindowE4swapERS2_"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE4swapERS2_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10EndColumnsEv = Module["__ZN5ImGui10EndColumnsEv"] = createExportWrapper("_ZN5ImGui10EndColumnsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9LogFinishEv = Module["__ZN5ImGui9LogFinishEv"] = createExportWrapper("_ZN5ImGui9LogFinishEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui51ErrorCheckUsingSetCursorPosToExtendParentBoundariesEv = Module["__ZN5ImGui51ErrorCheckUsingSetCursorPosToExtendParentBoundariesEv"] = createExportWrapper("_ZN5ImGui51ErrorCheckUsingSetCursorPosToExtendParentBoundariesEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataE8pop_backEv = Module["__ZN8ImVectorI14ImGuiPopupDataE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiStackSizes23CompareWithCurrentStateEv = Module["__ZN15ImGuiStackSizes23CompareWithCurrentStateEv"] = createExportWrapper("_ZN15ImGuiStackSizes23CompareWithCurrentStateEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataE8pop_backEv = Module["__ZN8ImVectorI20ImGuiWindowStackDataE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui28NavMoveRequestButNoResultYetEv = Module["__ZN5ImGui28NavMoveRequestButNoResultYetEv"] = createExportWrapper("_ZN5ImGui28NavMoveRequestButNoResultYetEv");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiPayload5ClearEv = Module["__ZN12ImGuiPayload5ClearEv"] = createExportWrapper("_ZN12ImGuiPayload5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIhE5clearEv = Module["__ZN8ImVectorIhE5clearEv"] = createExportWrapper("_ZN8ImVectorIhE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11SetTooltipVEPKcPv = Module["__ZN5ImGui11SetTooltipVEPKcPv"] = createExportWrapper("_ZN5ImGui11SetTooltipVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP11ImGuiWindowE14_grow_capacityEi = Module["__ZNK8ImVectorIP11ImGuiWindowE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIP11ImGuiWindowE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN17ImDrawDataBuilder5ClearEv = Module["__ZN17ImDrawDataBuilder5ClearEv"] = createExportWrapper("_ZN17ImDrawDataBuilder5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP10ImDrawListE9push_backERKS1_ = Module["__ZN8ImVectorIP10ImDrawListE9push_backERKS1_"] = createExportWrapper("_ZN8ImVectorIP10ImDrawListE9push_backERKS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui30GetTopMostAndVisiblePopupModalEv = Module["__ZN5ImGui30GetTopMostAndVisiblePopupModalEv"] = createExportWrapper("_ZN5ImGui30GetTopMostAndVisiblePopupModalEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect6ExpandEf = Module["__ZN6ImRect6ExpandEf"] = createExportWrapper("_ZN6ImRect6ExpandEf");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList10AddDrawCmdEv = Module["__ZN10ImDrawList10AddDrawCmdEv"] = createExportWrapper("_ZN10ImDrawList10AddDrawCmdEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList17_PopUnusedDrawCmdEv = Module["__ZN10ImDrawList17_PopUnusedDrawCmdEv"] = createExportWrapper("_ZN10ImDrawList17_PopUnusedDrawCmdEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12IsItemActiveEv = Module["__ZN5ImGui12IsItemActiveEv"] = createExportWrapper("_ZN5ImGui12IsItemActiveEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsItemActivatedEv = Module["__ZN5ImGui15IsItemActivatedEv"] = createExportWrapper("_ZN5ImGui15IsItemActivatedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17IsItemDeactivatedEv = Module["__ZN5ImGui17IsItemDeactivatedEv"] = createExportWrapper("_ZN5ImGui17IsItemDeactivatedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26IsItemDeactivatedAfterEditEv = Module["__ZN5ImGui26IsItemDeactivatedAfterEditEv"] = createExportWrapper("_ZN5ImGui26IsItemDeactivatedAfterEditEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsItemClickedEi = Module["__ZN5ImGui13IsItemClickedEi"] = createExportWrapper("_ZN5ImGui13IsItemClickedEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25CalcTypematicRepeatAmountEffff = Module["__ZN5ImGui25CalcTypematicRepeatAmountEffff"] = createExportWrapper("_ZN5ImGui25CalcTypematicRepeatAmountEffff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17IsItemToggledOpenEv = Module["__ZN5ImGui17IsItemToggledOpenEv"] = createExportWrapper("_ZN5ImGui17IsItemToggledOpenEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22IsItemToggledSelectionEv = Module["__ZN5ImGui22IsItemToggledSelectionEv"] = createExportWrapper("_ZN5ImGui22IsItemToggledSelectionEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16IsAnyItemHoveredEv = Module["__ZN5ImGui16IsAnyItemHoveredEv"] = createExportWrapper("_ZN5ImGui16IsAnyItemHoveredEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsAnyItemActiveEv = Module["__ZN5ImGui15IsAnyItemActiveEv"] = createExportWrapper("_ZN5ImGui15IsAnyItemActiveEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16IsAnyItemFocusedEv = Module["__ZN5ImGui16IsAnyItemFocusedEv"] = createExportWrapper("_ZN5ImGui16IsAnyItemFocusedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsItemVisibleEv = Module["__ZN5ImGui13IsItemVisibleEv"] = createExportWrapper("_ZN5ImGui13IsItemVisibleEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12IsItemEditedEv = Module["__ZN5ImGui12IsItemEditedEv"] = createExportWrapper("_ZN5ImGui12IsItemEditedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19SetItemAllowOverlapEv = Module["__ZN5ImGui19SetItemAllowOverlapEv"] = createExportWrapper("_ZN5ImGui19SetItemAllowOverlapEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22SetItemUsingMouseWheelEv = Module["__ZN5ImGui22SetItemUsingMouseWheelEv"] = createExportWrapper("_ZN5ImGui22SetItemUsingMouseWheelEv");
+
+/** @type {function(...*):?} */
+var __Z16ImBitArraySetBitPji = Module["__Z16ImBitArraySetBitPji"] = createExportWrapper("_Z16ImBitArraySetBitPji");
+
+/** @type {function(...*):?} */
+var __Z21ImBitArraySetBitRangePjii = Module["__Z21ImBitArraySetBitRangePjii"] = createExportWrapper("_Z21ImBitArraySetBitRangePjii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetItemRectMinEv = Module["__ZN5ImGui14GetItemRectMinEv"] = createExportWrapper("_ZN5ImGui14GetItemRectMinEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetItemRectMaxEv = Module["__ZN5ImGui14GetItemRectMaxEv"] = createExportWrapper("_ZN5ImGui14GetItemRectMaxEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetItemRectSizeEv = Module["__ZN5ImGui15GetItemRectSizeEv"] = createExportWrapper("_ZN5ImGui15GetItemRectSizeEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginChildExEPKcjRK6ImVec2bi = Module["__ZN5ImGui12BeginChildExEPKcjRK6ImVec2bi"] = createExportWrapper("_ZN5ImGui12BeginChildExEPKcjRK6ImVec2bi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetContentRegionAvailEv = Module["__ZN5ImGui21GetContentRegionAvailEv"] = createExportWrapper("_ZN5ImGui21GetContentRegionAvailEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22GetContentRegionMaxAbsEv = Module["__ZN5ImGui22GetContentRegionMaxAbsEv"] = createExportWrapper("_ZN5ImGui22GetContentRegionMaxAbsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8SetNavIDEj13ImGuiNavLayerjRK6ImRect = Module["__ZN5ImGui8SetNavIDEj13ImGuiNavLayerjRK6ImRect"] = createExportWrapper("_ZN5ImGui8SetNavIDEj13ImGuiNavLayerjRK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BeginChildEPKcRK6ImVec2bi = Module["__ZN5ImGui10BeginChildEPKcRK6ImVec2bi"] = createExportWrapper("_ZN5ImGui10BeginChildEPKcRK6ImVec2bi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BeginChildEjRK6ImVec2bi = Module["__ZN5ImGui10BeginChildEjRK6ImVec2bi"] = createExportWrapper("_ZN5ImGui10BeginChildEjRK6ImVec2bi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8EndChildEv = Module["__ZN5ImGui8EndChildEv"] = createExportWrapper("_ZN5ImGui8EndChildEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8ItemSizeERK6ImVec2f = Module["__ZN5ImGui8ItemSizeERK6ImVec2f"] = createExportWrapper("_ZN5ImGui8ItemSizeERK6ImVec2f");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7ItemAddERK6ImRectjPS1_i = Module["__ZN5ImGui7ItemAddERK6ImRectjPS1_i"] = createExportWrapper("_ZN5ImGui7ItemAddERK6ImRectjPS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15BeginChildFrameEjRK6ImVec2i = Module["__ZN5ImGui15BeginChildFrameEjRK6ImVec2i"] = createExportWrapper("_ZN5ImGui15BeginChildFrameEjRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13EndChildFrameEv = Module["__ZN5ImGui13EndChildFrameEv"] = createExportWrapper("_ZN5ImGui13EndChildFrameEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25CalcWindowNextAutoFitSizeEP11ImGuiWindow = Module["__ZN5ImGui25CalcWindowNextAutoFitSizeEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui25CalcWindowNextAutoFitSizeEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN21ImGuiSizeCallbackDataC2Ev = Module["__ZN21ImGuiSizeCallbackDataC2Ev"] = createExportWrapper("_ZN21ImGuiSizeCallbackDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23GetWindowResizeCornerIDEP11ImGuiWindowi = Module["__ZN5ImGui23GetWindowResizeCornerIDEP11ImGuiWindowi"] = createExportWrapper("_ZN5ImGui23GetWindowResizeCornerIDEP11ImGuiWindowi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23GetWindowResizeBorderIDEP11ImGuiWindowi = Module["__ZN5ImGui23GetWindowResizeBorderIDEP11ImGuiWindowi"] = createExportWrapper("_ZN5ImGui23GetWindowResizeBorderIDEP11ImGuiWindowi");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindowC1EP12ImGuiContextPKc = Module["__ZN11ImGuiWindowC1EP12ImGuiContextPKc"] = createExportWrapper("_ZN11ImGuiWindowC1EP12ImGuiContextPKc");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE10push_frontERKS1_ = Module["__ZN8ImVectorIP11ImGuiWindowE10push_frontERKS1_"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE10push_frontERKS1_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP11ImGuiWindowE8containsERKS1_ = Module["__ZNK8ImVectorIP11ImGuiWindowE8containsERKS1_"] = createExportWrapper("_ZNK8ImVectorIP11ImGuiWindowE8containsERKS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE5eraseEPKS1_ = Module["__ZN8ImVectorIP11ImGuiWindowE5eraseEPKS1_"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE5eraseEPKS1_");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiStackSizesC2Ev = Module["__ZN15ImGuiStackSizesC2Ev"] = createExportWrapper("_ZN15ImGuiStackSizesC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25GetPopupAllowedExtentRectEP11ImGuiWindow = Module["__ZN5ImGui25GetPopupAllowedExtentRectEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui25GetPopupAllowedExtentRectEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataEixEi = Module["__ZN8ImVectorI20ImGuiWindowStackDataEixEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui27FindBestWindowPosForPopupExERK6ImVec2S2_PiRK6ImRectS6_24ImGuiPopupPositionPolicy = Module["__ZN5ImGui27FindBestWindowPosForPopupExERK6ImVec2S2_PiRK6ImRectS6_24ImGuiPopupPositionPolicy"] = createExportWrapper("_ZN5ImGui27FindBestWindowPosForPopupExERK6ImVec2S2_PiRK6ImRectS6_24ImGuiPopupPositionPolicy");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6PushIDEPKc = Module["__ZN5ImGui6PushIDEPKc"] = createExportWrapper("_ZN5ImGui6PushIDEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14ButtonBehaviorERK6ImRectjPbS3_i = Module["__ZN5ImGui14ButtonBehaviorERK6ImRectjPbS3_i"] = createExportWrapper("_ZN5ImGui14ButtonBehaviorERK6ImRectjPbS3_i");
+
+/** @type {function(...*):?} */
+var __ZN6ImVec2ixEm = Module["__ZN6ImVec2ixEm"] = createExportWrapper("_ZN6ImVec2ixEm");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5PopIDEv = Module["__ZN5ImGui5PopIDEv"] = createExportWrapper("_ZN5ImGui5PopIDEv");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiWindow11MenuBarRectEv = Module["__ZNK11ImGuiWindow11MenuBarRectEv"] = createExportWrapper("_ZNK11ImGuiWindow11MenuBarRectEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect5GetBLEv = Module["__ZNK6ImRect5GetBLEv"] = createExportWrapper("_ZNK6ImRect5GetBLEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect5GetBREv = Module["__ZNK6ImRect5GetBREv"] = createExportWrapper("_ZNK6ImRect5GetBREv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7AddLineERK6ImVec2S2_jf = Module["__ZN10ImDrawList7AddLineERK6ImVec2S2_jf"] = createExportWrapper("_ZN10ImDrawList7AddLineERK6ImVec2S2_jf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9ScrollbarE9ImGuiAxis = Module["__ZN5ImGui9ScrollbarE9ImGuiAxis"] = createExportWrapper("_ZN5ImGui9ScrollbarE9ImGuiAxis");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList10PathLineToERK6ImVec2 = Module["__ZN10ImDrawList10PathLineToERK6ImVec2"] = createExportWrapper("_ZN10ImDrawList10PathLineToERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList13PathArcToFastERK6ImVec2fii = Module["__ZN10ImDrawList13PathArcToFastERK6ImVec2fii"] = createExportWrapper("_ZN10ImDrawList13PathArcToFastERK6ImVec2fii");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList14PathFillConvexEj = Module["__ZN10ImDrawList14PathFillConvexEj"] = createExportWrapper("_ZN10ImDrawList14PathFillConvexEj");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIfE14_grow_capacityEi = Module["__ZNK8ImVectorIfE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIfE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE7reserveEi = Module["__ZN8ImVectorIfE7reserveEi"] = createExportWrapper("_ZN8ImVectorIfE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14CollapseButtonEjRK6ImVec2 = Module["__ZN5ImGui14CollapseButtonEjRK6ImVec2"] = createExportWrapper("_ZN5ImGui14CollapseButtonEjRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11CloseButtonEjRK6ImVec2 = Module["__ZN5ImGui11CloseButtonEjRK6ImVec2"] = createExportWrapper("_ZN5ImGui11CloseButtonEjRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12RenderBulletEP10ImDrawList6ImVec2j = Module["__ZN5ImGui12RenderBulletEP10ImDrawList6ImVec2j"] = createExportWrapper("_ZN5ImGui12RenderBulletEP10ImDrawList6ImVec2j");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextBuffer5emptyEv = Module["__ZNK15ImGuiTextBuffer5emptyEv"] = createExportWrapper("_ZNK15ImGuiTextBuffer5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextBuffer5beginEv = Module["__ZNK15ImGuiTextBuffer5beginEv"] = createExportWrapper("_ZNK15ImGuiTextBuffer5beginEv");
+
+/** @type {function(...*):?} */
+var _fflush = Module["_fflush"] = createExportWrapper("fflush");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE4backEv = Module["__ZN8ImVectorIP11ImGuiWindowE4backEv"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui24BringWindowToDisplayBackEP11ImGuiWindow = Module["__ZN5ImGui24BringWindowToDisplayBackEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui24BringWindowToDisplayBackEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8PushFontEP6ImFont = Module["__ZN5ImGui8PushFontEP6ImFont"] = createExportWrapper("_ZN5ImGui8PushFontEP6ImFont");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontE9push_backERKS1_ = Module["__ZN8ImVectorIP6ImFontE9push_backERKS1_"] = createExportWrapper("_ZN8ImVectorIP6ImFontE9push_backERKS1_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP6ImFontE14_grow_capacityEi = Module["__ZNK8ImVectorIP6ImFontE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIP6ImFontE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontE7reserveEi = Module["__ZN8ImVectorIP6ImFontE7reserveEi"] = createExportWrapper("_ZN8ImVectorIP6ImFontE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7PopFontEv = Module["__ZN5ImGui7PopFontEv"] = createExportWrapper("_ZN5ImGui7PopFontEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontE8pop_backEv = Module["__ZN8ImVectorIP6ImFontE8pop_backEv"] = createExportWrapper("_ZN8ImVectorIP6ImFontE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIP6ImFontE5emptyEv = Module["__ZNK8ImVectorIP6ImFontE5emptyEv"] = createExportWrapper("_ZNK8ImVectorIP6ImFontE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontE4backEv = Module["__ZN8ImVectorIP6ImFontE4backEv"] = createExportWrapper("_ZN8ImVectorIP6ImFontE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12PushItemFlagEib = Module["__ZN5ImGui12PushItemFlagEib"] = createExportWrapper("_ZN5ImGui12PushItemFlagEib");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiE4backEv = Module["__ZN8ImVectorIiE4backEv"] = createExportWrapper("_ZN8ImVectorIiE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11PopItemFlagEv = Module["__ZN5ImGui11PopItemFlagEv"] = createExportWrapper("_ZN5ImGui11PopItemFlagEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiE8pop_backEv = Module["__ZN8ImVectorIiE8pop_backEv"] = createExportWrapper("_ZN8ImVectorIiE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13BeginDisabledEb = Module["__ZN5ImGui13BeginDisabledEb"] = createExportWrapper("_ZN5ImGui13BeginDisabledEb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11EndDisabledEv = Module["__ZN5ImGui11EndDisabledEv"] = createExportWrapper("_ZN5ImGui11EndDisabledEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22PushAllowKeyboardFocusEb = Module["__ZN5ImGui22PushAllowKeyboardFocusEb"] = createExportWrapper("_ZN5ImGui22PushAllowKeyboardFocusEb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21PopAllowKeyboardFocusEv = Module["__ZN5ImGui21PopAllowKeyboardFocusEv"] = createExportWrapper("_ZN5ImGui21PopAllowKeyboardFocusEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16PushButtonRepeatEb = Module["__ZN5ImGui16PushButtonRepeatEb"] = createExportWrapper("_ZN5ImGui16PushButtonRepeatEb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15PopButtonRepeatEv = Module["__ZN5ImGui15PopButtonRepeatEv"] = createExportWrapper("_ZN5ImGui15PopButtonRepeatEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15PushTextWrapPosEf = Module["__ZN5ImGui15PushTextWrapPosEf"] = createExportWrapper("_ZN5ImGui15PushTextWrapPosEf");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE9push_backERKf = Module["__ZN8ImVectorIfE9push_backERKf"] = createExportWrapper("_ZN8ImVectorIfE9push_backERKf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14PopTextWrapPosEv = Module["__ZN5ImGui14PopTextWrapPosEv"] = createExportWrapper("_ZN5ImGui14PopTextWrapPosEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE4backEv = Module["__ZN8ImVectorIfE4backEv"] = createExportWrapper("_ZN8ImVectorIfE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE8pop_backEv = Module["__ZN8ImVectorIfE8pop_backEv"] = createExportWrapper("_ZN8ImVectorIfE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsWindowChildOfEP11ImGuiWindowS1_b = Module["__ZN5ImGui15IsWindowChildOfEP11ImGuiWindowS1_b"] = createExportWrapper("_ZN5ImGui15IsWindowChildOfEP11ImGuiWindowS1_b");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsWindowHoveredEi = Module["__ZN5ImGui15IsWindowHoveredEi"] = createExportWrapper("_ZN5ImGui15IsWindowHoveredEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsWindowFocusedEi = Module["__ZN5ImGui15IsWindowFocusedEi"] = createExportWrapper("_ZN5ImGui15IsWindowFocusedEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20IsWindowNavFocusableEP11ImGuiWindow = Module["__ZN5ImGui20IsWindowNavFocusableEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui20IsWindowNavFocusableEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetWindowWidthEv = Module["__ZN5ImGui14GetWindowWidthEv"] = createExportWrapper("_ZN5ImGui14GetWindowWidthEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetWindowHeightEv = Module["__ZN5ImGui15GetWindowHeightEv"] = createExportWrapper("_ZN5ImGui15GetWindowHeightEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12GetWindowPosEv = Module["__ZN5ImGui12GetWindowPosEv"] = createExportWrapper("_ZN5ImGui12GetWindowPosEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SetWindowPosERK6ImVec2i = Module["__ZN5ImGui12SetWindowPosERK6ImVec2i"] = createExportWrapper("_ZN5ImGui12SetWindowPosERK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20GetCurrentWindowReadEv = Module["__ZN5ImGui20GetCurrentWindowReadEv"] = createExportWrapper("_ZN5ImGui20GetCurrentWindowReadEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SetWindowPosEPKcRK6ImVec2i = Module["__ZN5ImGui12SetWindowPosEPKcRK6ImVec2i"] = createExportWrapper("_ZN5ImGui12SetWindowPosEPKcRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetWindowSizeEv = Module["__ZN5ImGui13GetWindowSizeEv"] = createExportWrapper("_ZN5ImGui13GetWindowSizeEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13SetWindowSizeERK6ImVec2i = Module["__ZN5ImGui13SetWindowSizeERK6ImVec2i"] = createExportWrapper("_ZN5ImGui13SetWindowSizeERK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13SetWindowSizeEPKcRK6ImVec2i = Module["__ZN5ImGui13SetWindowSizeEPKcRK6ImVec2i"] = createExportWrapper("_ZN5ImGui13SetWindowSizeEPKcRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20SetWindowHitTestHoleEP11ImGuiWindowRK6ImVec2S4_ = Module["__ZN5ImGui20SetWindowHitTestHoleEP11ImGuiWindowRK6ImVec2S4_"] = createExportWrapper("_ZN5ImGui20SetWindowHitTestHoleEP11ImGuiWindowRK6ImVec2S4_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetWindowCollapsedEbi = Module["__ZN5ImGui18SetWindowCollapsedEbi"] = createExportWrapper("_ZN5ImGui18SetWindowCollapsedEbi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17IsWindowCollapsedEv = Module["__ZN5ImGui17IsWindowCollapsedEv"] = createExportWrapper("_ZN5ImGui17IsWindowCollapsedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17IsWindowAppearingEv = Module["__ZN5ImGui17IsWindowAppearingEv"] = createExportWrapper("_ZN5ImGui17IsWindowAppearingEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetWindowCollapsedEPKcbi = Module["__ZN5ImGui18SetWindowCollapsedEPKcbi"] = createExportWrapper("_ZN5ImGui18SetWindowCollapsedEPKcbi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetWindowFocusEv = Module["__ZN5ImGui14SetWindowFocusEv"] = createExportWrapper("_ZN5ImGui14SetWindowFocusEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetWindowFocusEPKc = Module["__ZN5ImGui14SetWindowFocusEPKc"] = createExportWrapper("_ZN5ImGui14SetWindowFocusEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16SetNextWindowPosERK6ImVec2iS2_ = Module["__ZN5ImGui16SetNextWindowPosERK6ImVec2iS2_"] = createExportWrapper("_ZN5ImGui16SetNextWindowPosERK6ImVec2iS2_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui28SetNextWindowSizeConstraintsERK6ImVec2S2_PFvP21ImGuiSizeCallbackDataEPv = Module["__ZN5ImGui28SetNextWindowSizeConstraintsERK6ImVec2S2_PFvP21ImGuiSizeCallbackDataEPv"] = createExportWrapper("_ZN5ImGui28SetNextWindowSizeConstraintsERK6ImVec2S2_PFvP21ImGuiSizeCallbackDataEPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui24SetNextWindowContentSizeERK6ImVec2 = Module["__ZN5ImGui24SetNextWindowContentSizeERK6ImVec2"] = createExportWrapper("_ZN5ImGui24SetNextWindowContentSizeERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19SetNextWindowScrollERK6ImVec2 = Module["__ZN5ImGui19SetNextWindowScrollERK6ImVec2"] = createExportWrapper("_ZN5ImGui19SetNextWindowScrollERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22SetNextWindowCollapsedEbi = Module["__ZN5ImGui22SetNextWindowCollapsedEbi"] = createExportWrapper("_ZN5ImGui22SetNextWindowCollapsedEbi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetNextWindowFocusEv = Module["__ZN5ImGui18SetNextWindowFocusEv"] = createExportWrapper("_ZN5ImGui18SetNextWindowFocusEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetWindowDrawListEv = Module["__ZN5ImGui17GetWindowDrawListEv"] = createExportWrapper("_ZN5ImGui17GetWindowDrawListEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7GetFontEv = Module["__ZN5ImGui7GetFontEv"] = createExportWrapper("_ZN5ImGui7GetFontEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetFontSizeEv = Module["__ZN5ImGui11GetFontSizeEv"] = createExportWrapper("_ZN5ImGui11GetFontSizeEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22GetFontTexUvWhitePixelEv = Module["__ZN5ImGui22GetFontTexUvWhitePixelEv"] = createExportWrapper("_ZN5ImGui22GetFontTexUvWhitePixelEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetWindowFontScaleEf = Module["__ZN5ImGui18SetWindowFontScaleEf"] = createExportWrapper("_ZN5ImGui18SetWindowFontScaleEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ActivateItemEj = Module["__ZN5ImGui12ActivateItemEj"] = createExportWrapper("_ZN5ImGui12ActivateItemEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14PushFocusScopeEj = Module["__ZN5ImGui14PushFocusScopeEj"] = createExportWrapper("_ZN5ImGui14PushFocusScopeEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13PopFocusScopeEv = Module["__ZN5ImGui13PopFocusScopeEv"] = createExportWrapper("_ZN5ImGui13PopFocusScopeEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIjE8pop_backEv = Module["__ZN8ImVectorIjE8pop_backEv"] = createExportWrapper("_ZN8ImVectorIjE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20SetKeyboardFocusHereEi = Module["__ZN5ImGui20SetKeyboardFocusHereEi"] = createExportWrapper("_ZN5ImGui20SetKeyboardFocusHereEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20NavMoveRequestSubmitEiiii = Module["__ZN5ImGui20NavMoveRequestSubmitEiiii"] = createExportWrapper("_ZN5ImGui20NavMoveRequestSubmitEiiii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui33NavMoveRequestResolveWithLastItemEP16ImGuiNavItemData = Module["__ZN5ImGui33NavMoveRequestResolveWithLastItemEP16ImGuiNavItemData"] = createExportWrapper("_ZN5ImGui33NavMoveRequestResolveWithLastItemEP16ImGuiNavItemData");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiNavItemData5ClearEv = Module["__ZN16ImGuiNavItemData5ClearEv"] = createExportWrapper("_ZN16ImGuiNavItemData5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19SetItemDefaultFocusEv = Module["__ZN5ImGui19SetItemDefaultFocusEv"] = createExportWrapper("_ZN5ImGui19SetItemDefaultFocusEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14ScrollToRectExEP11ImGuiWindowRK6ImRecti = Module["__ZN5ImGui14ScrollToRectExEP11ImGuiWindowRK6ImRecti"] = createExportWrapper("_ZN5ImGui14ScrollToRectExEP11ImGuiWindowRK6ImRecti");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetScrollFromPosXEP11ImGuiWindowff = Module["__ZN5ImGui17SetScrollFromPosXEP11ImGuiWindowff"] = createExportWrapper("_ZN5ImGui17SetScrollFromPosXEP11ImGuiWindowff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetScrollFromPosYEP11ImGuiWindowff = Module["__ZN5ImGui17SetScrollFromPosYEP11ImGuiWindowff"] = createExportWrapper("_ZN5ImGui17SetScrollFromPosYEP11ImGuiWindowff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SetStateStorageEP12ImGuiStorage = Module["__ZN5ImGui15SetStateStorageEP12ImGuiStorage"] = createExportWrapper("_ZN5ImGui15SetStateStorageEP12ImGuiStorage");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetStateStorageEv = Module["__ZN5ImGui15GetStateStorageEv"] = createExportWrapper("_ZN5ImGui15GetStateStorageEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6PushIDEPKcS1_ = Module["__ZN5ImGui6PushIDEPKcS1_"] = createExportWrapper("_ZN5ImGui6PushIDEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6PushIDEPKv = Module["__ZN5ImGui6PushIDEPKv"] = createExportWrapper("_ZN5ImGui6PushIDEPKv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6PushIDEi = Module["__ZN5ImGui6PushIDEi"] = createExportWrapper("_ZN5ImGui6PushIDEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14PushOverrideIDEj = Module["__ZN5ImGui14PushOverrideIDEj"] = createExportWrapper("_ZN5ImGui14PushOverrideIDEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetIDWithSeedEPKcS1_j = Module["__ZN5ImGui13GetIDWithSeedEPKcS1_j"] = createExportWrapper("_ZN5ImGui13GetIDWithSeedEPKcS1_j");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5GetIDEPKc = Module["__ZN5ImGui5GetIDEPKc"] = createExportWrapper("_ZN5ImGui5GetIDEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5GetIDEPKcS1_ = Module["__ZN5ImGui5GetIDEPKcS1_"] = createExportWrapper("_ZN5ImGui5GetIDEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5GetIDEPKv = Module["__ZN5ImGui5GetIDEPKv"] = createExportWrapper("_ZN5ImGui5GetIDEPKv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsRectVisibleERK6ImVec2 = Module["__ZN5ImGui13IsRectVisibleERK6ImVec2"] = createExportWrapper("_ZN5ImGui13IsRectVisibleERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsRectVisibleERK6ImVec2S2_ = Module["__ZN5ImGui13IsRectVisibleERK6ImVec2S2_"] = createExportWrapper("_ZN5ImGui13IsRectVisibleERK6ImVec2S2_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetKeyIndexEi = Module["__ZN5ImGui11GetKeyIndexEi"] = createExportWrapper("_ZN5ImGui11GetKeyIndexEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10GetKeyNameEi = Module["__ZN5ImGui10GetKeyNameEi"] = createExportWrapper("_ZN5ImGui10GetKeyNameEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetKeyChordNameEiiPci = Module["__ZN5ImGui15GetKeyChordNameEiiPci"] = createExportWrapper("_ZN5ImGui15GetKeyChordNameEiiPci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22GetTypematicRepeatRateEiPfS0_ = Module["__ZN5ImGui22GetTypematicRepeatRateEiPfS0_"] = createExportWrapper("_ZN5ImGui22GetTypematicRepeatRateEiPfS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19GetKeyPressedAmountEiff = Module["__ZN5ImGui19GetKeyPressedAmountEiff"] = createExportWrapper("_ZN5ImGui19GetKeyPressedAmountEiff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14IsKeyPressedExEii = Module["__ZN5ImGui14IsKeyPressedExEii"] = createExportWrapper("_ZN5ImGui14IsKeyPressedExEii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13IsKeyReleasedEi = Module["__ZN5ImGui13IsKeyReleasedEi"] = createExportWrapper("_ZN5ImGui13IsKeyReleasedEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsMouseReleasedEi = Module["__ZN5ImGui15IsMouseReleasedEi"] = createExportWrapper("_ZN5ImGui15IsMouseReleasedEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20IsMouseDoubleClickedEi = Module["__ZN5ImGui20IsMouseDoubleClickedEi"] = createExportWrapper("_ZN5ImGui20IsMouseDoubleClickedEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20GetMouseClickedCountEi = Module["__ZN5ImGui20GetMouseClickedCountEi"] = createExportWrapper("_ZN5ImGui20GetMouseClickedCountEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui24IsMouseDragPastThresholdEif = Module["__ZN5ImGui24IsMouseDragPastThresholdEif"] = createExportWrapper("_ZN5ImGui24IsMouseDragPastThresholdEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15IsMouseDraggingEif = Module["__ZN5ImGui15IsMouseDraggingEif"] = createExportWrapper("_ZN5ImGui15IsMouseDraggingEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11GetMousePosEv = Module["__ZN5ImGui11GetMousePosEv"] = createExportWrapper("_ZN5ImGui11GetMousePosEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui32GetMousePosOnOpeningCurrentPopupEv = Module["__ZN5ImGui32GetMousePosOnOpeningCurrentPopupEv"] = createExportWrapper("_ZN5ImGui32GetMousePosOnOpeningCurrentPopupEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14IsAnyMouseDownEv = Module["__ZN5ImGui14IsAnyMouseDownEv"] = createExportWrapper("_ZN5ImGui14IsAnyMouseDownEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetMouseDragDeltaEif = Module["__ZN5ImGui17GetMouseDragDeltaEif"] = createExportWrapper("_ZN5ImGui17GetMouseDragDeltaEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19ResetMouseDragDeltaEi = Module["__ZN5ImGui19ResetMouseDragDeltaEi"] = createExportWrapper("_ZN5ImGui19ResetMouseDragDeltaEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetMouseCursorEv = Module["__ZN5ImGui14GetMouseCursorEv"] = createExportWrapper("_ZN5ImGui14GetMouseCursorEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31SetNextFrameWantCaptureKeyboardEb = Module["__ZN5ImGui31SetNextFrameWantCaptureKeyboardEb"] = createExportWrapper("_ZN5ImGui31SetNextFrameWantCaptureKeyboardEb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui28SetNextFrameWantCaptureMouseEb = Module["__ZN5ImGui28SetNextFrameWantCaptureMouseEb"] = createExportWrapper("_ZN5ImGui28SetNextFrameWantCaptureMouseEb");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi652ELi0EE12ClearAllBitsEv = Module["__ZN10ImBitArrayILi652ELi0EE12ClearAllBitsEv"] = createExportWrapper("_ZN10ImBitArrayILi652ELi0EE12ClearAllBitsEv");
+
+/** @type {function(...*):?} */
+var __Z17ImBitArrayTestBitPKji = Module["__Z17ImBitArrayTestBitPKji"] = createExportWrapper("_Z17ImBitArrayTestBitPKji");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25ErrorCheckEndFrameRecoverEPFvPvPKczES0_ = Module["__ZN5ImGui25ErrorCheckEndFrameRecoverEPFvPvPKczES0_"] = createExportWrapper("_ZN5ImGui25ErrorCheckEndFrameRecoverEPFvPvPKczES0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26ErrorCheckEndWindowRecoverEPFvPvPKczES0_ = Module["__ZN5ImGui26ErrorCheckEndWindowRecoverEPFvPvPKczES0_"] = createExportWrapper("_ZN5ImGui26ErrorCheckEndWindowRecoverEPFvPvPKczES0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8EndTableEv = Module["__ZN5ImGui8EndTableEv"] = createExportWrapper("_ZN5ImGui8EndTableEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8EndGroupEv = Module["__ZN5ImGui8EndGroupEv"] = createExportWrapper("_ZN5ImGui8EndGroupEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7TreePopEv = Module["__ZN5ImGui7TreePopEv"] = createExportWrapper("_ZN5ImGui7TreePopEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9EndTabBarEv = Module["__ZN5ImGui9EndTabBarEv"] = createExportWrapper("_ZN5ImGui9EndTabBarEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataE4backEv = Module["__ZN8ImVectorI14ImGuiGroupDataE4backEv"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataE8pop_backEv = Module["__ZN8ImVectorI14ImGuiGroupDataE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18GetCursorScreenPosEv = Module["__ZN5ImGui18GetCursorScreenPosEv"] = createExportWrapper("_ZN5ImGui18GetCursorScreenPosEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetCursorScreenPosERK6ImVec2 = Module["__ZN5ImGui18SetCursorScreenPosERK6ImVec2"] = createExportWrapper("_ZN5ImGui18SetCursorScreenPosERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12GetCursorPosEv = Module["__ZN5ImGui12GetCursorPosEv"] = createExportWrapper("_ZN5ImGui12GetCursorPosEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetCursorPosXEv = Module["__ZN5ImGui13GetCursorPosXEv"] = createExportWrapper("_ZN5ImGui13GetCursorPosXEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetCursorPosYEv = Module["__ZN5ImGui13GetCursorPosYEv"] = createExportWrapper("_ZN5ImGui13GetCursorPosYEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SetCursorPosERK6ImVec2 = Module["__ZN5ImGui12SetCursorPosERK6ImVec2"] = createExportWrapper("_ZN5ImGui12SetCursorPosERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13SetCursorPosXEf = Module["__ZN5ImGui13SetCursorPosXEf"] = createExportWrapper("_ZN5ImGui13SetCursorPosXEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13SetCursorPosYEf = Module["__ZN5ImGui13SetCursorPosYEf"] = createExportWrapper("_ZN5ImGui13SetCursorPosYEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetCursorStartPosEv = Module["__ZN5ImGui17GetCursorStartPosEv"] = createExportWrapper("_ZN5ImGui17GetCursorStartPosEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6IndentEf = Module["__ZN5ImGui6IndentEf"] = createExportWrapper("_ZN5ImGui6IndentEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8UnindentEf = Module["__ZN5ImGui8UnindentEf"] = createExportWrapper("_ZN5ImGui8UnindentEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13PushItemWidthEf = Module["__ZN5ImGui13PushItemWidthEf"] = createExportWrapper("_ZN5ImGui13PushItemWidthEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20PushMultiItemsWidthsEif = Module["__ZN5ImGui20PushMultiItemsWidthsEif"] = createExportWrapper("_ZN5ImGui20PushMultiItemsWidthsEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12PopItemWidthEv = Module["__ZN5ImGui12PopItemWidthEv"] = createExportWrapper("_ZN5ImGui12PopItemWidthEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13CalcItemWidthEv = Module["__ZN5ImGui13CalcItemWidthEv"] = createExportWrapper("_ZN5ImGui13CalcItemWidthEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12CalcItemSizeE6ImVec2ff = Module["__ZN5ImGui12CalcItemSizeE6ImVec2ff"] = createExportWrapper("_ZN5ImGui12CalcItemSizeE6ImVec2ff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetTextLineHeightEv = Module["__ZN5ImGui17GetTextLineHeightEv"] = createExportWrapper("_ZN5ImGui17GetTextLineHeightEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui28GetTextLineHeightWithSpacingEv = Module["__ZN5ImGui28GetTextLineHeightWithSpacingEv"] = createExportWrapper("_ZN5ImGui28GetTextLineHeightWithSpacingEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetFrameHeightEv = Module["__ZN5ImGui14GetFrameHeightEv"] = createExportWrapper("_ZN5ImGui14GetFrameHeightEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25GetFrameHeightWithSpacingEv = Module["__ZN5ImGui25GetFrameHeightWithSpacingEv"] = createExportWrapper("_ZN5ImGui25GetFrameHeightWithSpacingEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19GetContentRegionMaxEv = Module["__ZN5ImGui19GetContentRegionMaxEv"] = createExportWrapper("_ZN5ImGui19GetContentRegionMaxEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25GetWindowContentRegionMinEv = Module["__ZN5ImGui25GetWindowContentRegionMinEv"] = createExportWrapper("_ZN5ImGui25GetWindowContentRegionMinEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25GetWindowContentRegionMaxEv = Module["__ZN5ImGui25GetWindowContentRegionMaxEv"] = createExportWrapper("_ZN5ImGui25GetWindowContentRegionMaxEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BeginGroupEv = Module["__ZN5ImGui10BeginGroupEv"] = createExportWrapper("_ZN5ImGui10BeginGroupEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ScrollToItemEi = Module["__ZN5ImGui12ScrollToItemEi"] = createExportWrapper("_ZN5ImGui12ScrollToItemEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ScrollToRectEP11ImGuiWindowRK6ImRecti = Module["__ZN5ImGui12ScrollToRectEP11ImGuiWindowRK6ImRecti"] = createExportWrapper("_ZN5ImGui12ScrollToRectEP11ImGuiWindowRK6ImRecti");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10GetScrollXEv = Module["__ZN5ImGui10GetScrollXEv"] = createExportWrapper("_ZN5ImGui10GetScrollXEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10GetScrollYEv = Module["__ZN5ImGui10GetScrollYEv"] = createExportWrapper("_ZN5ImGui10GetScrollYEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetScrollMaxXEv = Module["__ZN5ImGui13GetScrollMaxXEv"] = createExportWrapper("_ZN5ImGui13GetScrollMaxXEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13GetScrollMaxYEv = Module["__ZN5ImGui13GetScrollMaxYEv"] = createExportWrapper("_ZN5ImGui13GetScrollMaxYEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SetScrollXEf = Module["__ZN5ImGui10SetScrollXEf"] = createExportWrapper("_ZN5ImGui10SetScrollXEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SetScrollYEf = Module["__ZN5ImGui10SetScrollYEf"] = createExportWrapper("_ZN5ImGui10SetScrollYEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetScrollFromPosXEff = Module["__ZN5ImGui17SetScrollFromPosXEff"] = createExportWrapper("_ZN5ImGui17SetScrollFromPosXEff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17SetScrollFromPosYEff = Module["__ZN5ImGui17SetScrollFromPosYEff"] = createExportWrapper("_ZN5ImGui17SetScrollFromPosYEff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetScrollHereXEf = Module["__ZN5ImGui14SetScrollHereXEf"] = createExportWrapper("_ZN5ImGui14SetScrollHereXEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetScrollHereYEf = Module["__ZN5ImGui14SetScrollHereYEf"] = createExportWrapper("_ZN5ImGui14SetScrollHereYEf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14BeginTooltipExEii = Module["__ZN5ImGui14BeginTooltipExEii"] = createExportWrapper("_ZN5ImGui14BeginTooltipExEii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5TextVEPKcPv = Module["__ZN5ImGui5TextVEPKcPv"] = createExportWrapper("_ZN5ImGui5TextVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11IsPopupOpenEPKci = Module["__ZN5ImGui11IsPopupOpenEPKci"] = createExportWrapper("_ZN5ImGui11IsPopupOpenEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9OpenPopupEPKci = Module["__ZN5ImGui9OpenPopupEPKci"] = createExportWrapper("_ZN5ImGui9OpenPopupEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11OpenPopupExEji = Module["__ZN5ImGui11OpenPopupExEji"] = createExportWrapper("_ZN5ImGui11OpenPopupExEji");
+
+/** @type {function(...*):?} */
+var __ZN14ImGuiPopupDataC2Ev = Module["__ZN14ImGuiPopupDataC2Ev"] = createExportWrapper("_ZN14ImGuiPopupDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9OpenPopupEji = Module["__ZN5ImGui9OpenPopupEji"] = createExportWrapper("_ZN5ImGui9OpenPopupEji");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect9TranslateERK6ImVec2 = Module["__ZN6ImRect9TranslateERK6ImVec2"] = createExportWrapper("_ZN6ImRect9TranslateERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23ClosePopupsExceptModalsEv = Module["__ZN5ImGui23ClosePopupsExceptModalsEv"] = createExportWrapper("_ZN5ImGui23ClosePopupsExceptModalsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17CloseCurrentPopupEv = Module["__ZN5ImGui17CloseCurrentPopupEv"] = createExportWrapper("_ZN5ImGui17CloseCurrentPopupEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginPopupExEji = Module["__ZN5ImGui12BeginPopupExEji"] = createExportWrapper("_ZN5ImGui12BeginPopupExEji");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8EndPopupEv = Module["__ZN5ImGui8EndPopupEv"] = createExportWrapper("_ZN5ImGui8EndPopupEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25NavMoveRequestTryWrappingEP11ImGuiWindowi = Module["__ZN5ImGui25NavMoveRequestTryWrappingEP11ImGuiWindowi"] = createExportWrapper("_ZN5ImGui25NavMoveRequestTryWrappingEP11ImGuiWindowi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BeginPopupEPKci = Module["__ZN5ImGui10BeginPopupEPKci"] = createExportWrapper("_ZN5ImGui10BeginPopupEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15BeginPopupModalEPKcPbi = Module["__ZN5ImGui15BeginPopupModalEPKcPbi"] = createExportWrapper("_ZN5ImGui15BeginPopupModalEPKcPbi");
+
+/** @type {function(...*):?} */
+var __ZNK13ImGuiViewport9GetCenterEv = Module["__ZNK13ImGuiViewport9GetCenterEv"] = createExportWrapper("_ZNK13ImGuiViewport9GetCenterEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20OpenPopupOnItemClickEPKci = Module["__ZN5ImGui20OpenPopupOnItemClickEPKci"] = createExportWrapper("_ZN5ImGui20OpenPopupOnItemClickEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21BeginPopupContextItemEPKci = Module["__ZN5ImGui21BeginPopupContextItemEPKci"] = createExportWrapper("_ZN5ImGui21BeginPopupContextItemEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23BeginPopupContextWindowEPKci = Module["__ZN5ImGui23BeginPopupContextWindowEPKci"] = createExportWrapper("_ZN5ImGui23BeginPopupContextWindowEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21BeginPopupContextVoidEPKci = Module["__ZN5ImGui21BeginPopupContextVoidEPKci"] = createExportWrapper("_ZN5ImGui21BeginPopupContextVoidEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SetFocusIDEjP11ImGuiWindow = Module["__ZN5ImGui10SetFocusIDEjP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui10SetFocusIDEjP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __Z25ImGetDirQuadrantFromDeltaff = Module["__Z25ImGetDirQuadrantFromDeltaff"] = createExportWrapper("_Z25ImGetDirQuadrantFromDeltaff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21NavMoveRequestForwardEiiii = Module["__ZN5ImGui21NavMoveRequestForwardEiiii"] = createExportWrapper("_ZN5ImGui21NavMoveRequestForwardEiiii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui24GetNavTweakPressedAmountE9ImGuiAxis = Module["__ZN5ImGui24GetNavTweakPressedAmountE9ImGuiAxis"] = createExportWrapper("_ZN5ImGui24GetNavTweakPressedAmountE9ImGuiAxis");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16IsDragDropActiveEv = Module["__ZN5ImGui16IsDragDropActiveEv"] = createExportWrapper("_ZN5ImGui16IsDragDropActiveEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19BeginDragDropSourceEi = Module["__ZN5ImGui19BeginDragDropSourceEi"] = createExportWrapper("_ZN5ImGui19BeginDragDropSourceEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17EndDragDropSourceEv = Module["__ZN5ImGui17EndDragDropSourceEv"] = createExportWrapper("_ZN5ImGui17EndDragDropSourceEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18SetDragDropPayloadEPKcPKvmi = Module["__ZN5ImGui18SetDragDropPayloadEPKcPKvmi"] = createExportWrapper("_ZN5ImGui18SetDragDropPayloadEPKcPKvmi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIhE6resizeEi = Module["__ZN8ImVectorIhE6resizeEi"] = createExportWrapper("_ZN8ImVectorIhE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIhE14_grow_capacityEi = Module["__ZNK8ImVectorIhE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIhE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIhE7reserveEi = Module["__ZN8ImVectorIhE7reserveEi"] = createExportWrapper("_ZN8ImVectorIhE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25BeginDragDropTargetCustomERK6ImRectj = Module["__ZN5ImGui25BeginDragDropTargetCustomERK6ImRectj"] = createExportWrapper("_ZN5ImGui25BeginDragDropTargetCustomERK6ImRectj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19BeginDragDropTargetEv = Module["__ZN5ImGui19BeginDragDropTargetEv"] = createExportWrapper("_ZN5ImGui19BeginDragDropTargetEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui30IsDragDropPayloadBeingAcceptedEv = Module["__ZN5ImGui30IsDragDropPayloadBeingAcceptedEv"] = createExportWrapper("_ZN5ImGui30IsDragDropPayloadBeingAcceptedEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21AcceptDragDropPayloadEPKci = Module["__ZN5ImGui21AcceptDragDropPayloadEPKci"] = createExportWrapper("_ZN5ImGui21AcceptDragDropPayloadEPKci");
+
+/** @type {function(...*):?} */
+var __ZNK12ImGuiPayload10IsDataTypeEPKc = Module["__ZNK12ImGuiPayload10IsDataTypeEPKc"] = createExportWrapper("_ZNK12ImGuiPayload10IsDataTypeEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18GetDragDropPayloadEv = Module["__ZN5ImGui18GetDragDropPayloadEv"] = createExportWrapper("_ZN5ImGui18GetDragDropPayloadEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17EndDragDropTargetEv = Module["__ZN5ImGui17EndDragDropTargetEv"] = createExportWrapper("_ZN5ImGui17EndDragDropTargetEv");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextBuffer5c_strEv = Module["__ZNK15ImGuiTextBuffer5c_strEv"] = createExportWrapper("_ZNK15ImGuiTextBuffer5c_strEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8LogTextVEPKcPv = Module["__ZN5ImGui8LogTextVEPKcPv"] = createExportWrapper("_ZN5ImGui8LogTextVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8LogBeginE12ImGuiLogTypei = Module["__ZN5ImGui8LogBeginE12ImGuiLogTypei"] = createExportWrapper("_ZN5ImGui8LogBeginE12ImGuiLogTypei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui24LogSetNextTextDecorationEPKcS1_ = Module["__ZN5ImGui24LogSetNextTextDecorationEPKcS1_"] = createExportWrapper("_ZN5ImGui24LogSetNextTextDecorationEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8LogToTTYEi = Module["__ZN5ImGui8LogToTTYEi"] = createExportWrapper("_ZN5ImGui8LogToTTYEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9LogToFileEiPKc = Module["__ZN5ImGui9LogToFileEiPKc"] = createExportWrapper("_ZN5ImGui9LogToFileEiPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14LogToClipboardEi = Module["__ZN5ImGui14LogToClipboardEi"] = createExportWrapper("_ZN5ImGui14LogToClipboardEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11LogToBufferEi = Module["__ZN5ImGui11LogToBufferEi"] = createExportWrapper("_ZN5ImGui11LogToBufferEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIcE5frontEv = Module["__ZNK8ImVectorIcE5frontEv"] = createExportWrapper("_ZNK8ImVectorIcE5frontEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10LogButtonsEv = Module["__ZN5ImGui10LogButtonsEv"] = createExportWrapper("_ZN5ImGui10LogButtonsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20MarkIniSettingsDirtyEv = Module["__ZN5ImGui20MarkIniSettingsDirtyEv"] = createExportWrapper("_ZN5ImGui20MarkIniSettingsDirtyEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE11alloc_chunkEm = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE11alloc_chunkEm"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE11alloc_chunkEm");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE3endEv = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE3endEv"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE3endEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsE10chunk_sizeEPKS0_ = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsE10chunk_sizeEPKS0_"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsE10chunk_sizeEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerEixEi = Module["__ZN8ImVectorI20ImGuiSettingsHandlerEixEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI20ImGuiSettingsHandlerE14_grow_capacityEi = Module["__ZNK8ImVectorI20ImGuiSettingsHandlerE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI20ImGuiSettingsHandlerE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerE7reserveEi = Module["__ZN8ImVectorI20ImGuiSettingsHandlerE7reserveEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21RemoveSettingsHandlerEPKc = Module["__ZN5ImGui21RemoveSettingsHandlerEPKc"] = createExportWrapper("_ZN5ImGui21RemoveSettingsHandlerEPKc");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerE5eraseEPKS0_ = Module["__ZN8ImVectorI20ImGuiSettingsHandlerE5eraseEPKS0_"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerE5eraseEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16ClearIniSettingsEv = Module["__ZN5ImGui16ClearIniSettingsEv"] = createExportWrapper("_ZN5ImGui16ClearIniSettingsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25LoadIniSettingsFromMemoryEPKcm = Module["__ZN5ImGui25LoadIniSettingsFromMemoryEPKcm"] = createExportWrapper("_ZN5ImGui25LoadIniSettingsFromMemoryEPKcm");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE9push_backERKc = Module["__ZN8ImVectorIcE9push_backERKc"] = createExportWrapper("_ZN8ImVectorIcE9push_backERKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui28DebugRenderViewportThumbnailEP10ImDrawListP14ImGuiViewportPRK6ImRect = Module["__ZN5ImGui28DebugRenderViewportThumbnailEP10ImDrawListP14ImGuiViewportPRK6ImRect"] = createExportWrapper("_ZN5ImGui28DebugRenderViewportThumbnailEP10ImDrawListP14ImGuiViewportPRK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17DebugTextEncodingEPKc = Module["__ZN5ImGui17DebugTextEncodingEPKc"] = createExportWrapper("_ZN5ImGui17DebugTextEncodingEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BeginTableEPKciiRK6ImVec2f = Module["__ZN5ImGui10BeginTableEPKciiRK6ImVec2f"] = createExportWrapper("_ZN5ImGui10BeginTableEPKciiRK6ImVec2f");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16TableSetupColumnEPKcifj = Module["__ZN5ImGui16TableSetupColumnEPKcifj"] = createExportWrapper("_ZN5ImGui16TableSetupColumnEPKcifj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TableHeadersRowEv = Module["__ZN5ImGui15TableHeadersRowEv"] = createExportWrapper("_ZN5ImGui15TableHeadersRowEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TableNextColumnEv = Module["__ZN5ImGui15TableNextColumnEv"] = createExportWrapper("_ZN5ImGui15TableNextColumnEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont19FindGlyphNoFallbackEt = Module["__ZNK6ImFont19FindGlyphNoFallbackEt"] = createExportWrapper("_ZNK6ImFont19FindGlyphNoFallbackEt");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TextUnformattedEPKcS1_ = Module["__ZN5ImGui15TextUnformattedEPKcS1_"] = createExportWrapper("_ZN5ImGui15TextUnformattedEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ShowFontAtlasEP11ImFontAtlas = Module["__ZN5ImGui13ShowFontAtlasEP11ImFontAtlas"] = createExportWrapper("_ZN5ImGui13ShowFontAtlasEP11ImFontAtlas");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8TreeNodeEPKcS1_z = Module["__ZN5ImGui8TreeNodeEPKcS1_z"] = createExportWrapper("_ZN5ImGui8TreeNodeEPKcS1_z");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ImageEPvRK6ImVec2S3_S3_RK6ImVec4S6_ = Module["__ZN5ImGui5ImageEPvRK6ImVec2S3_S3_RK6ImVec4S6_"] = createExportWrapper("_ZN5ImGui5ImageEPvRK6ImVec2S3_S3_RK6ImVec4S6_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DebugNodeFontEP6ImFont = Module["__ZN5ImGui13DebugNodeFontEP6ImFont"] = createExportWrapper("_ZN5ImGui13DebugNodeFontEP6ImFont");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8TreeNodeEPKvPKcz = Module["__ZN5ImGui8TreeNodeEPKvPKcz"] = createExportWrapper("_ZN5ImGui8TreeNodeEPKvPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11SmallButtonEPKc = Module["__ZN5ImGui11SmallButtonEPKc"] = createExportWrapper("_ZN5ImGui11SmallButtonEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9DragFloatEPKcPffffS1_i = Module["__ZN5ImGui9DragFloatEPKcPffffS1_i"] = createExportWrapper("_ZN5ImGui9DragFloatEPKcPffffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont18IsGlyphRangeUnusedEjj = Module["__ZN6ImFont18IsGlyphRangeUnusedEjj"] = createExportWrapper("_ZN6ImFont18IsGlyphRangeUnusedEjj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5DummyERK6ImVec2 = Module["__ZN5ImGui5DummyERK6ImVec2"] = createExportWrapper("_ZN5ImGui5DummyERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18DebugNodeFontGlyphEP6ImFontPK11ImFontGlyph = Module["__ZN5ImGui18DebugNodeFontGlyphEP6ImFontPK11ImFontGlyph"] = createExportWrapper("_ZN5ImGui18DebugNodeFontGlyphEP6ImFontPK11ImFontGlyph");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BulletTextEPKcz = Module["__ZN5ImGui10BulletTextEPKcz"] = createExportWrapper("_ZN5ImGui10BulletTextEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17ShowMetricsWindowEPb = Module["__ZN5ImGui17ShowMetricsWindowEPb"] = createExportWrapper("_ZN5ImGui17ShowMetricsWindowEPb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18ShowDebugLogWindowEPb = Module["__ZN5ImGui18ShowDebugLogWindowEPb"] = createExportWrapper("_ZN5ImGui18ShowDebugLogWindowEPb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19ShowStackToolWindowEPb = Module["__ZN5ImGui19ShowStackToolWindowEPb"] = createExportWrapper("_ZN5ImGui19ShowStackToolWindowEPb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9SeparatorEv = Module["__ZN5ImGui9SeparatorEv"] = createExportWrapper("_ZN5ImGui9SeparatorEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8TreeNodeEPKc = Module["__ZN5ImGui8TreeNodeEPKc"] = createExportWrapper("_ZN5ImGui8TreeNodeEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20DebugStartItemPickerEv = Module["__ZN5ImGui20DebugStartItemPickerEv"] = createExportWrapper("_ZN5ImGui20DebugStartItemPickerEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ComboEPKcPiPKS1_ii = Module["__ZN5ImGui5ComboEPKcPiPKS1_ii"] = createExportWrapper("_ZN5ImGui5ComboEPKcPiPKS1_ii");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI10ImGuiTableE10GetMapSizeEv = Module["__ZNK6ImPoolI10ImGuiTableE10GetMapSizeEv"] = createExportWrapper("_ZNK6ImPoolI10ImGuiTableE10GetMapSizeEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE13TryGetMapDataEi = Module["__ZN6ImPoolI10ImGuiTableE13TryGetMapDataEi"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE13TryGetMapDataEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SelectableEPKcbiRK6ImVec2 = Module["__ZN5ImGui10SelectableEPKcbiRK6ImVec2"] = createExportWrapper("_ZN5ImGui10SelectableEPKcbiRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20DebugNodeWindowsListEP8ImVectorIP11ImGuiWindowEPKc = Module["__ZN5ImGui20DebugNodeWindowsListEP8ImVectorIP11ImGuiWindowEPKc"] = createExportWrapper("_ZN5ImGui20DebugNodeWindowsListEP8ImVectorIP11ImGuiWindowEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui38DebugNodeWindowsListByBeginStackParentEPP11ImGuiWindowiS1_ = Module["__ZN5ImGui38DebugNodeWindowsListByBeginStackParentEPP11ImGuiWindowiS1_"] = createExportWrapper("_ZN5ImGui38DebugNodeWindowsListByBeginStackParentEPP11ImGuiWindowiS1_");
+
+/** @type {function(...*):?} */
+var __ZNK17ImDrawDataBuilder16GetDrawListCountEv = Module["__ZNK17ImDrawDataBuilder16GetDrawListCountEv"] = createExportWrapper("_ZNK17ImDrawDataBuilder16GetDrawListCountEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17DebugNodeDrawListEP11ImGuiWindowPK10ImDrawListPKc = Module["__ZN5ImGui17DebugNodeDrawListEP11ImGuiWindowPK10ImDrawListPKc"] = createExportWrapper("_ZN5ImGui17DebugNodeDrawListEP11ImGuiWindowPK10ImDrawListPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25GetTreeNodeToLabelSpacingEv = Module["__ZN5ImGui25GetTreeNodeToLabelSpacingEv"] = createExportWrapper("_ZN5ImGui25GetTreeNodeToLabelSpacingEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17DebugNodeViewportEP14ImGuiViewportP = Module["__ZN5ImGui17DebugNodeViewportEP14ImGuiViewportP"] = createExportWrapper("_ZN5ImGui17DebugNodeViewportEP14ImGuiViewportP");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI11ImGuiTabBarE13GetAliveCountEv = Module["__ZNK6ImPoolI11ImGuiTabBarE13GetAliveCountEv"] = createExportWrapper("_ZNK6ImPoolI11ImGuiTabBarE13GetAliveCountEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI11ImGuiTabBarE10GetMapSizeEv = Module["__ZNK6ImPoolI11ImGuiTabBarE10GetMapSizeEv"] = createExportWrapper("_ZNK6ImPoolI11ImGuiTabBarE10GetMapSizeEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarE13TryGetMapDataEi = Module["__ZN6ImPoolI11ImGuiTabBarE13TryGetMapDataEi"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarE13TryGetMapDataEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DebugNodeTabBarEP11ImGuiTabBarPKc = Module["__ZN5ImGui15DebugNodeTabBarEP11ImGuiTabBarPKc"] = createExportWrapper("_ZN5ImGui15DebugNodeTabBarEP11ImGuiTabBarPKc");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI10ImGuiTableE13GetAliveCountEv = Module["__ZNK6ImPoolI10ImGuiTableE13GetAliveCountEv"] = createExportWrapper("_ZNK6ImPoolI10ImGuiTableE13GetAliveCountEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14DebugNodeTableEP10ImGuiTable = Module["__ZN5ImGui14DebugNodeTableEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui14DebugNodeTableEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23DebugNodeInputTextStateEP19ImGuiInputTextState = Module["__ZN5ImGui23DebugNodeInputTextStateEP19ImGuiInputTextState"] = createExportWrapper("_ZN5ImGui23DebugNodeInputTextStateEP19ImGuiInputTextState");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23DebugNodeWindowSettingsEP19ImGuiWindowSettings = Module["__ZN5ImGui23DebugNodeWindowSettingsEP19ImGuiWindowSettings"] = createExportWrapper("_ZN5ImGui23DebugNodeWindowSettingsEP19ImGuiWindowSettings");
+
+/** @type {function(...*):?} */
+var __ZNK13ImChunkStreamI18ImGuiTableSettingsE4sizeEv = Module["__ZNK13ImChunkStreamI18ImGuiTableSettingsE4sizeEv"] = createExportWrapper("_ZNK13ImChunkStreamI18ImGuiTableSettingsE4sizeEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE5beginEv = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE5beginEv"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE5beginEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22DebugNodeTableSettingsEP18ImGuiTableSettings = Module["__ZN5ImGui22DebugNodeTableSettingsEP18ImGuiTableSettings"] = createExportWrapper("_ZN5ImGui22DebugNodeTableSettingsEP18ImGuiTableSettings");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE10next_chunkEPS0_ = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE10next_chunkEPS0_"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE10next_chunkEPS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18InputTextMultilineEPKcPcmRK6ImVec2iPFiP26ImGuiInputTextCallbackDataEPv = Module["__ZN5ImGui18InputTextMultilineEPKcPcmRK6ImVec2iPFiP26ImGuiInputTextCallbackDataEPv"] = createExportWrapper("_ZN5ImGui18InputTextMultilineEPKcPcmRK6ImVec2iPFiP26ImGuiInputTextCallbackDataEPv");
+
+/** @type {function(...*):?} */
+var __ZNK10ImBitArrayILi140ELin512EEixEi = Module["__ZNK10ImBitArrayILi140ELin512EEixEi"] = createExportWrapper("_ZNK10ImBitArrayILi140ELin512EEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21GetForegroundDrawListEP11ImGuiWindow = Module["__ZN5ImGui21GetForegroundDrawListEP11ImGuiWindow"] = createExportWrapper("_ZN5ImGui21GetForegroundDrawListEP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7AddTextERK6ImVec2jPKcS4_ = Module["__ZN10ImDrawList7AddTextERK6ImVec2jPKcS4_"] = createExportWrapper("_ZN10ImDrawList7AddTextERK6ImVec2jPKcS4_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23AlignTextToFramePaddingEv = Module["__ZN5ImGui23AlignTextToFramePaddingEv"] = createExportWrapper("_ZN5ImGui23AlignTextToFramePaddingEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13CheckboxFlagsEPKcPii = Module["__ZN5ImGui13CheckboxFlagsEPKcPii"] = createExportWrapper("_ZN5ImGui13CheckboxFlagsEPKcPii");
+
+/** @type {function(...*):?} */
+var __ZNK15ImGuiTextBuffer3endEv = Module["__ZNK15ImGuiTextBuffer3endEv"] = createExportWrapper("_ZNK15ImGuiTextBuffer3endEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TableSetBgColorEiji = Module["__ZN5ImGui15TableSetBgColorEiji"] = createExportWrapper("_ZN5ImGui15TableSetBgColorEiji");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12TextDisabledEPKcz = Module["__ZN5ImGui12TextDisabledEPKcz"] = createExportWrapper("_ZN5ImGui12TextDisabledEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20TableGetInstanceDataEP10ImGuiTablei = Module["__ZN5ImGui20TableGetInstanceDataEP10ImGuiTablei"] = createExportWrapper("_ZN5ImGui20TableGetInstanceDataEP10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanI16ImGuiTableColumnEixEi = Module["__ZN6ImSpanI16ImGuiTableColumnEixEi"] = createExportWrapper("_ZN6ImSpanI16ImGuiTableColumnEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DebugNodeWindowEP11ImGuiWindowPKc = Module["__ZN5ImGui15DebugNodeWindowEP11ImGuiWindowPKc"] = createExportWrapper("_ZN5ImGui15DebugNodeWindowEP11ImGuiWindowPKc");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI9ImDrawCmdE4backEv = Module["__ZNK8ImVectorI9ImDrawCmdE4backEv"] = createExportWrapper("_ZNK8ImVectorI9ImDrawCmdE4backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI9ImDrawCmdE5beginEv = Module["__ZNK8ImVectorI9ImDrawCmdE5beginEv"] = createExportWrapper("_ZNK8ImVectorI9ImDrawCmdE5beginEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui38DebugNodeDrawCmdShowMeshAndBoundingBoxEP10ImDrawListPKS0_PK9ImDrawCmdbb = Module["__ZN5ImGui38DebugNodeDrawCmdShowMeshAndBoundingBoxEP10ImDrawListPKS0_PK9ImDrawCmdbb"] = createExportWrapper("_ZN5ImGui38DebugNodeDrawCmdShowMeshAndBoundingBoxEP10ImDrawListPKS0_PK9ImDrawCmdbb");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipperC1Ev = Module["__ZN16ImGuiListClipperC1Ev"] = createExportWrapper("_ZN16ImGuiListClipperC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList11AddPolylineEPK6ImVec2ijif = Module["__ZN10ImDrawList11AddPolylineEPK6ImVec2ijif"] = createExportWrapper("_ZN10ImDrawList11AddPolylineEPK6ImVec2ijif");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiListClipperD1Ev = Module["__ZN16ImGuiListClipperD1Ev"] = createExportWrapper("_ZN16ImGuiListClipperD1Ev");
+
+/** @type {function(...*):?} */
+var __Z14ImTriangleAreaRK6ImVec2S1_S1_ = Module["__Z14ImTriangleAreaRK6ImVec2S1_S1_"] = createExportWrapper("_Z14ImTriangleAreaRK6ImVec2S1_S1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SetNextItemOpenEbi = Module["__ZN5ImGui15SetNextItemOpenEbi"] = createExportWrapper("_ZN5ImGui15SetNextItemOpenEbi");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarE10GetByIndexEi = Module["__ZN6ImPoolI11ImGuiTabBarE10GetByIndexEi"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarE10GetByIndexEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemEixEi = Module["__ZN8ImVectorI12ImGuiTabItemEixEi"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiTabBar10GetTabNameEPK12ImGuiTabItem = Module["__ZNK11ImGuiTabBar10GetTabNameEPK12ImGuiTabItem"] = createExportWrapper("_ZNK11ImGuiTabBar10GetTabNameEPK12ImGuiTabItem");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TabBarQueueReorderEP11ImGuiTabBarPK12ImGuiTabItemi = Module["__ZN5ImGui18TabBarQueueReorderEP11ImGuiTabBarPK12ImGuiTabItemi"] = createExportWrapper("_ZN5ImGui18TabBarQueueReorderEP11ImGuiTabBarPK12ImGuiTabItemi");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE3endEv = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE3endEv"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE3endEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE10chunk_sizeEPKS0_ = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE10chunk_sizeEPKS0_"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE10chunk_sizeEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16DebugNodeColumnsEP15ImGuiOldColumns = Module["__ZN5ImGui16DebugNodeColumnsEP15ImGuiOldColumns"] = createExportWrapper("_ZN5ImGui16DebugNodeColumnsEP15ImGuiOldColumns");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiOldColumnDataEixEi = Module["__ZN8ImVectorI18ImGuiOldColumnDataEixEi"] = createExportWrapper("_ZN8ImVectorI18ImGuiOldColumnDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23GetColumnOffsetFromNormEPK15ImGuiOldColumnsf = Module["__ZN5ImGui23GetColumnOffsetFromNormEPK15ImGuiOldColumnsf"] = createExportWrapper("_ZN5ImGui23GetColumnOffsetFromNormEPK15ImGuiOldColumnsf");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect3AddERK6ImVec2 = Module["__ZN6ImRect3AddERK6ImVec2"] = createExportWrapper("_ZN6ImRect3AddERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16DebugNodeStorageEP12ImGuiStoragePKc = Module["__ZN5ImGui16DebugNodeStorageEP12ImGuiStoragePKc"] = createExportWrapper("_ZN5ImGui16DebugNodeStorageEP12ImGuiStoragePKc");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE13size_in_bytesEv = Module["__ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE13size_in_bytesEv"] = createExportWrapper("_ZNK8ImVectorIN12ImGuiStorage16ImGuiStoragePairEE13size_in_bytesEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10TreeNodeExEPKciS1_z = Module["__ZN5ImGui10TreeNodeExEPKciS1_z"] = createExportWrapper("_ZN5ImGui10TreeNodeExEPKciS1_z");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsEixEi = Module["__ZN8ImVectorI15ImGuiOldColumnsEixEi"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsEixEi");
+
+/** @type {function(...*):?} */
+var _iprintf = Module["_iprintf"] = createExportWrapper("iprintf");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIcE4backEv = Module["__ZNK8ImVectorIcE4backEv"] = createExportWrapper("_ZNK8ImVectorIcE4backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI19ImGuiStackLevelInfoE14_grow_capacityEi = Module["__ZNK8ImVectorI19ImGuiStackLevelInfoE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI19ImGuiStackLevelInfoE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI19ImGuiStackLevelInfoE7reserveEi = Module["__ZN8ImVectorI19ImGuiStackLevelInfoE7reserveEi"] = createExportWrapper("_ZN8ImVectorI19ImGuiStackLevelInfoE7reserveEi");
+
+/** @type {function(...*):?} */
+var _memchr = Module["_memchr"] = createExportWrapper("memchr");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeE6insertEPKS0_RS2_ = Module["__ZN8ImVectorI21ImGuiListClipperRangeE6insertEPKS0_RS2_"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeE6insertEPKS0_RS2_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImGuiListClipperRangeE5eraseEPKS0_ = Module["__ZN8ImVectorI21ImGuiListClipperRangeE5eraseEPKS0_"] = createExportWrapper("_ZN8ImVectorI21ImGuiListClipperRangeE5eraseEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitter15ClearFreeMemoryEv = Module["__ZN18ImDrawListSplitter15ClearFreeMemoryEv"] = createExportWrapper("_ZN18ImDrawListSplitter15ClearFreeMemoryEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImDrawChannelED2Ev = Module["__ZN8ImVectorI13ImDrawChannelED2Ev"] = createExportWrapper("_ZN8ImVectorI13ImDrawChannelED2Ev");
 
 /** @type {function(...*):?} */
 var _malloc = Module["_malloc"] = createExportWrapper("malloc");
 
 /** @type {function(...*):?} */
-var _strcpy = Module["_strcpy"] = createExportWrapper("strcpy");
+var _free = Module["_free"] = createExportWrapper("free");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImGuiTableEC2Ev = Module["__ZN8ImVectorI10ImGuiTableEC2Ev"] = createExportWrapper("_ZN8ImVectorI10ImGuiTableEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImGuiTabBarEC2Ev = Module["__ZN8ImVectorI11ImGuiTabBarEC2Ev"] = createExportWrapper("_ZN8ImVectorI11ImGuiTabBarEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI19ImGuiStackLevelInfoEC2Ev = Module["__ZN8ImVectorI19ImGuiStackLevelInfoEC2Ev"] = createExportWrapper("_ZN8ImVectorI19ImGuiStackLevelInfoEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP10ImDrawListEC2Ev = Module["__ZN8ImVectorIP10ImDrawListEC2Ev"] = createExportWrapper("_ZN8ImVectorIP10ImDrawListEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE8pop_backEv = Module["__ZN8ImVectorI9ImDrawCmdE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE10push_frontERKS0_ = Module["__ZN8ImVectorI9ImDrawCmdE10push_frontERKS0_"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE10push_frontERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE9push_backERKS0_ = Module["__ZN8ImVectorI9ImDrawCmdE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE6insertEPKS0_RS2_ = Module["__ZN8ImVectorI9ImDrawCmdE6insertEPKS0_RS2_"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE6insertEPKS0_RS2_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI9ImDrawCmdE14_grow_capacityEi = Module["__ZNK8ImVectorI9ImDrawCmdE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI9ImDrawCmdE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE7reserveEi = Module["__ZN8ImVectorI9ImDrawCmdE7reserveEi"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP11ImGuiWindowE6insertEPKS1_RS3_ = Module["__ZN8ImVectorIP11ImGuiWindowE6insertEPKS1_RS3_"] = createExportWrapper("_ZN8ImVectorIP11ImGuiWindowE6insertEPKS1_RS3_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2E9push_backERKS0_ = Module["__ZN8ImVectorI6ImVec2E9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI6ImVec2E9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList19AddConvexPolyFilledEPK6ImVec2ij = Module["__ZN10ImDrawList19AddConvexPolyFilledEPK6ImVec2ij"] = createExportWrapper("_ZN10ImDrawList19AddConvexPolyFilledEPK6ImVec2ij");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList9PathArcToERK6ImVec2fffi = Module["__ZN10ImDrawList9PathArcToERK6ImVec2fffi"] = createExportWrapper("_ZN10ImDrawList9PathArcToERK6ImVec2fffi");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList10PathStrokeEjif = Module["__ZN10ImDrawList10PathStrokeEjif"] = createExportWrapper("_ZN10ImDrawList10PathStrokeEjif");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI6ImVec2E14_grow_capacityEi = Module["__ZNK8ImVectorI6ImVec2E14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI6ImVec2E14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2E7reserveEi = Module["__ZN8ImVectorI6ImVec2E7reserveEi"] = createExportWrapper("_ZN8ImVectorI6ImVec2E7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18IsActiveIdUsingKeyEi = Module["__ZN5ImGui18IsActiveIdUsingKeyEi"] = createExportWrapper("_ZN5ImGui18IsActiveIdUsingKeyEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21IsActiveIdUsingNavDirEi = Module["__ZN5ImGui21IsActiveIdUsingNavDirEi"] = createExportWrapper("_ZN5ImGui21IsActiveIdUsingNavDirEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect10TranslateYEf = Module["__ZN6ImRect10TranslateYEf"] = createExportWrapper("_ZN6ImRect10TranslateYEf");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect10IsInvertedEv = Module["__ZNK6ImRect10IsInvertedEv"] = createExportWrapper("_ZNK6ImRect10IsInvertedEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImRect10TranslateXEf = Module["__ZN6ImRect10TranslateXEf"] = createExportWrapper("_ZN6ImRect10TranslateXEf");
 
 /** @type {function(...*):?} */
 var _strstr = Module["_strstr"] = createExportWrapper("strstr");
+
+/** @type {function(...*):?} */
+var __ZNK14ImGuiViewportP15CalcWorkRectPosERK6ImVec2 = Module["__ZNK14ImGuiViewportP15CalcWorkRectPosERK6ImVec2"] = createExportWrapper("_ZNK14ImGuiViewportP15CalcWorkRectPosERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZNK14ImGuiViewportP16CalcWorkRectSizeERK6ImVec2S2_ = Module["__ZNK14ImGuiViewportP16CalcWorkRectSizeERK6ImVec2S2_"] = createExportWrapper("_ZNK14ImGuiViewportP16CalcWorkRectSizeERK6ImVec2S2_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI22ImGuiTableInstanceDataEixEi = Module["__ZN8ImVectorI22ImGuiTableInstanceDataEixEi"] = createExportWrapper("_ZN8ImVectorI22ImGuiTableInstanceDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiOldColumnDataED2Ev = Module["__ZN8ImVectorI18ImGuiOldColumnDataED2Ev"] = createExportWrapper("_ZN8ImVectorI18ImGuiOldColumnDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcED2Ev = Module["__ZN8ImVectorIcED2Ev"] = createExportWrapper("_ZN8ImVectorIcED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN14ImGuiStackToolD2Ev = Module["__ZN14ImGuiStackToolD2Ev"] = createExportWrapper("_ZN14ImGuiStackToolD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextBufferD2Ev = Module["__ZN15ImGuiTextBufferD2Ev"] = createExportWrapper("_ZN15ImGuiTextBufferD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16ImGuiContextHookED2Ev = Module["__ZN8ImVectorI16ImGuiContextHookED2Ev"] = createExportWrapper("_ZN8ImVectorI16ImGuiContextHookED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsED2Ev = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsED2Ev"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI19ImGuiWindowSettingsED2Ev = Module["__ZN13ImChunkStreamI19ImGuiWindowSettingsED2Ev"] = createExportWrapper("_ZN13ImChunkStreamI19ImGuiWindowSettingsED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiSettingsHandlerED2Ev = Module["__ZN8ImVectorI20ImGuiSettingsHandlerED2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiSettingsHandlerED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImFontD1Ev = Module["__ZN6ImFontD1Ev"] = createExportWrapper("_ZN6ImFontD1Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextStateD2Ev = Module["__ZN19ImGuiInputTextStateD2Ev"] = createExportWrapper("_ZN19ImGuiInputTextStateD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiShrinkWidthItemED2Ev = Module["__ZN8ImVectorI20ImGuiShrinkWidthItemED2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiShrinkWidthItemED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexED2Ev = Module["__ZN8ImVectorI15ImGuiPtrOrIndexED2Ev"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarED2Ev = Module["__ZN6ImPoolI11ImGuiTabBarED2Ev"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableED2Ev = Module["__ZN6ImPoolI10ImGuiTableED2Ev"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataED2Ev = Module["__ZN8ImVectorI18ImGuiTableTempDataED2Ev"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiListClipperDataED2Ev = Module["__ZN8ImVectorI20ImGuiListClipperDataED2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiListClipperDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIhED2Ev = Module["__ZN8ImVectorIhED2Ev"] = createExportWrapper("_ZN8ImVectorIhED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP14ImGuiViewportPED2Ev = Module["__ZN8ImVectorIP14ImGuiViewportPED2Ev"] = createExportWrapper("_ZN8ImVectorIP14ImGuiViewportPED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiPopupDataED2Ev = Module["__ZN8ImVectorI14ImGuiPopupDataED2Ev"] = createExportWrapper("_ZN8ImVectorI14ImGuiPopupDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI14ImGuiGroupDataED2Ev = Module["__ZN8ImVectorI14ImGuiGroupDataED2Ev"] = createExportWrapper("_ZN8ImVectorI14ImGuiGroupDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiED2Ev = Module["__ZN8ImVectorIiED2Ev"] = createExportWrapper("_ZN8ImVectorIiED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontED2Ev = Module["__ZN8ImVectorIP6ImFontED2Ev"] = createExportWrapper("_ZN8ImVectorIP6ImFontED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiStyleModED2Ev = Module["__ZN8ImVectorI13ImGuiStyleModED2Ev"] = createExportWrapper("_ZN8ImVectorI13ImGuiStyleModED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImGuiColorModED2Ev = Module["__ZN8ImVectorI13ImGuiColorModED2Ev"] = createExportWrapper("_ZN8ImVectorI13ImGuiColorModED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiWindowStackDataED2Ev = Module["__ZN8ImVectorI20ImGuiWindowStackDataED2Ev"] = createExportWrapper("_ZN8ImVectorI20ImGuiWindowStackDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiInputEventED2Ev = Module["__ZN8ImVectorI15ImGuiInputEventED2Ev"] = createExportWrapper("_ZN8ImVectorI15ImGuiInputEventED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN7ImGuiIOD2Ev = Module["__ZN7ImGuiIOD2Ev"] = createExportWrapper("_ZN7ImGuiIOD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI19ImGuiStackLevelInfoED2Ev = Module["__ZN8ImVectorI19ImGuiStackLevelInfoED2Ev"] = createExportWrapper("_ZN8ImVectorI19ImGuiStackLevelInfoED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImGuiTabBarED2Ev = Module["__ZN8ImVectorI11ImGuiTabBarED2Ev"] = createExportWrapper("_ZN8ImVectorI11ImGuiTabBarED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImGuiTableED2Ev = Module["__ZN8ImVectorI10ImGuiTableED2Ev"] = createExportWrapper("_ZN8ImVectorI10ImGuiTableED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiWindowD1Ev = Module["__ZN11ImGuiWindowD1Ev"] = createExportWrapper("_ZN11ImGuiWindowD1Ev");
+
+/** @type {function(...*):?} */
+var __ZN14ImGuiViewportPD2Ev = Module["__ZN14ImGuiViewportPD2Ev"] = createExportWrapper("_ZN14ImGuiViewportPD2Ev");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI10ImDrawListEvPT_ = Module["__Z9IM_DELETEI10ImDrawListEvPT_"] = createExportWrapper("_Z9IM_DELETEI10ImDrawListEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN17ImDrawDataBuilderD2Ev = Module["__ZN17ImDrawDataBuilderD2Ev"] = createExportWrapper("_ZN17ImDrawDataBuilderD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP10ImDrawListED2Ev = Module["__ZN8ImVectorIP10ImDrawListED2Ev"] = createExportWrapper("_ZN8ImVectorIP10ImDrawListED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemED2Ev = Module["__ZN8ImVectorI12ImGuiTabItemED2Ev"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI25ImGuiTableColumnSortSpecsED2Ev = Module["__ZN8ImVectorI25ImGuiTableColumnSortSpecsED2Ev"] = createExportWrapper("_ZN8ImVectorI25ImGuiTableColumnSortSpecsED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI22ImGuiTableInstanceDataED2Ev = Module["__ZN8ImVectorI22ImGuiTableInstanceDataED2Ev"] = createExportWrapper("_ZN8ImVectorI22ImGuiTableInstanceDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiTextFilterC1EPKc = Module["__ZN15ImGuiTextFilterC1EPKc"] = createExportWrapper("_ZN15ImGuiTextFilterC1EPKc");
+
+/** @type {function(...*):?} */
+var __ZN22ImGui_ImplOpenGL3_DataC2Ev = Module["__ZN22ImGui_ImplOpenGL3_DataC2Ev"] = createExportWrapper("_ZN22ImGui_ImplOpenGL3_DataC2Ev");
+
+/** @type {function(...*):?} */
+var _strcpy = Module["_strcpy"] = createExportWrapper("strcpy");
+
+/** @type {function(...*):?} */
+var __Z38ImGui_ImplOpenGL3_DestroyDeviceObjectsv = Module["__Z38ImGui_ImplOpenGL3_DestroyDeviceObjectsv"] = createExportWrapper("_Z38ImGui_ImplOpenGL3_DestroyDeviceObjectsv");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI22ImGui_ImplOpenGL3_DataEvPT_ = Module["__Z9IM_DELETEI22ImGui_ImplOpenGL3_DataEvPT_"] = createExportWrapper("_Z9IM_DELETEI22ImGui_ImplOpenGL3_DataEvPT_");
+
+/** @type {function(...*):?} */
+var __Z37ImGui_ImplOpenGL3_DestroyFontsTexturev = Module["__Z37ImGui_ImplOpenGL3_DestroyFontsTexturev"] = createExportWrapper("_Z37ImGui_ImplOpenGL3_DestroyFontsTexturev");
+
+/** @type {function(...*):?} */
+var __Z37ImGui_ImplOpenGL3_CreateDeviceObjectsv = Module["__Z37ImGui_ImplOpenGL3_CreateDeviceObjectsv"] = createExportWrapper("_Z37ImGui_ImplOpenGL3_CreateDeviceObjectsv");
+
+/** @type {function(...*):?} */
+var __Z36ImGui_ImplOpenGL3_CreateFontsTexturev = Module["__Z36ImGui_ImplOpenGL3_CreateFontsTexturev"] = createExportWrapper("_Z36ImGui_ImplOpenGL3_CreateFontsTexturev");
+
+/** @type {function(...*):?} */
+var _glBindVertexArrayOES = Module["_glBindVertexArrayOES"] = createExportWrapper("glBindVertexArrayOES");
+
+/** @type {function(...*):?} */
+var _glGenVertexArraysOES = Module["_glGenVertexArraysOES"] = createExportWrapper("glGenVertexArraysOES");
+
+/** @type {function(...*):?} */
+var _glDeleteVertexArraysOES = Module["_glDeleteVertexArraysOES"] = createExportWrapper("glDeleteVertexArraysOES");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI9ImDrawCmdEixEi = Module["__ZNK8ImVectorI9ImDrawCmdEixEi"] = createExportWrapper("_ZNK8ImVectorI9ImDrawCmdEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK9ImDrawCmd8GetTexIDEv = Module["__ZNK9ImDrawCmd8GetTexIDEv"] = createExportWrapper("_ZNK9ImDrawCmd8GetTexIDEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas18GetTexDataAsRGBA32EPPhPiS2_S2_ = Module["__ZN11ImFontAtlas18GetTexDataAsRGBA32EPPhPiS2_S2_"] = createExportWrapper("_ZN11ImFontAtlas18GetTexDataAsRGBA32EPPhPiS2_S2_");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas8SetTexIDEPv = Module["__ZN11ImFontAtlas8SetTexIDEPv"] = createExportWrapper("_ZN11ImFontAtlas8SetTexIDEPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18StyleColorsClassicEP10ImGuiStyle = Module["__ZN5ImGui18StyleColorsClassicEP10ImGuiStyle"] = createExportWrapper("_ZN5ImGui18StyleColorsClassicEP10ImGuiStyle");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16StyleColorsLightEP10ImGuiStyle = Module["__ZN5ImGui16StyleColorsLightEP10ImGuiStyle"] = createExportWrapper("_ZN5ImGui16StyleColorsLightEP10ImGuiStyle");
+
+/** @type {function(...*):?} */
+var __ZN20ImDrawListSharedDataC2Ev = Module["__ZN20ImDrawListSharedDataC2Ev"] = createExportWrapper("_ZN20ImDrawListSharedDataC2Ev");
+
+/** @type {function(...*):?} */
+var _acosf = Module["_acosf"] = createExportWrapper("acosf");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE6resizeEi = Module["__ZN8ImVectorI9ImDrawCmdE6resizeEi"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertE6resizeEi = Module["__ZN8ImVectorI10ImDrawVertE6resizeEi"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4E6resizeEi = Module["__ZN8ImVectorI6ImVec4E6resizeEi"] = createExportWrapper("_ZN8ImVectorI6ImVec4E6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvE6resizeEi = Module["__ZN8ImVectorIPvE6resizeEi"] = createExportWrapper("_ZN8ImVectorIPvE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2E6resizeEi = Module["__ZN8ImVectorI6ImVec2E6resizeEi"] = createExportWrapper("_ZN8ImVectorI6ImVec2E6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitter5ClearEv = Module["__ZN18ImDrawListSplitter5ClearEv"] = createExportWrapper("_ZN18ImDrawListSplitter5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN9ImDrawCmdC2Ev = Module["__ZN9ImDrawCmdC2Ev"] = createExportWrapper("_ZN9ImDrawCmdC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI10ImDrawVertE14_grow_capacityEi = Module["__ZNK8ImVectorI10ImDrawVertE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI10ImDrawVertE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI6ImVec4E14_grow_capacityEi = Module["__ZNK8ImVectorI6ImVec4E14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI6ImVec4E14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4E7reserveEi = Module["__ZN8ImVectorI6ImVec4E7reserveEi"] = createExportWrapper("_ZN8ImVectorI6ImVec4E7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIPvE14_grow_capacityEi = Module["__ZNK8ImVectorIPvE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorIPvE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvE7reserveEi = Module["__ZN8ImVectorIPvE7reserveEi"] = createExportWrapper("_ZN8ImVectorIPvE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE5clearEv = Module["__ZN8ImVectorI9ImDrawCmdE5clearEv"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertE5clearEv = Module["__ZN8ImVectorI10ImDrawVertE5clearEv"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4E5clearEv = Module["__ZN8ImVectorI6ImVec4E5clearEv"] = createExportWrapper("_ZN8ImVectorI6ImVec4E5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvE5clearEv = Module["__ZN8ImVectorIPvE5clearEv"] = createExportWrapper("_ZN8ImVectorIPvE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2E5clearEv = Module["__ZN8ImVectorI6ImVec2E5clearEv"] = createExportWrapper("_ZN8ImVectorI6ImVec2E5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImDrawChannelEixEi = Module["__ZN8ImVectorI13ImDrawChannelEixEi"] = createExportWrapper("_ZN8ImVectorI13ImDrawChannelEixEi");
+
+/** @type {function(...*):?} */
+var __ZNK10ImDrawList11CloneOutputEv = Module["__ZNK10ImDrawList11CloneOutputEv"] = createExportWrapper("_ZNK10ImDrawList11CloneOutputEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdEaSERKS1_ = Module["__ZN8ImVectorI9ImDrawCmdEaSERKS1_"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdEaSERKS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItEaSERKS0_ = Module["__ZN8ImVectorItEaSERKS0_"] = createExportWrapper("_ZN8ImVectorItEaSERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertEaSERKS1_ = Module["__ZN8ImVectorI10ImDrawVertEaSERKS1_"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertEaSERKS1_");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList11AddCallbackEPFvPKS_PK9ImDrawCmdEPv = Module["__ZN10ImDrawList11AddCallbackEPFvPKS_PK9ImDrawCmdEPv"] = createExportWrapper("_ZN10ImDrawList11AddCallbackEPFvPKS_PK9ImDrawCmdEPv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList17_TryMergeDrawCmdsEv = Module["__ZN10ImDrawList17_TryMergeDrawCmdsEv"] = createExportWrapper("_ZN10ImDrawList17_TryMergeDrawCmdsEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList18_OnChangedClipRectEv = Module["__ZN10ImDrawList18_OnChangedClipRectEv"] = createExportWrapper("_ZN10ImDrawList18_OnChangedClipRectEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList19_OnChangedTextureIDEv = Module["__ZN10ImDrawList19_OnChangedTextureIDEv"] = createExportWrapper("_ZN10ImDrawList19_OnChangedTextureIDEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList19_OnChangedVtxOffsetEv = Module["__ZN10ImDrawList19_OnChangedVtxOffsetEv"] = createExportWrapper("_ZN10ImDrawList19_OnChangedVtxOffsetEv");
+
+/** @type {function(...*):?} */
+var __ZNK10ImDrawList27_CalcCircleAutoSegmentCountEf = Module["__ZNK10ImDrawList27_CalcCircleAutoSegmentCountEf"] = createExportWrapper("_ZNK10ImDrawList27_CalcCircleAutoSegmentCountEf");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4E9push_backERKS0_ = Module["__ZN8ImVectorI6ImVec4E9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI6ImVec4E9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList22PushClipRectFullScreenEv = Module["__ZN10ImDrawList22PushClipRectFullScreenEv"] = createExportWrapper("_ZN10ImDrawList22PushClipRectFullScreenEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec4E8pop_backEv = Module["__ZN8ImVectorI6ImVec4E8pop_backEv"] = createExportWrapper("_ZN8ImVectorI6ImVec4E8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvE9push_backERKS0_ = Module["__ZN8ImVectorIPvE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorIPvE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIPvE8pop_backEv = Module["__ZN8ImVectorIPvE8pop_backEv"] = createExportWrapper("_ZN8ImVectorIPvE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList11PrimReserveEii = Module["__ZN10ImDrawList11PrimReserveEii"] = createExportWrapper("_ZN10ImDrawList11PrimReserveEii");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList13PrimUnreserveEii = Module["__ZN10ImDrawList13PrimUnreserveEii"] = createExportWrapper("_ZN10ImDrawList13PrimUnreserveEii");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertE6shrinkEi = Module["__ZN8ImVectorI10ImDrawVertE6shrinkEi"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertE6shrinkEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItE6shrinkEi = Module["__ZN8ImVectorItE6shrinkEi"] = createExportWrapper("_ZN8ImVectorItE6shrinkEi");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList8PrimRectERK6ImVec2S2_j = Module["__ZN10ImDrawList8PrimRectERK6ImVec2S2_j"] = createExportWrapper("_ZN10ImDrawList8PrimRectERK6ImVec2S2_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList10PrimRectUVERK6ImVec2S2_S2_S2_j = Module["__ZN10ImDrawList10PrimRectUVERK6ImVec2S2_S2_S2_j"] = createExportWrapper("_ZN10ImDrawList10PrimRectUVERK6ImVec2S2_S2_S2_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList10PrimQuadUVERK6ImVec2S2_S2_S2_S2_S2_S2_S2_j = Module["__ZN10ImDrawList10PrimQuadUVERK6ImVec2S2_S2_S2_S2_S2_S2_S2_j"] = createExportWrapper("_ZN10ImDrawList10PrimQuadUVERK6ImVec2S2_S2_S2_S2_S2_S2_S2_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList16_PathArcToFastExERK6ImVec2fiii = Module["__ZN10ImDrawList16_PathArcToFastExERK6ImVec2fiii"] = createExportWrapper("_ZN10ImDrawList16_PathArcToFastExERK6ImVec2fiii");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList11_PathArcToNERK6ImVec2fffi = Module["__ZN10ImDrawList11_PathArcToNERK6ImVec2fffi"] = createExportWrapper("_ZN10ImDrawList11_PathArcToNERK6ImVec2fffi");
+
+/** @type {function(...*):?} */
+var __Z21ImBezierQuadraticCalcRK6ImVec2S1_S1_f = Module["__Z21ImBezierQuadraticCalcRK6ImVec2S1_S1_f"] = createExportWrapper("_Z21ImBezierQuadraticCalcRK6ImVec2S1_S1_f");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList22PathBezierCubicCurveToERK6ImVec2S2_S2_i = Module["__ZN10ImDrawList22PathBezierCubicCurveToERK6ImVec2S2_S2_i"] = createExportWrapper("_ZN10ImDrawList22PathBezierCubicCurveToERK6ImVec2S2_S2_i");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI6ImVec2E4backEv = Module["__ZN8ImVectorI6ImVec2E4backEv"] = createExportWrapper("_ZN8ImVectorI6ImVec2E4backEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList26PathBezierQuadraticCurveToERK6ImVec2S2_i = Module["__ZN10ImDrawList26PathBezierQuadraticCurveToERK6ImVec2S2_i"] = createExportWrapper("_ZN10ImDrawList26PathBezierQuadraticCurveToERK6ImVec2S2_i");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList8PathRectERK6ImVec2S2_fi = Module["__ZN10ImDrawList8PathRectERK6ImVec2S2_fi"] = createExportWrapper("_ZN10ImDrawList8PathRectERK6ImVec2S2_fi");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList23AddRectFilledMultiColorERK6ImVec2S2_jjjj = Module["__ZN10ImDrawList23AddRectFilledMultiColorERK6ImVec2S2_jjjj"] = createExportWrapper("_ZN10ImDrawList23AddRectFilledMultiColorERK6ImVec2S2_jjjj");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList12PrimWriteIdxEt = Module["__ZN10ImDrawList12PrimWriteIdxEt"] = createExportWrapper("_ZN10ImDrawList12PrimWriteIdxEt");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList12PrimWriteVtxERK6ImVec2S2_j = Module["__ZN10ImDrawList12PrimWriteVtxERK6ImVec2S2_j"] = createExportWrapper("_ZN10ImDrawList12PrimWriteVtxERK6ImVec2S2_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7AddQuadERK6ImVec2S2_S2_S2_jf = Module["__ZN10ImDrawList7AddQuadERK6ImVec2S2_S2_S2_jf"] = createExportWrapper("_ZN10ImDrawList7AddQuadERK6ImVec2S2_S2_S2_jf");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList13AddQuadFilledERK6ImVec2S2_S2_S2_j = Module["__ZN10ImDrawList13AddQuadFilledERK6ImVec2S2_S2_S2_j"] = createExportWrapper("_ZN10ImDrawList13AddQuadFilledERK6ImVec2S2_S2_S2_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList11AddTriangleERK6ImVec2S2_S2_jf = Module["__ZN10ImDrawList11AddTriangleERK6ImVec2S2_S2_jf"] = createExportWrapper("_ZN10ImDrawList11AddTriangleERK6ImVec2S2_S2_jf");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList17AddTriangleFilledERK6ImVec2S2_S2_j = Module["__ZN10ImDrawList17AddTriangleFilledERK6ImVec2S2_S2_j"] = createExportWrapper("_ZN10ImDrawList17AddTriangleFilledERK6ImVec2S2_S2_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList9AddCircleERK6ImVec2fjif = Module["__ZN10ImDrawList9AddCircleERK6ImVec2fjif"] = createExportWrapper("_ZN10ImDrawList9AddCircleERK6ImVec2fjif");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList15AddCircleFilledERK6ImVec2fji = Module["__ZN10ImDrawList15AddCircleFilledERK6ImVec2fji"] = createExportWrapper("_ZN10ImDrawList15AddCircleFilledERK6ImVec2fji");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7AddNgonERK6ImVec2fjif = Module["__ZN10ImDrawList7AddNgonERK6ImVec2fjif"] = createExportWrapper("_ZN10ImDrawList7AddNgonERK6ImVec2fjif");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList13AddNgonFilledERK6ImVec2fji = Module["__ZN10ImDrawList13AddNgonFilledERK6ImVec2fji"] = createExportWrapper("_ZN10ImDrawList13AddNgonFilledERK6ImVec2fji");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList14AddBezierCubicERK6ImVec2S2_S2_S2_jfi = Module["__ZN10ImDrawList14AddBezierCubicERK6ImVec2S2_S2_S2_jfi"] = createExportWrapper("_ZN10ImDrawList14AddBezierCubicERK6ImVec2S2_S2_S2_jfi");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList18AddBezierQuadraticERK6ImVec2S2_S2_jfi = Module["__ZN10ImDrawList18AddBezierQuadraticERK6ImVec2S2_S2_jfi"] = createExportWrapper("_ZN10ImDrawList18AddBezierQuadraticERK6ImVec2S2_S2_jfi");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont10RenderTextEP10ImDrawListfRK6ImVec2jRK6ImVec4PKcS9_fb = Module["__ZNK6ImFont10RenderTextEP10ImDrawListfRK6ImVec2jRK6ImVec4PKcS9_fb"] = createExportWrapper("_ZNK6ImFont10RenderTextEP10ImDrawListfRK6ImVec2jRK6ImVec4PKcS9_fb");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont21CalcWordWrapPositionAEfPKcS1_f = Module["__ZNK6ImFont21CalcWordWrapPositionAEfPKcS1_f"] = createExportWrapper("_ZNK6ImFont21CalcWordWrapPositionAEfPKcS1_f");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList12AddImageQuadEPvRK6ImVec2S3_S3_S3_S3_S3_S3_S3_j = Module["__ZN10ImDrawList12AddImageQuadEPvRK6ImVec2S3_S3_S3_S3_S3_S3_S3_j"] = createExportWrapper("_ZN10ImDrawList12AddImageQuadEPvRK6ImVec2S3_S3_S3_S3_S3_S3_S3_j");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList15AddImageRoundedEPvRK6ImVec2S3_S3_S3_jfi = Module["__ZN10ImDrawList15AddImageRoundedEPvRK6ImVec2S3_S3_S3_jfi"] = createExportWrapper("_ZN10ImDrawList15AddImageRoundedEPvRK6ImVec2S3_S3_S3_jfi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18ShadeVertsLinearUVEP10ImDrawListiiRK6ImVec2S4_S4_S4_b = Module["__ZN5ImGui18ShadeVertsLinearUVEP10ImDrawListiiRK6ImVec2S4_S4_S4_b"] = createExportWrapper("_ZN5ImGui18ShadeVertsLinearUVEP10ImDrawListiiRK6ImVec2S4_S4_S4_b");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitter5SplitEP10ImDrawListi = Module["__ZN18ImDrawListSplitter5SplitEP10ImDrawListi"] = createExportWrapper("_ZN18ImDrawListSplitter5SplitEP10ImDrawListi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImDrawChannelE7reserveEi = Module["__ZN8ImVectorI13ImDrawChannelE7reserveEi"] = createExportWrapper("_ZN8ImVectorI13ImDrawChannelE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI13ImDrawChannelE6resizeEi = Module["__ZN8ImVectorI13ImDrawChannelE6resizeEi"] = createExportWrapper("_ZN8ImVectorI13ImDrawChannelE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN13ImDrawChannelC2Ev = Module["__ZN13ImDrawChannelC2Ev"] = createExportWrapper("_ZN13ImDrawChannelC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI13ImDrawChannelE14_grow_capacityEi = Module["__ZNK8ImVectorI13ImDrawChannelE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI13ImDrawChannelE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitter5MergeEP10ImDrawList = Module["__ZN18ImDrawListSplitter5MergeEP10ImDrawList"] = createExportWrapper("_ZN18ImDrawListSplitter5MergeEP10ImDrawList");
+
+/** @type {function(...*):?} */
+var __ZN18ImDrawListSplitter17SetCurrentChannelEP10ImDrawListi = Module["__ZN18ImDrawListSplitter17SetCurrentChannelEP10ImDrawListi"] = createExportWrapper("_ZN18ImDrawListSplitter17SetCurrentChannelEP10ImDrawListi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI9ImDrawCmdE5eraseEPKS0_ = Module["__ZN8ImVectorI9ImDrawCmdE5eraseEPKS0_"] = createExportWrapper("_ZN8ImVectorI9ImDrawCmdE5eraseEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawData17DeIndexAllBuffersEv = Module["__ZN10ImDrawData17DeIndexAllBuffersEv"] = createExportWrapper("_ZN10ImDrawData17DeIndexAllBuffersEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorItE5emptyEv = Module["__ZNK8ImVectorItE5emptyEv"] = createExportWrapper("_ZNK8ImVectorItE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertE4swapERS1_ = Module["__ZN8ImVectorI10ImDrawVertE4swapERS1_"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertE4swapERS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItEixEi = Module["__ZN8ImVectorItEixEi"] = createExportWrapper("_ZN8ImVectorItEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImDrawVertEixEi = Module["__ZN8ImVectorI10ImDrawVertEixEi"] = createExportWrapper("_ZN8ImVectorI10ImDrawVertEixEi");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawData14ScaleClipRectsERK6ImVec2 = Module["__ZN10ImDrawData14ScaleClipRectsERK6ImVec2"] = createExportWrapper("_ZN10ImDrawData14ScaleClipRectsERK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui38ShadeVertsLinearColorGradientKeepAlphaEP10ImDrawListii6ImVec2S2_jj = Module["__ZN5ImGui38ShadeVertsLinearColorGradientKeepAlphaEP10ImDrawListii6ImVec2S2_jj"] = createExportWrapper("_ZN5ImGui38ShadeVertsLinearColorGradientKeepAlphaEP10ImDrawListii6ImVec2S2_jj");
+
+/** @type {function(...*):?} */
+var __ZN12ImFontConfigC2Ev = Module["__ZN12ImFontConfigC2Ev"] = createExportWrapper("_ZN12ImFontConfigC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlasC2Ev = Module["__ZN11ImFontAtlasC2Ev"] = createExportWrapper("_ZN11ImFontAtlasC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImFontAtlasCustomRectEC2Ev = Module["__ZN8ImVectorI21ImFontAtlasCustomRectEC2Ev"] = createExportWrapper("_ZN8ImVectorI21ImFontAtlasCustomRectEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigEC2Ev = Module["__ZN8ImVectorI12ImFontConfigEC2Ev"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlasD2Ev = Module["__ZN11ImFontAtlasD2Ev"] = createExportWrapper("_ZN11ImFontAtlasD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas5ClearEv = Module["__ZN11ImFontAtlas5ClearEv"] = createExportWrapper("_ZN11ImFontAtlas5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigED2Ev = Module["__ZN8ImVectorI12ImFontConfigED2Ev"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImFontAtlasCustomRectED2Ev = Module["__ZN8ImVectorI21ImFontAtlasCustomRectED2Ev"] = createExportWrapper("_ZN8ImVectorI21ImFontAtlasCustomRectED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas14ClearInputDataEv = Module["__ZN11ImFontAtlas14ClearInputDataEv"] = createExportWrapper("_ZN11ImFontAtlas14ClearInputDataEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas12ClearTexDataEv = Module["__ZN11ImFontAtlas12ClearTexDataEv"] = createExportWrapper("_ZN11ImFontAtlas12ClearTexDataEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas10ClearFontsEv = Module["__ZN11ImFontAtlas10ClearFontsEv"] = createExportWrapper("_ZN11ImFontAtlas10ClearFontsEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigEixEi = Module["__ZN8ImVectorI12ImFontConfigEixEi"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigE5clearEv = Module["__ZN8ImVectorI12ImFontConfigE5clearEv"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImFontAtlasCustomRectE5clearEv = Module["__ZN8ImVectorI21ImFontAtlasCustomRectE5clearEv"] = createExportWrapper("_ZN8ImVectorI21ImFontAtlasCustomRectE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIP6ImFontE12clear_deleteEv = Module["__ZN8ImVectorIP6ImFontE12clear_deleteEv"] = createExportWrapper("_ZN8ImVectorIP6ImFontE12clear_deleteEv");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI6ImFontEvPT_ = Module["__Z9IM_DELETEI6ImFontEvPT_"] = createExportWrapper("_Z9IM_DELETEI6ImFontEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas18GetTexDataAsAlpha8EPPhPiS2_S2_ = Module["__ZN11ImFontAtlas18GetTexDataAsAlpha8EPPhPiS2_S2_"] = createExportWrapper("_ZN11ImFontAtlas18GetTexDataAsAlpha8EPPhPiS2_S2_");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas5BuildEv = Module["__ZN11ImFontAtlas5BuildEv"] = createExportWrapper("_ZN11ImFontAtlas5BuildEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas14AddFontDefaultEPK12ImFontConfig = Module["__ZN11ImFontAtlas14AddFontDefaultEPK12ImFontConfig"] = createExportWrapper("_ZN11ImFontAtlas14AddFontDefaultEPK12ImFontConfig");
+
+/** @type {function(...*):?} */
+var __Z35ImFontAtlasGetBuilderForStbTruetypev = Module["__Z35ImFontAtlasGetBuilderForStbTruetypev"] = createExportWrapper("_Z35ImFontAtlasGetBuilderForStbTruetypev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas7AddFontEPK12ImFontConfig = Module["__ZN11ImFontAtlas7AddFontEPK12ImFontConfig"] = createExportWrapper("_ZN11ImFontAtlas7AddFontEPK12ImFontConfig");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigE9push_backERKS0_ = Module["__ZN8ImVectorI12ImFontConfigE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigE4backEv = Module["__ZN8ImVectorI12ImFontConfigE4backEv"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigE4backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI12ImFontConfigE14_grow_capacityEi = Module["__ZNK8ImVectorI12ImFontConfigE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI12ImFontConfigE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImFontConfigE7reserveEi = Module["__ZN8ImVectorI12ImFontConfigE7reserveEi"] = createExportWrapper("_ZN8ImVectorI12ImFontConfigE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN12ImFontConfigC1Ev = Module["__ZN12ImFontConfigC1Ev"] = createExportWrapper("_ZN12ImFontConfigC1Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas36AddFontFromMemoryCompressedBase85TTFEPKcfPK12ImFontConfigPKt = Module["__ZN11ImFontAtlas36AddFontFromMemoryCompressedBase85TTFEPKcfPK12ImFontConfigPKt"] = createExportWrapper("_ZN11ImFontAtlas36AddFontFromMemoryCompressedBase85TTFEPKcfPK12ImFontConfigPKt");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas21GetGlyphRangesDefaultEv = Module["__ZN11ImFontAtlas21GetGlyphRangesDefaultEv"] = createExportWrapper("_ZN11ImFontAtlas21GetGlyphRangesDefaultEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas30AddFontFromMemoryCompressedTTFEPKvifPK12ImFontConfigPKt = Module["__ZN11ImFontAtlas30AddFontFromMemoryCompressedTTFEPKvifPK12ImFontConfigPKt"] = createExportWrapper("_ZN11ImFontAtlas30AddFontFromMemoryCompressedTTFEPKvifPK12ImFontConfigPKt");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas18AddFontFromFileTTFEPKcfPK12ImFontConfigPKt = Module["__ZN11ImFontAtlas18AddFontFromFileTTFEPKcfPK12ImFontConfigPKt"] = createExportWrapper("_ZN11ImFontAtlas18AddFontFromFileTTFEPKcfPK12ImFontConfigPKt");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas20AddFontFromMemoryTTFEPvifPK12ImFontConfigPKt = Module["__ZN11ImFontAtlas20AddFontFromMemoryTTFEPvifPK12ImFontConfigPKt"] = createExportWrapper("_ZN11ImFontAtlas20AddFontFromMemoryTTFEPvifPK12ImFontConfigPKt");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas20AddCustomRectRegularEii = Module["__ZN11ImFontAtlas20AddCustomRectRegularEii"] = createExportWrapper("_ZN11ImFontAtlas20AddCustomRectRegularEii");
+
+/** @type {function(...*):?} */
+var __ZN21ImFontAtlasCustomRectC2Ev = Module["__ZN21ImFontAtlasCustomRectC2Ev"] = createExportWrapper("_ZN21ImFontAtlasCustomRectC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImFontAtlasCustomRectE9push_backERKS0_ = Module["__ZN8ImVectorI21ImFontAtlasCustomRectE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI21ImFontAtlasCustomRectE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI21ImFontAtlasCustomRectE14_grow_capacityEi = Module["__ZNK8ImVectorI21ImFontAtlasCustomRectE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI21ImFontAtlasCustomRectE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImFontAtlasCustomRectE7reserveEi = Module["__ZN8ImVectorI21ImFontAtlasCustomRectE7reserveEi"] = createExportWrapper("_ZN8ImVectorI21ImFontAtlasCustomRectE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas22AddCustomRectFontGlyphEP6ImFonttiifRK6ImVec2 = Module["__ZN11ImFontAtlas22AddCustomRectFontGlyphEP6ImFonttiifRK6ImVec2"] = createExportWrapper("_ZN11ImFontAtlas22AddCustomRectFontGlyphEP6ImFonttiifRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZNK11ImFontAtlas16CalcCustomRectUVEPK21ImFontAtlasCustomRectP6ImVec2S4_ = Module["__ZNK11ImFontAtlas16CalcCustomRectUVEPK21ImFontAtlasCustomRectP6ImVec2S4_"] = createExportWrapper("_ZNK11ImFontAtlas16CalcCustomRectUVEPK21ImFontAtlasCustomRectP6ImVec2S4_");
+
+/** @type {function(...*):?} */
+var __ZNK21ImFontAtlasCustomRect8IsPackedEv = Module["__ZNK21ImFontAtlasCustomRect8IsPackedEv"] = createExportWrapper("_ZNK21ImFontAtlasCustomRect8IsPackedEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas20GetCustomRectByIndexEi = Module["__ZN11ImFontAtlas20GetCustomRectByIndexEi"] = createExportWrapper("_ZN11ImFontAtlas20GetCustomRectByIndexEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI21ImFontAtlasCustomRectEixEi = Module["__ZN8ImVectorI21ImFontAtlasCustomRectEixEi"] = createExportWrapper("_ZN8ImVectorI21ImFontAtlasCustomRectEixEi");
+
+/** @type {function(...*):?} */
+var __Z39ImFontAtlasBuildMultiplyCalcLookupTablePhf = Module["__Z39ImFontAtlasBuildMultiplyCalcLookupTablePhf"] = createExportWrapper("_Z39ImFontAtlasBuildMultiplyCalcLookupTablePhf");
+
+/** @type {function(...*):?} */
+var __Z34ImFontAtlasBuildMultiplyRectAlpha8PKhPhiiiii = Module["__Z34ImFontAtlasBuildMultiplyRectAlpha8PKhPhiiiii"] = createExportWrapper("_Z34ImFontAtlasBuildMultiplyRectAlpha8PKhPhiiiii");
+
+/** @type {function(...*):?} */
+var __Z20ImFontAtlasBuildInitP11ImFontAtlas = Module["__Z20ImFontAtlasBuildInitP11ImFontAtlas"] = createExportWrapper("_Z20ImFontAtlasBuildInitP11ImFontAtlas");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataEC2Ev = Module["__ZN8ImVectorI18ImFontBuildSrcDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildDstDataEC2Ev = Module["__ZN8ImVectorI18ImFontBuildDstDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildDstDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataE6resizeEi = Module["__ZN8ImVectorI18ImFontBuildSrcDataE6resizeEi"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildDstDataE6resizeEi = Module["__ZN8ImVectorI18ImFontBuildDstDataE6resizeEi"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildDstDataE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI18ImFontBuildSrcDataE13size_in_bytesEv = Module["__ZNK8ImVectorI18ImFontBuildSrcDataE13size_in_bytesEv"] = createExportWrapper("_ZNK8ImVectorI18ImFontBuildSrcDataE13size_in_bytesEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI18ImFontBuildDstDataE13size_in_bytesEv = Module["__ZNK8ImVectorI18ImFontBuildDstDataE13size_in_bytesEv"] = createExportWrapper("_ZNK8ImVectorI18ImFontBuildDstDataE13size_in_bytesEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataEixEi = Module["__ZN8ImVectorI18ImFontBuildSrcDataEixEi"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImBitVector5ClearEv = Module["__ZN11ImBitVector5ClearEv"] = createExportWrapper("_ZN11ImBitVector5ClearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildDstDataEixEi = Module["__ZN8ImVectorI18ImFontBuildDstDataEixEi"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildDstDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildDstDataE5clearEv = Module["__ZN8ImVectorI18ImFontBuildDstDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildDstDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10stbrp_rectEC2Ev = Module["__ZN8ImVectorI10stbrp_rectEC2Ev"] = createExportWrapper("_ZN8ImVectorI10stbrp_rectEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16stbtt_packedcharEC2Ev = Module["__ZN8ImVectorI16stbtt_packedcharEC2Ev"] = createExportWrapper("_ZN8ImVectorI16stbtt_packedcharEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10stbrp_rectE6resizeEi = Module["__ZN8ImVectorI10stbrp_rectE6resizeEi"] = createExportWrapper("_ZN8ImVectorI10stbrp_rectE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16stbtt_packedcharE6resizeEi = Module["__ZN8ImVectorI16stbtt_packedcharE6resizeEi"] = createExportWrapper("_ZN8ImVectorI16stbtt_packedcharE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI10stbrp_rectE13size_in_bytesEv = Module["__ZNK8ImVectorI10stbrp_rectE13size_in_bytesEv"] = createExportWrapper("_ZNK8ImVectorI10stbrp_rectE13size_in_bytesEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI16stbtt_packedcharE13size_in_bytesEv = Module["__ZNK8ImVectorI16stbtt_packedcharE13size_in_bytesEv"] = createExportWrapper("_ZNK8ImVectorI16stbtt_packedcharE13size_in_bytesEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10stbrp_rectEixEi = Module["__ZN8ImVectorI10stbrp_rectEixEi"] = createExportWrapper("_ZN8ImVectorI10stbrp_rectEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16stbtt_packedcharEixEi = Module["__ZN8ImVectorI16stbtt_packedcharEixEi"] = createExportWrapper("_ZN8ImVectorI16stbtt_packedcharEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIiEixEi = Module["__ZN8ImVectorIiEixEi"] = createExportWrapper("_ZN8ImVectorIiEixEi");
+
+/** @type {function(...*):?} */
+var __Z31ImFontAtlasBuildPackCustomRectsP11ImFontAtlasPv = Module["__Z31ImFontAtlasBuildPackCustomRectsP11ImFontAtlasPv"] = createExportWrapper("_Z31ImFontAtlasBuildPackCustomRectsP11ImFontAtlasPv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10stbrp_rectE5clearEv = Module["__ZN8ImVectorI10stbrp_rectE5clearEv"] = createExportWrapper("_ZN8ImVectorI10stbrp_rectE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataE14clear_destructEv = Module["__ZN8ImVectorI18ImFontBuildSrcDataE14clear_destructEv"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataE14clear_destructEv");
+
+/** @type {function(...*):?} */
+var __Z22ImFontAtlasBuildFinishP11ImFontAtlas = Module["__Z22ImFontAtlasBuildFinishP11ImFontAtlas"] = createExportWrapper("_Z22ImFontAtlasBuildFinishP11ImFontAtlas");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16stbtt_packedcharED2Ev = Module["__ZN8ImVectorI16stbtt_packedcharED2Ev"] = createExportWrapper("_ZN8ImVectorI16stbtt_packedcharED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10stbrp_rectED2Ev = Module["__ZN8ImVectorI10stbrp_rectED2Ev"] = createExportWrapper("_ZN8ImVectorI10stbrp_rectED2Ev");
+
+/** @type {function(...*):?} */
+var __Z25ImFontAtlasBuildSetupFontP11ImFontAtlasP6ImFontP12ImFontConfigff = Module["__Z25ImFontAtlasBuildSetupFontP11ImFontAtlasP6ImFontP12ImFontConfigff"] = createExportWrapper("_Z25ImFontAtlasBuildSetupFontP11ImFontAtlasP6ImFontP12ImFontConfigff");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont8AddGlyphEPK12ImFontConfigtfffffffff = Module["__ZN6ImFont8AddGlyphEPK12ImFontConfigtfffffffff"] = createExportWrapper("_ZN6ImFont8AddGlyphEPK12ImFontConfigtfffffffff");
+
+/** @type {function(...*):?} */
+var __ZN11ImBitVector6CreateEi = Module["__ZN11ImBitVector6CreateEi"] = createExportWrapper("_ZN11ImBitVector6CreateEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIjE5emptyEv = Module["__ZNK8ImVectorIjE5emptyEv"] = createExportWrapper("_ZNK8ImVectorIjE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZNK11ImBitVector7TestBitEi = Module["__ZNK11ImBitVector7TestBitEi"] = createExportWrapper("_ZNK11ImBitVector7TestBitEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImBitVector6SetBitEi = Module["__ZN11ImBitVector6SetBitEi"] = createExportWrapper("_ZN11ImBitVector6SetBitEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildDstDataED2Ev = Module["__ZN8ImVectorI18ImFontBuildDstDataED2Ev"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildDstDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataED2Ev = Module["__ZN8ImVectorI18ImFontBuildSrcDataED2Ev"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont15ClearOutputDataEv = Module["__ZN6ImFont15ClearOutputDataEv"] = createExportWrapper("_ZN6ImFont15ClearOutputDataEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphE5clearEv = Module["__ZN8ImVectorI11ImFontGlyphE5clearEv"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI10stbrp_rectE14_grow_capacityEi = Module["__ZNK8ImVectorI10stbrp_rectE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI10stbrp_rectE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10stbrp_rectE7reserveEi = Module["__ZN8ImVectorI10stbrp_rectE7reserveEi"] = createExportWrapper("_ZN8ImVectorI10stbrp_rectE7reserveEi");
+
+/** @type {function(...*):?} */
+var __Z40ImFontAtlasBuildRender8bppRectFromStringP11ImFontAtlasiiiiPKcch = Module["__Z40ImFontAtlasBuildRender8bppRectFromStringP11ImFontAtlasiiiiPKcch"] = createExportWrapper("_Z40ImFontAtlasBuildRender8bppRectFromStringP11ImFontAtlasiiiiPKcch");
+
+/** @type {function(...*):?} */
+var __Z41ImFontAtlasBuildRender32bppRectFromStringP11ImFontAtlasiiiiPKccj = Module["__Z41ImFontAtlasBuildRender32bppRectFromStringP11ImFontAtlasiiiiPKccj"] = createExportWrapper("_Z41ImFontAtlasBuildRender32bppRectFromStringP11ImFontAtlasiiiiPKccj");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont16BuildLookupTableEv = Module["__ZN6ImFont16BuildLookupTableEv"] = createExportWrapper("_ZN6ImFont16BuildLookupTableEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphE6resizeEi = Module["__ZN8ImVectorI11ImFontGlyphE6resizeEi"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphE4backEv = Module["__ZN8ImVectorI11ImFontGlyphE4backEv"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont9GrowIndexEi = Module["__ZN6ImFont9GrowIndexEi"] = createExportWrapper("_ZN6ImFont9GrowIndexEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont15SetGlyphVisibleEtb = Module["__ZN6ImFont15SetGlyphVisibleEtb"] = createExportWrapper("_ZN6ImFont15SetGlyphVisibleEtb");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphEixEi = Module["__ZN8ImVectorI11ImFontGlyphEixEi"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphEixEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas20GetGlyphRangesKoreanEv = Module["__ZN11ImFontAtlas20GetGlyphRangesKoreanEv"] = createExportWrapper("_ZN11ImFontAtlas20GetGlyphRangesKoreanEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas25GetGlyphRangesChineseFullEv = Module["__ZN11ImFontAtlas25GetGlyphRangesChineseFullEv"] = createExportWrapper("_ZN11ImFontAtlas25GetGlyphRangesChineseFullEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas37GetGlyphRangesChineseSimplifiedCommonEv = Module["__ZN11ImFontAtlas37GetGlyphRangesChineseSimplifiedCommonEv"] = createExportWrapper("_ZN11ImFontAtlas37GetGlyphRangesChineseSimplifiedCommonEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas22GetGlyphRangesJapaneseEv = Module["__ZN11ImFontAtlas22GetGlyphRangesJapaneseEv"] = createExportWrapper("_ZN11ImFontAtlas22GetGlyphRangesJapaneseEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas22GetGlyphRangesCyrillicEv = Module["__ZN11ImFontAtlas22GetGlyphRangesCyrillicEv"] = createExportWrapper("_ZN11ImFontAtlas22GetGlyphRangesCyrillicEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas18GetGlyphRangesThaiEv = Module["__ZN11ImFontAtlas18GetGlyphRangesThaiEv"] = createExportWrapper("_ZN11ImFontAtlas18GetGlyphRangesThaiEv");
+
+/** @type {function(...*):?} */
+var __ZN11ImFontAtlas24GetGlyphRangesVietnameseEv = Module["__ZN11ImFontAtlas24GetGlyphRangesVietnameseEv"] = createExportWrapper("_ZN11ImFontAtlas24GetGlyphRangesVietnameseEv");
+
+/** @type {function(...*):?} */
+var __ZN24ImFontGlyphRangesBuilder7AddTextEPKcS1_ = Module["__ZN24ImFontGlyphRangesBuilder7AddTextEPKcS1_"] = createExportWrapper("_ZN24ImFontGlyphRangesBuilder7AddTextEPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN24ImFontGlyphRangesBuilder7AddCharEt = Module["__ZN24ImFontGlyphRangesBuilder7AddCharEt"] = createExportWrapper("_ZN24ImFontGlyphRangesBuilder7AddCharEt");
+
+/** @type {function(...*):?} */
+var __ZN24ImFontGlyphRangesBuilder6SetBitEm = Module["__ZN24ImFontGlyphRangesBuilder6SetBitEm"] = createExportWrapper("_ZN24ImFontGlyphRangesBuilder6SetBitEm");
+
+/** @type {function(...*):?} */
+var __ZN24ImFontGlyphRangesBuilder9AddRangesEPKt = Module["__ZN24ImFontGlyphRangesBuilder9AddRangesEPKt"] = createExportWrapper("_ZN24ImFontGlyphRangesBuilder9AddRangesEPKt");
+
+/** @type {function(...*):?} */
+var __ZN24ImFontGlyphRangesBuilder11BuildRangesEP8ImVectorItE = Module["__ZN24ImFontGlyphRangesBuilder11BuildRangesEP8ImVectorItE"] = createExportWrapper("_ZN24ImFontGlyphRangesBuilder11BuildRangesEP8ImVectorItE");
+
+/** @type {function(...*):?} */
+var __ZNK24ImFontGlyphRangesBuilder6GetBitEm = Module["__ZNK24ImFontGlyphRangesBuilder6GetBitEm"] = createExportWrapper("_ZNK24ImFontGlyphRangesBuilder6GetBitEm");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIjEixEi = Module["__ZNK8ImVectorIjEixEi"] = createExportWrapper("_ZNK8ImVectorIjEixEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImFontC2Ev = Module["__ZN6ImFontC2Ev"] = createExportWrapper("_ZN6ImFontC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphEC2Ev = Module["__ZN8ImVectorI11ImFontGlyphEC2Ev"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImFontD2Ev = Module["__ZN6ImFontD2Ev"] = createExportWrapper("_ZN6ImFontD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphED2Ev = Module["__ZN8ImVectorI11ImFontGlyphED2Ev"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphED2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIfE6resizeEiRKf = Module["__ZN8ImVectorIfE6resizeEiRKf"] = createExportWrapper("_ZN8ImVectorIfE6resizeEiRKf");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorItE6resizeEiRKt = Module["__ZN8ImVectorItE6resizeEiRKt"] = createExportWrapper("_ZN8ImVectorItE6resizeEiRKt");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI11ImFontGlyphE14_grow_capacityEi = Module["__ZNK8ImVectorI11ImFontGlyphE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI11ImFontGlyphE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImFontGlyphE7reserveEi = Module["__ZN8ImVectorI11ImFontGlyphE7reserveEi"] = createExportWrapper("_ZN8ImVectorI11ImFontGlyphE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImFont12AddRemapCharEttb = Module["__ZN6ImFont12AddRemapCharEttb"] = createExportWrapper("_ZN6ImFont12AddRemapCharEttb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11RenderArrowEP10ImDrawList6ImVec2jif = Module["__ZN5ImGui11RenderArrowEP10ImDrawList6ImVec2jif"] = createExportWrapper("_ZN5ImGui11RenderArrowEP10ImDrawList6ImVec2jif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15RenderCheckMarkEP10ImDrawList6ImVec2jf = Module["__ZN5ImGui15RenderCheckMarkEP10ImDrawList6ImVec2jf"] = createExportWrapper("_ZN5ImGui15RenderCheckMarkEP10ImDrawList6ImVec2jf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21RenderArrowPointingAtEP10ImDrawList6ImVec2S2_ij = Module["__ZN5ImGui21RenderArrowPointingAtEP10ImDrawList6ImVec2S2_ij"] = createExportWrapper("_ZN5ImGui21RenderArrowPointingAtEP10ImDrawList6ImVec2S2_ij");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RenderRectFilledRangeHEP10ImDrawListRK6ImRectjfff = Module["__ZN5ImGui22RenderRectFilledRangeHEP10ImDrawListRK6ImRectjfff"] = createExportWrapper("_ZN5ImGui22RenderRectFilledRangeHEP10ImDrawListRK6ImRectjfff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui24RenderRectFilledWithHoleEP10ImDrawListRK6ImRectS4_jf = Module["__ZN5ImGui24RenderRectFilledWithHoleEP10ImDrawListRK6ImRectS4_jf"] = createExportWrapper("_ZN5ImGui24RenderRectFilledWithHoleEP10ImDrawListRK6ImRectS4_jf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui36RenderColorRectWithAlphaCheckerboardEP10ImDrawList6ImVec2S2_jfS2_fi = Module["__ZN5ImGui36RenderColorRectWithAlphaCheckerboardEP10ImDrawList6ImVec2S2_jfS2_fi"] = createExportWrapper("_ZN5ImGui36RenderColorRectWithAlphaCheckerboardEP10ImDrawList6ImVec2S2_jfS2_fi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI18ImFontBuildSrcDataE14_grow_capacityEi = Module["__ZNK8ImVectorI18ImFontBuildSrcDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI18ImFontBuildSrcDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataE7reserveEi = Module["__ZN8ImVectorI18ImFontBuildSrcDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI18ImFontBuildDstDataE14_grow_capacityEi = Module["__ZNK8ImVectorI18ImFontBuildDstDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI18ImFontBuildDstDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildDstDataE7reserveEi = Module["__ZN8ImVectorI18ImFontBuildDstDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildDstDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIjE5beginEv = Module["__ZNK8ImVectorIjE5beginEv"] = createExportWrapper("_ZNK8ImVectorIjE5beginEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIjE3endEv = Module["__ZNK8ImVectorIjE3endEv"] = createExportWrapper("_ZNK8ImVectorIjE3endEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI16stbtt_packedcharE14_grow_capacityEi = Module["__ZNK8ImVectorI16stbtt_packedcharE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI16stbtt_packedcharE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI16stbtt_packedcharE7reserveEi = Module["__ZN8ImVectorI16stbtt_packedcharE7reserveEi"] = createExportWrapper("_ZN8ImVectorI16stbtt_packedcharE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImFontBuildSrcDataE5clearEv = Module["__ZN8ImVectorI18ImFontBuildSrcDataE5clearEv"] = createExportWrapper("_ZN8ImVectorI18ImFontBuildSrcDataE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN18ImFontBuildSrcDataD2Ev = Module["__ZN18ImFontBuildSrcDataD2Ev"] = createExportWrapper("_ZN18ImFontBuildSrcDataD2Ev");
+
+/** @type {function(...*):?} */
+var __ZN11ImBitVectorD2Ev = Module["__ZN11ImBitVectorD2Ev"] = createExportWrapper("_ZN11ImBitVectorD2Ev");
+
+/** @type {function(...*):?} */
+var __Z34ImGui_ImplGlfw_MouseButtonCallbackP10GLFWwindowiii = Module["__Z34ImGui_ImplGlfw_MouseButtonCallbackP10GLFWwindowiii"] = createExportWrapper("_Z34ImGui_ImplGlfw_MouseButtonCallbackP10GLFWwindowiii");
+
+/** @type {function(...*):?} */
+var __Z29ImGui_ImplGlfw_ScrollCallbackP10GLFWwindowdd = Module["__Z29ImGui_ImplGlfw_ScrollCallbackP10GLFWwindowdd"] = createExportWrapper("_Z29ImGui_ImplGlfw_ScrollCallbackP10GLFWwindowdd");
+
+/** @type {function(...*):?} */
+var __Z26ImGui_ImplGlfw_KeyCallbackP10GLFWwindowiiii = Module["__Z26ImGui_ImplGlfw_KeyCallbackP10GLFWwindowiiii"] = createExportWrapper("_Z26ImGui_ImplGlfw_KeyCallbackP10GLFWwindowiiii");
+
+/** @type {function(...*):?} */
+var __Z34ImGui_ImplGlfw_WindowFocusCallbackP10GLFWwindowi = Module["__Z34ImGui_ImplGlfw_WindowFocusCallbackP10GLFWwindowi"] = createExportWrapper("_Z34ImGui_ImplGlfw_WindowFocusCallbackP10GLFWwindowi");
+
+/** @type {function(...*):?} */
+var __Z32ImGui_ImplGlfw_CursorPosCallbackP10GLFWwindowdd = Module["__Z32ImGui_ImplGlfw_CursorPosCallbackP10GLFWwindowdd"] = createExportWrapper("_Z32ImGui_ImplGlfw_CursorPosCallbackP10GLFWwindowdd");
+
+/** @type {function(...*):?} */
+var __Z34ImGui_ImplGlfw_CursorEnterCallbackP10GLFWwindowi = Module["__Z34ImGui_ImplGlfw_CursorEnterCallbackP10GLFWwindowi"] = createExportWrapper("_Z34ImGui_ImplGlfw_CursorEnterCallbackP10GLFWwindowi");
+
+/** @type {function(...*):?} */
+var __Z27ImGui_ImplGlfw_CharCallbackP10GLFWwindowj = Module["__Z27ImGui_ImplGlfw_CharCallbackP10GLFWwindowj"] = createExportWrapper("_Z27ImGui_ImplGlfw_CharCallbackP10GLFWwindowj");
+
+/** @type {function(...*):?} */
+var __Z30ImGui_ImplGlfw_MonitorCallbackP11GLFWmonitori = Module["__Z30ImGui_ImplGlfw_MonitorCallbackP11GLFWmonitori"] = createExportWrapper("_Z30ImGui_ImplGlfw_MonitorCallbackP11GLFWmonitori");
+
+/** @type {function(...*):?} */
+var __Z31ImGui_ImplGlfw_InstallCallbacksP10GLFWwindow = Module["__Z31ImGui_ImplGlfw_InstallCallbacksP10GLFWwindow"] = createExportWrapper("_Z31ImGui_ImplGlfw_InstallCallbacksP10GLFWwindow");
+
+/** @type {function(...*):?} */
+var __Z31ImGui_ImplGlfw_RestoreCallbacksP10GLFWwindow = Module["__Z31ImGui_ImplGlfw_RestoreCallbacksP10GLFWwindow"] = createExportWrapper("_Z31ImGui_ImplGlfw_RestoreCallbacksP10GLFWwindow");
+
+/** @type {function(...*):?} */
+var __ZN19ImGui_ImplGlfw_DataC2Ev = Module["__ZN19ImGui_ImplGlfw_DataC2Ev"] = createExportWrapper("_ZN19ImGui_ImplGlfw_DataC2Ev");
+
+/** @type {function(...*):?} */
+var __Z28ImGui_ImplGlfw_InitForVulkanP10GLFWwindowb = Module["__Z28ImGui_ImplGlfw_InitForVulkanP10GLFWwindowb"] = createExportWrapper("_Z28ImGui_ImplGlfw_InitForVulkanP10GLFWwindowb");
+
+/** @type {function(...*):?} */
+var __Z27ImGui_ImplGlfw_InitForOtherP10GLFWwindowb = Module["__Z27ImGui_ImplGlfw_InitForOtherP10GLFWwindowb"] = createExportWrapper("_Z27ImGui_ImplGlfw_InitForOtherP10GLFWwindowb");
+
+/** @type {function(...*):?} */
+var __Z9IM_DELETEI19ImGui_ImplGlfw_DataEvPT_ = Module["__Z9IM_DELETEI19ImGui_ImplGlfw_DataEvPT_"] = createExportWrapper("_Z9IM_DELETEI19ImGui_ImplGlfw_DataEvPT_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13TableFindByIDEj = Module["__ZN5ImGui13TableFindByIDEj"] = createExportWrapper("_ZN5ImGui13TableFindByIDEj");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE8GetByKeyEj = Module["__ZN6ImPoolI10ImGuiTableE8GetByKeyEj"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE8GetByKeyEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginTableExEPKcjiiRK6ImVec2f = Module["__ZN5ImGui12BeginTableExEPKcjiiRK6ImVec2f"] = createExportWrapper("_ZN5ImGui12BeginTableExEPKcjiiRK6ImVec2f");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8ItemSizeERK6ImRectf = Module["__ZN5ImGui8ItemSizeERK6ImRectf"] = createExportWrapper("_ZN5ImGui8ItemSizeERK6ImRectf");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE13GetOrAddByKeyEj = Module["__ZN6ImPoolI10ImGuiTableE13GetOrAddByKeyEj"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE13GetOrAddByKeyEj");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI10ImGuiTableE8GetIndexEPKS0_ = Module["__ZNK6ImPoolI10ImGuiTableE8GetIndexEPKS0_"] = createExportWrapper("_ZNK6ImPoolI10ImGuiTableE8GetIndexEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiTableTempDataC2Ev = Module["__ZN18ImGuiTableTempDataC2Ev"] = createExportWrapper("_ZN18ImGuiTableTempDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataE6resizeEiRKS0_ = Module["__ZN8ImVectorI18ImGuiTableTempDataE6resizeEiRKS0_"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataE6resizeEiRKS0_");
+
+/** @type {function(...*):?} */
+var __Z13TableFixFlagsiP11ImGuiWindow = Module["__Z13TableFixFlagsiP11ImGuiWindow"] = createExportWrapper("_Z13TableFixFlagsiP11ImGuiWindow");
+
+/** @type {function(...*):?} */
+var __ZN22ImGuiTableInstanceDataC2Ev = Module["__ZN22ImGuiTableInstanceDataC2Ev"] = createExportWrapper("_ZN22ImGuiTableInstanceDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI22ImGuiTableInstanceDataE9push_backERKS0_ = Module["__ZN8ImVectorI22ImGuiTableInstanceDataE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI22ImGuiTableInstanceDataE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK6ImSpanI16ImGuiTableColumnE4sizeEv = Module["__ZNK6ImSpanI16ImGuiTableColumnE4sizeEv"] = createExportWrapper("_ZNK6ImSpanI16ImGuiTableColumnE4sizeEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20TableBeginInitMemoryEP10ImGuiTablei = Module["__ZN5ImGui20TableBeginInitMemoryEP10ImGuiTablei"] = createExportWrapper("_ZN5ImGui20TableBeginInitMemoryEP10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TableResetSettingsEP10ImGuiTable = Module["__ZN5ImGui18TableResetSettingsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui18TableResetSettingsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiTableColumnC2Ev = Module["__ZN16ImGuiTableColumnC2Ev"] = createExportWrapper("_ZN16ImGuiTableColumnC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanIaEixEi = Module["__ZN6ImSpanIaEixEi"] = createExportWrapper("_ZN6ImSpanIaEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TableLoadSettingsEP10ImGuiTable = Module["__ZN5ImGui17TableLoadSettingsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui17TableLoadSettingsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23TableBeginApplyRequestsEP10ImGuiTable = Module["__ZN5ImGui23TableBeginApplyRequestsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui23TableBeginApplyRequestsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE3AddEv = Module["__ZN6ImPoolI10ImGuiTableE3AddEv"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE3AddEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI18ImGuiTableTempDataE14_grow_capacityEi = Module["__ZNK8ImVectorI18ImGuiTableTempDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI18ImGuiTableTempDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiTableTempDataE7reserveEi = Module["__ZN8ImVectorI18ImGuiTableTempDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI18ImGuiTableTempDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI22ImGuiTableInstanceDataE14_grow_capacityEi = Module["__ZNK8ImVectorI22ImGuiTableInstanceDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI22ImGuiTableInstanceDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI22ImGuiTableInstanceDataE7reserveEi = Module["__ZN8ImVectorI22ImGuiTableInstanceDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI22ImGuiTableInstanceDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EEC2Ev = Module["__ZN15ImSpanAllocatorILi3EEC2Ev"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE7ReserveEimi = Module["__ZN15ImSpanAllocatorILi3EE7ReserveEimi"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE7ReserveEimi");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE19GetArenaSizeInBytesEv = Module["__ZN15ImSpanAllocatorILi3EE19GetArenaSizeInBytesEv"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE19GetArenaSizeInBytesEv");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE15SetArenaBasePtrEPv = Module["__ZN15ImSpanAllocatorILi3EE15SetArenaBasePtrEPv"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE15SetArenaBasePtrEPv");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE7GetSpanI16ImGuiTableColumnEEviP6ImSpanIT_E = Module["__ZN15ImSpanAllocatorILi3EE7GetSpanI16ImGuiTableColumnEEviP6ImSpanIT_E"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE7GetSpanI16ImGuiTableColumnEEviP6ImSpanIT_E");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE7GetSpanIaEEviP6ImSpanIT_E = Module["__ZN15ImSpanAllocatorILi3EE7GetSpanIaEEviP6ImSpanIT_E"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE7GetSpanIaEEviP6ImSpanIT_E");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE7GetSpanI18ImGuiTableCellDataEEviP6ImSpanIT_E = Module["__ZN15ImSpanAllocatorILi3EE7GetSpanI18ImGuiTableCellDataEEviP6ImSpanIT_E"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE7GetSpanI18ImGuiTableCellDataEEviP6ImSpanIT_E");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21TableSettingsFindByIDEj = Module["__ZN5ImGui21TableSettingsFindByIDEj"] = createExportWrapper("_ZN5ImGui21TableSettingsFindByIDEj");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE15offset_from_ptrEPKS0_ = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE15offset_from_ptrEPKS0_"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE15offset_from_ptrEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21TableGetBoundSettingsEP10ImGuiTable = Module["__ZN5ImGui21TableGetBoundSettingsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui21TableGetBoundSettingsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiTableSettings17GetColumnSettingsEv = Module["__ZN18ImGuiTableSettings17GetColumnSettingsEv"] = createExportWrapper("_ZN18ImGuiTableSettings17GetColumnSettingsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableSetColumnWidthEif = Module["__ZN5ImGui19TableSetColumnWidthEif"] = createExportWrapper("_ZN5ImGui19TableSetColumnWidthEif");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE15GetSpanPtrBeginEi = Module["__ZN15ImSpanAllocatorILi3EE15GetSpanPtrBeginEi"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE15GetSpanPtrBeginEi");
+
+/** @type {function(...*):?} */
+var __ZN15ImSpanAllocatorILi3EE13GetSpanPtrEndEi = Module["__ZN15ImSpanAllocatorILi3EE13GetSpanPtrEndEi"] = createExportWrapper("_ZN15ImSpanAllocatorILi3EE13GetSpanPtrEndEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanI16ImGuiTableColumnE3setEPS0_S2_ = Module["__ZN6ImSpanI16ImGuiTableColumnE3setEPS0_S2_"] = createExportWrapper("_ZN6ImSpanI16ImGuiTableColumnE3setEPS0_S2_");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanIaE3setEPaS1_ = Module["__ZN6ImSpanIaE3setEPaS1_"] = createExportWrapper("_ZN6ImSpanIaE3setEPaS1_");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanI18ImGuiTableCellDataE3setEPS0_S2_ = Module["__ZN6ImSpanI18ImGuiTableCellDataE3setEPS0_S2_"] = createExportWrapper("_ZN6ImSpanI18ImGuiTableCellDataE3setEPS0_S2_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableGetMaxColumnWidthEPK10ImGuiTablei = Module["__ZN5ImGui22TableGetMaxColumnWidthEPK10ImGuiTablei"] = createExportWrapper("_ZN5ImGui22TableGetMaxColumnWidthEPK10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui33TableUpdateColumnsWeightFromWidthEP10ImGuiTable = Module["__ZN5ImGui33TableUpdateColumnsWeightFromWidthEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui33TableUpdateColumnsWeightFromWidthEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TableUpdateLayoutEP10ImGuiTable = Module["__ZN5ImGui17TableUpdateLayoutEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui17TableUpdateLayoutEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23TableGetColumnWidthAutoEP10ImGuiTableP16ImGuiTableColumn = Module["__ZN5ImGui23TableGetColumnWidthAutoEP10ImGuiTableP16ImGuiTableColumn"] = createExportWrapper("_ZN5ImGui23TableGetColumnWidthAutoEP10ImGuiTableP16ImGuiTableColumn");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableSetupDrawChannelsEP10ImGuiTable = Module["__ZN5ImGui22TableSetupDrawChannelsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui22TableSetupDrawChannelsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TableUpdateBordersEP10ImGuiTable = Module["__ZN5ImGui18TableUpdateBordersEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui18TableUpdateBordersEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26TableBeginContextMenuPopupEP10ImGuiTable = Module["__ZN5ImGui26TableBeginContextMenuPopupEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui26TableBeginContextMenuPopupEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20TableDrawContextMenuEP10ImGuiTable = Module["__ZN5ImGui20TableDrawContextMenuEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui20TableDrawContextMenuEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableSortSpecsBuildEP10ImGuiTable = Module["__ZN5ImGui19TableSortSpecsBuildEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui19TableSortSpecsBuildEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZNK6ImSpanI16ImGuiTableColumnE14index_from_ptrEPKS0_ = Module["__ZNK6ImSpanI16ImGuiTableColumnE14index_from_ptrEPKS0_"] = createExportWrapper("_ZNK6ImSpanI16ImGuiTableColumnE14index_from_ptrEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui27TableFixColumnSortDirectionEP10ImGuiTableP16ImGuiTableColumn = Module["__ZN5ImGui27TableFixColumnSortDirectionEP10ImGuiTableP16ImGuiTableColumn"] = createExportWrapper("_ZN5ImGui27TableFixColumnSortDirectionEP10ImGuiTableP16ImGuiTableColumn");
+
+/** @type {function(...*):?} */
+var __ZNK6ImSpanI16ImGuiTableColumnEixEi = Module["__ZNK6ImSpanI16ImGuiTableColumnEixEi"] = createExportWrapper("_ZNK6ImSpanI16ImGuiTableColumnEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableGetColumnResizeIDEPK10ImGuiTableii = Module["__ZN5ImGui22TableGetColumnResizeIDEPK10ImGuiTableii"] = createExportWrapper("_ZN5ImGui22TableGetColumnResizeIDEPK10ImGuiTableii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui29TableSetColumnWidthAutoSingleEP10ImGuiTablei = Module["__ZN5ImGui29TableSetColumnWidthAutoSingleEP10ImGuiTablei"] = createExportWrapper("_ZN5ImGui29TableSetColumnWidthAutoSingleEP10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8MenuItemEPKcS1_bb = Module["__ZN5ImGui8MenuItemEPKcS1_bb"] = createExportWrapper("_ZN5ImGui8MenuItemEPKcS1_bb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26TableSetColumnWidthAutoAllEP10ImGuiTable = Module["__ZN5ImGui26TableSetColumnWidthAutoAllEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui26TableSetColumnWidthAutoAllEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TableGetColumnNameEPK10ImGuiTablei = Module["__ZN5ImGui18TableGetColumnNameEPK10ImGuiTablei"] = createExportWrapper("_ZN5ImGui18TableGetColumnNameEPK10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableSortSpecsSanitizeEP10ImGuiTable = Module["__ZN5ImGui22TableSortSpecsSanitizeEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui22TableSortSpecsSanitizeEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI25ImGuiTableColumnSortSpecsE6resizeEi = Module["__ZN8ImVectorI25ImGuiTableColumnSortSpecsE6resizeEi"] = createExportWrapper("_ZN8ImVectorI25ImGuiTableColumnSortSpecsE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20TableOpenContextMenuEi = Module["__ZN5ImGui20TableOpenContextMenuEi"] = createExportWrapper("_ZN5ImGui20TableOpenContextMenuEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16TableDrawBordersEP10ImGuiTable = Module["__ZN5ImGui16TableDrawBordersEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui16TableDrawBordersEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableMergeDrawChannelsEP10ImGuiTable = Module["__ZN5ImGui22TableMergeDrawChannelsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui22TableMergeDrawChannelsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TableSaveSettingsEP10ImGuiTable = Module["__ZN5ImGui17TableSaveSettingsEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui17TableSaveSettingsEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12TableEndCellEP10ImGuiTable = Module["__ZN5ImGui12TableEndCellEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui12TableEndCellEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanI18ImGuiTableCellDataEixEi = Module["__ZN6ImSpanI18ImGuiTableCellDataEixEi"] = createExportWrapper("_ZN6ImSpanI18ImGuiTableCellDataEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TableGetCellBgRectEPK10ImGuiTablei = Module["__ZN5ImGui18TableGetCellBgRectEPK10ImGuiTablei"] = createExportWrapper("_ZN5ImGui18TableGetCellBgRectEPK10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui33SetWindowClipRectBeforeSetChannelEP11ImGuiWindowRK6ImRect = Module["__ZN5ImGui33SetWindowClipRectBeforeSetChannelEP11ImGuiWindowRK6ImRect"] = createExportWrapper("_ZN5ImGui33SetWindowClipRectBeforeSetChannelEP11ImGuiWindowRK6ImRect");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi132ELi0EEC2Ev = Module["__ZN10ImBitArrayILi132ELi0EEC2Ev"] = createExportWrapper("_ZN10ImBitArrayILi132ELi0EEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi132ELi0EE11SetBitRangeEii = Module["__ZN10ImBitArrayILi132ELi0EE11SetBitRangeEii"] = createExportWrapper("_ZN10ImBitArrayILi132ELi0EE11SetBitRangeEii");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi132ELi0EE8ClearBitEi = Module["__ZN10ImBitArrayILi132ELi0EE8ClearBitEi"] = createExportWrapper("_ZN10ImBitArrayILi132ELi0EE8ClearBitEi");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi132ELi0EE6SetBitEi = Module["__ZN10ImBitArrayILi132ELi0EE6SetBitEi"] = createExportWrapper("_ZN10ImBitArrayILi132ELi0EE6SetBitEi");
+
+/** @type {function(...*):?} */
+var __ZNK10ImBitArrayILi132ELi0EE7TestBitEi = Module["__ZNK10ImBitArrayILi132ELi0EE7TestBitEi"] = createExportWrapper("_ZNK10ImBitArrayILi132ELi0EE7TestBitEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableSettingsCreateEji = Module["__ZN5ImGui19TableSettingsCreateEji"] = createExportWrapper("_ZN5ImGui19TableSettingsCreateEji");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TableSetupScrollFreezeEii = Module["__ZN5ImGui22TableSetupScrollFreezeEii"] = createExportWrapper("_ZN5ImGui22TableSetupScrollFreezeEii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableGetColumnCountEv = Module["__ZN5ImGui19TableGetColumnCountEv"] = createExportWrapper("_ZN5ImGui19TableGetColumnCountEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TableGetColumnNameEi = Module["__ZN5ImGui18TableGetColumnNameEi"] = createExportWrapper("_ZN5ImGui18TableGetColumnNameEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIcEixEi = Module["__ZNK8ImVectorIcEixEi"] = createExportWrapper("_ZNK8ImVectorIcEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21TableSetColumnEnabledEib = Module["__ZN5ImGui21TableSetColumnEnabledEib"] = createExportWrapper("_ZN5ImGui21TableSetColumnEnabledEib");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableGetColumnFlagsEi = Module["__ZN5ImGui19TableGetColumnFlagsEi"] = createExportWrapper("_ZN5ImGui19TableGetColumnFlagsEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21TableGetHoveredColumnEv = Module["__ZN5ImGui21TableGetHoveredColumnEv"] = createExportWrapper("_ZN5ImGui21TableGetHoveredColumnEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16TableGetRowIndexEv = Module["__ZN5ImGui16TableGetRowIndexEv"] = createExportWrapper("_ZN5ImGui16TableGetRowIndexEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12TableNextRowEif = Module["__ZN5ImGui12TableNextRowEif"] = createExportWrapper("_ZN5ImGui12TableNextRowEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13TableBeginRowEP10ImGuiTable = Module["__ZN5ImGui13TableBeginRowEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui13TableBeginRowEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableGetColumnIndexEv = Module["__ZN5ImGui19TableGetColumnIndexEv"] = createExportWrapper("_ZN5ImGui19TableGetColumnIndexEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19TableSetColumnIndexEi = Module["__ZN5ImGui19TableSetColumnIndexEi"] = createExportWrapper("_ZN5ImGui19TableSetColumnIndexEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14TableBeginCellEP10ImGuiTablei = Module["__ZN5ImGui14TableBeginCellEP10ImGuiTablei"] = createExportWrapper("_ZN5ImGui14TableBeginCellEP10ImGuiTablei");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26TablePushBackgroundChannelEv = Module["__ZN5ImGui26TablePushBackgroundChannelEv"] = createExportWrapper("_ZN5ImGui26TablePushBackgroundChannelEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui25TablePopBackgroundChannelEv = Module["__ZN5ImGui25TablePopBackgroundChannelEv"] = createExportWrapper("_ZN5ImGui25TablePopBackgroundChannelEv");
+
+/** @type {function(...*):?} */
+var __ZN10ImBitArrayILi132ELi0EE12ClearAllBitsEv = Module["__ZN10ImBitArrayILi132ELi0EE12ClearAllBitsEv"] = createExportWrapper("_ZN10ImBitArrayILi132ELi0EE12ClearAllBitsEv");
+
+/** @type {function(...*):?} */
+var __Z18ImBitArrayClearBitPji = Module["__Z18ImBitArrayClearBitPji"] = createExportWrapper("_Z18ImBitArrayClearBitPji");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TableGetSortSpecsEv = Module["__ZN5ImGui17TableGetSortSpecsEv"] = createExportWrapper("_ZN5ImGui17TableGetSortSpecsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui31TableGetColumnNextSortDirectionEP16ImGuiTableColumn = Module["__ZN5ImGui31TableGetColumnNextSortDirectionEP16ImGuiTableColumn"] = createExportWrapper("_ZN5ImGui31TableGetColumnNextSortDirectionEP16ImGuiTableColumn");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui27TableSetColumnSortDirectionEiib = Module["__ZN5ImGui27TableSetColumnSortDirectionEiib"] = createExportWrapper("_ZN5ImGui27TableSetColumnSortDirectionEiib");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI25ImGuiTableColumnSortSpecsE14_grow_capacityEi = Module["__ZNK8ImVectorI25ImGuiTableColumnSortSpecsE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI25ImGuiTableColumnSortSpecsE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI25ImGuiTableColumnSortSpecsE7reserveEi = Module["__ZN8ImVectorI25ImGuiTableColumnSortSpecsE7reserveEi"] = createExportWrapper("_ZN8ImVectorI25ImGuiTableColumnSortSpecsE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23TableGetHeaderRowHeightEv = Module["__ZN5ImGui23TableGetHeaderRowHeightEv"] = createExportWrapper("_ZN5ImGui23TableGetHeaderRowHeightEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TableHeaderEPKc = Module["__ZN5ImGui11TableHeaderEPKc"] = createExportWrapper("_ZN5ImGui11TableHeaderEPKc");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE11alloc_chunkEm = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE11alloc_chunkEm"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE11alloc_chunkEm");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiTableSettingsC2Ev = Module["__ZN18ImGuiTableSettingsC2Ev"] = createExportWrapper("_ZN18ImGuiTableSettingsC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN24ImGuiTableColumnSettingsC2Ev = Module["__ZN24ImGuiTableColumnSettingsC2Ev"] = createExportWrapper("_ZN24ImGuiTableColumnSettingsC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE15ptr_from_offsetEi = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE15ptr_from_offsetEi"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE15ptr_from_offsetEi");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE5clearEv = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE5clearEv"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TableRemoveEP10ImGuiTable = Module["__ZN5ImGui11TableRemoveEP10ImGuiTable"] = createExportWrapper("_ZN5ImGui11TableRemoveEP10ImGuiTable");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE6RemoveEjPKS0_ = Module["__ZN6ImPoolI10ImGuiTableE6RemoveEjPKS0_"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE6RemoveEjPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI10ImGuiTableE6RemoveEji = Module["__ZN6ImPoolI10ImGuiTableE6RemoveEji"] = createExportWrapper("_ZN6ImPoolI10ImGuiTableE6RemoveEji");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI25ImGuiTableColumnSortSpecsE5clearEv = Module["__ZN8ImVectorI25ImGuiTableColumnSortSpecsE5clearEv"] = createExportWrapper("_ZN8ImVectorI25ImGuiTableColumnSortSpecsE5clearEv");
+
+/** @type {function(...*):?} */
+var __ZN13ImChunkStreamI18ImGuiTableSettingsE4swapERS1_ = Module["__ZN13ImChunkStreamI18ImGuiTableSettingsE4swapERS1_"] = createExportWrapper("_ZN13ImChunkStreamI18ImGuiTableSettingsE4swapERS1_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE4swapERS0_ = Module["__ZN8ImVectorIcE4swapERS0_"] = createExportWrapper("_ZN8ImVectorIcE4swapERS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6BulletEv = Module["__ZN5ImGui6BulletEv"] = createExportWrapper("_ZN5ImGui6BulletEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetColumnIndexEv = Module["__ZN5ImGui14GetColumnIndexEv"] = createExportWrapper("_ZN5ImGui14GetColumnIndexEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetColumnsCountEv = Module["__ZN5ImGui15GetColumnsCountEv"] = createExportWrapper("_ZN5ImGui15GetColumnsCountEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23GetColumnNormFromOffsetEPK15ImGuiOldColumnsf = Module["__ZN5ImGui23GetColumnNormFromOffsetEPK15ImGuiOldColumnsf"] = createExportWrapper("_ZN5ImGui23GetColumnNormFromOffsetEPK15ImGuiOldColumnsf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15GetColumnOffsetEi = Module["__ZN5ImGui15GetColumnOffsetEi"] = createExportWrapper("_ZN5ImGui15GetColumnOffsetEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14GetColumnWidthEi = Module["__ZN5ImGui14GetColumnWidthEi"] = createExportWrapper("_ZN5ImGui14GetColumnWidthEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SetColumnOffsetEif = Module["__ZN5ImGui15SetColumnOffsetEif"] = createExportWrapper("_ZN5ImGui15SetColumnOffsetEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SetColumnWidthEif = Module["__ZN5ImGui14SetColumnWidthEif"] = createExportWrapper("_ZN5ImGui14SetColumnWidthEif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18PushColumnClipRectEi = Module["__ZN5ImGui18PushColumnClipRectEi"] = createExportWrapper("_ZN5ImGui18PushColumnClipRectEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21PushColumnsBackgroundEv = Module["__ZN5ImGui21PushColumnsBackgroundEv"] = createExportWrapper("_ZN5ImGui21PushColumnsBackgroundEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20PopColumnsBackgroundEv = Module["__ZN5ImGui20PopColumnsBackgroundEv"] = createExportWrapper("_ZN5ImGui20PopColumnsBackgroundEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19FindOrCreateColumnsEP11ImGuiWindowj = Module["__ZN5ImGui19FindOrCreateColumnsEP11ImGuiWindowj"] = createExportWrapper("_ZN5ImGui19FindOrCreateColumnsEP11ImGuiWindowj");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiOldColumnsC2Ev = Module["__ZN15ImGuiOldColumnsC2Ev"] = createExportWrapper("_ZN15ImGuiOldColumnsC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsE9push_backERKS0_ = Module["__ZN8ImVectorI15ImGuiOldColumnsE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsE4backEv = Module["__ZN8ImVectorI15ImGuiOldColumnsE4backEv"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsE4backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI15ImGuiOldColumnsE14_grow_capacityEi = Module["__ZNK8ImVectorI15ImGuiOldColumnsE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI15ImGuiOldColumnsE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiOldColumnsE7reserveEi = Module["__ZN8ImVectorI15ImGuiOldColumnsE7reserveEi"] = createExportWrapper("_ZN8ImVectorI15ImGuiOldColumnsE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiOldColumnDataEC2Ev = Module["__ZN8ImVectorI18ImGuiOldColumnDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI18ImGuiOldColumnDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12GetColumnsIDEPKci = Module["__ZN5ImGui12GetColumnsIDEPKci"] = createExportWrapper("_ZN5ImGui12GetColumnsIDEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginColumnsEPKcii = Module["__ZN5ImGui12BeginColumnsEPKcii"] = createExportWrapper("_ZN5ImGui12BeginColumnsEPKcii");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiOldColumnDataE6resizeEi = Module["__ZN8ImVectorI18ImGuiOldColumnDataE6resizeEi"] = createExportWrapper("_ZN8ImVectorI18ImGuiOldColumnDataE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiOldColumnDataE7reserveEi = Module["__ZN8ImVectorI18ImGuiOldColumnDataE7reserveEi"] = createExportWrapper("_ZN8ImVectorI18ImGuiOldColumnDataE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiOldColumnDataC2Ev = Module["__ZN18ImGuiOldColumnDataC2Ev"] = createExportWrapper("_ZN18ImGuiOldColumnDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI18ImGuiOldColumnDataE9push_backERKS0_ = Module["__ZN8ImVectorI18ImGuiOldColumnDataE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI18ImGuiOldColumnDataE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI18ImGuiOldColumnDataE14_grow_capacityEi = Module["__ZNK8ImVectorI18ImGuiOldColumnDataE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI18ImGuiOldColumnDataE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10NextColumnEv = Module["__ZN5ImGui10NextColumnEv"] = createExportWrapper("_ZN5ImGui10NextColumnEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7ColumnsEiPKcb = Module["__ZN5ImGui7ColumnsEiPKcb"] = createExportWrapper("_ZN5ImGui7ColumnsEiPKcb");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImGuiTableE6resizeEi = Module["__ZN8ImVectorI10ImGuiTableE6resizeEi"] = createExportWrapper("_ZN8ImVectorI10ImGuiTableE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN10ImGuiTableC2Ev = Module["__ZN10ImGuiTableC2Ev"] = createExportWrapper("_ZN10ImGuiTableC2Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI10ImGuiTableE14_grow_capacityEi = Module["__ZNK8ImVectorI10ImGuiTableE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI10ImGuiTableE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI10ImGuiTableE7reserveEi = Module["__ZN8ImVectorI10ImGuiTableE7reserveEi"] = createExportWrapper("_ZN8ImVectorI10ImGuiTableE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanI16ImGuiTableColumnEC2Ev = Module["__ZN6ImSpanI16ImGuiTableColumnEC2Ev"] = createExportWrapper("_ZN6ImSpanI16ImGuiTableColumnEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanIaEC2Ev = Module["__ZN6ImSpanIaEC2Ev"] = createExportWrapper("_ZN6ImSpanIaEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN6ImSpanI18ImGuiTableCellDataEC2Ev = Module["__ZN6ImSpanI18ImGuiTableCellDataEC2Ev"] = createExportWrapper("_ZN6ImSpanI18ImGuiTableCellDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI22ImGuiTableInstanceDataEC2Ev = Module["__ZN8ImVectorI22ImGuiTableInstanceDataEC2Ev"] = createExportWrapper("_ZN8ImVectorI22ImGuiTableInstanceDataEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN25ImGuiTableColumnSortSpecsC2Ev = Module["__ZN25ImGuiTableColumnSortSpecsC2Ev"] = createExportWrapper("_ZN25ImGuiTableColumnSortSpecsC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI25ImGuiTableColumnSortSpecsEC2Ev = Module["__ZN8ImVectorI25ImGuiTableColumnSortSpecsEC2Ev"] = createExportWrapper("_ZN8ImVectorI25ImGuiTableColumnSortSpecsEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiTableSortSpecsC2Ev = Module["__ZN19ImGuiTableSortSpecsC2Ev"] = createExportWrapper("_ZN19ImGuiTableSortSpecsC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6TextExEPKcS1_i = Module["__ZN5ImGui6TextExEPKcS1_i"] = createExportWrapper("_ZN5ImGui6TextExEPKcS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12TextColoredVERK6ImVec4PKcPv = Module["__ZN5ImGui12TextColoredVERK6ImVec4PKcPv"] = createExportWrapper("_ZN5ImGui12TextColoredVERK6ImVec4PKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13TextDisabledVEPKcPv = Module["__ZN5ImGui13TextDisabledVEPKcPv"] = createExportWrapper("_ZN5ImGui13TextDisabledVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TextWrappedEPKcz = Module["__ZN5ImGui11TextWrappedEPKcz"] = createExportWrapper("_ZN5ImGui11TextWrappedEPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12TextWrappedVEPKcPv = Module["__ZN5ImGui12TextWrappedVEPKcPv"] = createExportWrapper("_ZN5ImGui12TextWrappedVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9LabelTextEPKcS1_z = Module["__ZN5ImGui9LabelTextEPKcS1_z"] = createExportWrapper("_ZN5ImGui9LabelTextEPKcS1_z");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10LabelTextVEPKcS1_Pv = Module["__ZN5ImGui10LabelTextVEPKcS1_Pv"] = createExportWrapper("_ZN5ImGui10LabelTextVEPKcS1_Pv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11BulletTextVEPKcPv = Module["__ZN5ImGui11BulletTextVEPKcPv"] = createExportWrapper("_ZN5ImGui11BulletTextVEPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8ButtonExEPKcRK6ImVec2i = Module["__ZN5ImGui8ButtonExEPKcRK6ImVec2i"] = createExportWrapper("_ZN5ImGui8ButtonExEPKcRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15InvisibleButtonEPKcRK6ImVec2i = Module["__ZN5ImGui15InvisibleButtonEPKcRK6ImVec2i"] = createExportWrapper("_ZN5ImGui15InvisibleButtonEPKcRK6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ArrowButtonExEPKci6ImVec2i = Module["__ZN5ImGui13ArrowButtonExEPKci6ImVec2i"] = createExportWrapper("_ZN5ImGui13ArrowButtonExEPKci6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11ArrowButtonEPKci = Module["__ZN5ImGui11ArrowButtonEPKci"] = createExportWrapper("_ZN5ImGui11ArrowButtonEPKci");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect7GetAreaEv = Module["__ZNK6ImRect7GetAreaEv"] = createExportWrapper("_ZNK6ImRect7GetAreaEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect9GetCenterEv = Module["__ZNK6ImRect9GetCenterEv"] = createExportWrapper("_ZNK6ImRect9GetCenterEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20GetWindowScrollbarIDEP11ImGuiWindow9ImGuiAxis = Module["__ZN5ImGui20GetWindowScrollbarIDEP11ImGuiWindow9ImGuiAxis"] = createExportWrapper("_ZN5ImGui20GetWindowScrollbarIDEP11ImGuiWindow9ImGuiAxis");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22GetWindowScrollbarRectEP11ImGuiWindow9ImGuiAxis = Module["__ZN5ImGui22GetWindowScrollbarRectEP11ImGuiWindow9ImGuiAxis"] = createExportWrapper("_ZN5ImGui22GetWindowScrollbarRectEP11ImGuiWindow9ImGuiAxis");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11ScrollbarExERK6ImRectj9ImGuiAxisPxxxi = Module["__ZN5ImGui11ScrollbarExERK6ImRectj9ImGuiAxisPxxxi"] = createExportWrapper("_ZN5ImGui11ScrollbarExERK6ImRectj9ImGuiAxisPxxxi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ImageButtonExEjPvRK6ImVec2S3_S3_RK6ImVec4S6_ = Module["__ZN5ImGui13ImageButtonExEjPvRK6ImVec2S3_S3_RK6ImVec4S6_"] = createExportWrapper("_ZN5ImGui13ImageButtonExEjPvRK6ImVec2S3_S3_RK6ImVec4S6_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11ImageButtonEPKcPvRK6ImVec2S5_S5_RK6ImVec4S8_ = Module["__ZN5ImGui11ImageButtonEPKcPvRK6ImVec2S5_S5_RK6ImVec4S8_"] = createExportWrapper("_ZN5ImGui11ImageButtonEPKcPvRK6ImVec2S5_S5_RK6ImVec4S8_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11ImageButtonEPvRK6ImVec2S3_S3_iRK6ImVec4S6_ = Module["__ZN5ImGui11ImageButtonEPvRK6ImVec2S3_S3_iRK6ImVec4S6_"] = createExportWrapper("_ZN5ImGui11ImageButtonEPvRK6ImVec2S3_S3_iRK6ImVec4S6_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14CheckboxFlagsTIiEEbPKcPT_S3_ = Module["__ZN5ImGui14CheckboxFlagsTIiEEbPKcPT_S3_"] = createExportWrapper("_ZN5ImGui14CheckboxFlagsTIiEEbPKcPT_S3_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13CheckboxFlagsEPKcPjj = Module["__ZN5ImGui13CheckboxFlagsEPKcPjj"] = createExportWrapper("_ZN5ImGui13CheckboxFlagsEPKcPjj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14CheckboxFlagsTIjEEbPKcPT_S3_ = Module["__ZN5ImGui14CheckboxFlagsTIjEEbPKcPT_S3_"] = createExportWrapper("_ZN5ImGui14CheckboxFlagsTIjEEbPKcPT_S3_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13CheckboxFlagsEPKcPxx = Module["__ZN5ImGui13CheckboxFlagsEPKcPxx"] = createExportWrapper("_ZN5ImGui13CheckboxFlagsEPKcPxx");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14CheckboxFlagsTIxEEbPKcPT_S3_ = Module["__ZN5ImGui14CheckboxFlagsTIxEEbPKcPT_S3_"] = createExportWrapper("_ZN5ImGui14CheckboxFlagsTIxEEbPKcPT_S3_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13CheckboxFlagsEPKcPyy = Module["__ZN5ImGui13CheckboxFlagsEPKcPyy"] = createExportWrapper("_ZN5ImGui13CheckboxFlagsEPKcPyy");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14CheckboxFlagsTIyEEbPKcPT_S3_ = Module["__ZN5ImGui14CheckboxFlagsTIyEEbPKcPT_S3_"] = createExportWrapper("_ZN5ImGui14CheckboxFlagsTIyEEbPKcPT_S3_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11RadioButtonEPKcb = Module["__ZN5ImGui11RadioButtonEPKcb"] = createExportWrapper("_ZN5ImGui11RadioButtonEPKcb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11RadioButtonEPKcPii = Module["__ZN5ImGui11RadioButtonEPKcPii"] = createExportWrapper("_ZN5ImGui11RadioButtonEPKcPii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11ProgressBarEfRK6ImVec2PKc = Module["__ZN5ImGui11ProgressBarEfRK6ImVec2PKc"] = createExportWrapper("_ZN5ImGui11ProgressBarEfRK6ImVec2PKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7SpacingEv = Module["__ZN5ImGui7SpacingEv"] = createExportWrapper("_ZN5ImGui7SpacingEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7NewLineEv = Module["__ZN5ImGui7NewLineEv"] = createExportWrapper("_ZN5ImGui7NewLineEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11SeparatorExEi = Module["__ZN5ImGui11SeparatorExEi"] = createExportWrapper("_ZN5ImGui11SeparatorExEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16SplitterBehaviorERK6ImRectj9ImGuiAxisPfS4_ffff = Module["__ZN5ImGui16SplitterBehaviorERK6ImRectj9ImGuiAxisPfS4_ffff"] = createExportWrapper("_ZN5ImGui16SplitterBehaviorERK6ImRectj9ImGuiAxisPfS4_ffff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ShrinkWidthsEP20ImGuiShrinkWidthItemif = Module["__ZN5ImGui12ShrinkWidthsEP20ImGuiShrinkWidthItemif"] = createExportWrapper("_ZN5ImGui12ShrinkWidthsEP20ImGuiShrinkWidthItemif");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10BeginComboEPKcS1_i = Module["__ZN5ImGui10BeginComboEPKcS1_i"] = createExportWrapper("_ZN5ImGui10BeginComboEPKcS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15BeginComboPopupEjRK6ImRecti = Module["__ZN5ImGui15BeginComboPopupEjRK6ImRecti"] = createExportWrapper("_ZN5ImGui15BeginComboPopupEjRK6ImRecti");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8EndComboEv = Module["__ZN5ImGui8EndComboEv"] = createExportWrapper("_ZN5ImGui8EndComboEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17BeginComboPreviewEv = Module["__ZN5ImGui17BeginComboPreviewEv"] = createExportWrapper("_ZN5ImGui17BeginComboPreviewEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15EndComboPreviewEv = Module["__ZN5ImGui15EndComboPreviewEv"] = createExportWrapper("_ZN5ImGui15EndComboPreviewEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ComboEPKcPiPFbPviPS1_ES3_ii = Module["__ZN5ImGui5ComboEPKcPiPFbPviPS1_ES3_ii"] = createExportWrapper("_ZN5ImGui5ComboEPKcPiPFbPviPS1_ES3_ii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ComboEPKcPiS1_i = Module["__ZN5ImGui5ComboEPKcPiS1_i"] = createExportWrapper("_ZN5ImGui5ComboEPKcPiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DataTypeGetInfoEi = Module["__ZN5ImGui15DataTypeGetInfoEi"] = createExportWrapper("_ZN5ImGui15DataTypeGetInfoEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20DataTypeFormatStringEPciiPKvPKc = Module["__ZN5ImGui20DataTypeFormatStringEPciiPKvPKc"] = createExportWrapper("_ZN5ImGui20DataTypeFormatStringEPciiPKvPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DataTypeApplyOpEiiPvPKvS2_ = Module["__ZN5ImGui15DataTypeApplyOpEiiPvPKvS2_"] = createExportWrapper("_ZN5ImGui15DataTypeApplyOpEiiPvPKvS2_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21DataTypeApplyFromTextEPKciPvS1_ = Module["__ZN5ImGui21DataTypeApplyFromTextEPKciPvS1_"] = createExportWrapper("_ZN5ImGui21DataTypeApplyFromTextEPKciPvS1_");
+
+/** @type {function(...*):?} */
+var __Z32ImParseFormatSanitizeForScanningPKcPcm = Module["__Z32ImParseFormatSanitizeForScanningPKcPcm"] = createExportWrapper("_Z32ImParseFormatSanitizeForScanningPKcPcm");
+
+/** @type {function(...*):?} */
+var __Z20ImParseFormatFindEndPKc = Module["__Z20ImParseFormatFindEndPKc"] = createExportWrapper("_Z20ImParseFormatFindEndPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DataTypeCompareEiPKvS1_ = Module["__ZN5ImGui15DataTypeCompareEiPKvS1_"] = createExportWrapper("_ZN5ImGui15DataTypeCompareEiPKvS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DataTypeClampEiPvPKvS2_ = Module["__ZN5ImGui13DataTypeClampEiPvPKvS2_"] = createExportWrapper("_ZN5ImGui13DataTypeClampEiPvPKvS2_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12DragBehaviorEjiPvfPKvS2_PKci = Module["__ZN5ImGui12DragBehaviorEjiPvfPKvS2_PKci"] = createExportWrapper("_ZN5ImGui12DragBehaviorEjiPvfPKvS2_PKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragBehaviorTIiifEEbiPT_fS1_S1_PKci = Module["__ZN5ImGui13DragBehaviorTIiifEEbiPT_fS1_S1_PKci"] = createExportWrapper("_ZN5ImGui13DragBehaviorTIiifEEbiPT_fS1_S1_PKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragBehaviorTIjifEEbiPT_fS1_S1_PKci = Module["__ZN5ImGui13DragBehaviorTIjifEEbiPT_fS1_S1_PKci"] = createExportWrapper("_ZN5ImGui13DragBehaviorTIjifEEbiPT_fS1_S1_PKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragBehaviorTIxxdEEbiPT_fS1_S1_PKci = Module["__ZN5ImGui13DragBehaviorTIxxdEEbiPT_fS1_S1_PKci"] = createExportWrapper("_ZN5ImGui13DragBehaviorTIxxdEEbiPT_fS1_S1_PKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragBehaviorTIyxdEEbiPT_fS1_S1_PKci = Module["__ZN5ImGui13DragBehaviorTIyxdEEbiPT_fS1_S1_PKci"] = createExportWrapper("_ZN5ImGui13DragBehaviorTIyxdEEbiPT_fS1_S1_PKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragBehaviorTIfffEEbiPT_fS1_S1_PKci = Module["__ZN5ImGui13DragBehaviorTIfffEEbiPT_fS1_S1_PKci"] = createExportWrapper("_ZN5ImGui13DragBehaviorTIfffEEbiPT_fS1_S1_PKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragBehaviorTIdddEEbiPT_fS1_S1_PKci = Module["__ZN5ImGui13DragBehaviorTIdddEEbiPT_fS1_S1_PKci"] = createExportWrapper("_ZN5ImGui13DragBehaviorTIdddEEbiPT_fS1_S1_PKci");
+
+/** @type {function(...*):?} */
+var __Z22ImParseFormatPrecisionPKci = Module["__Z22ImParseFormatPrecisionPKci"] = createExportWrapper("_Z22ImParseFormatPrecisionPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleRatioFromValueTIiifEEfiT_S1_S1_bff = Module["__ZN5ImGui20ScaleRatioFromValueTIiifEEfiT_S1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleRatioFromValueTIiifEEfiT_S1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleValueFromRatioTIiifEET_ifS1_S1_bff = Module["__ZN5ImGui20ScaleValueFromRatioTIiifEET_ifS1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleValueFromRatioTIiifEET_ifS1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RoundScalarWithFormatTIiEET_PKciS1_ = Module["__ZN5ImGui22RoundScalarWithFormatTIiEET_PKciS1_"] = createExportWrapper("_ZN5ImGui22RoundScalarWithFormatTIiEET_PKciS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleRatioFromValueTIjifEEfiT_S1_S1_bff = Module["__ZN5ImGui20ScaleRatioFromValueTIjifEEfiT_S1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleRatioFromValueTIjifEEfiT_S1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleValueFromRatioTIjifEET_ifS1_S1_bff = Module["__ZN5ImGui20ScaleValueFromRatioTIjifEET_ifS1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleValueFromRatioTIjifEET_ifS1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RoundScalarWithFormatTIjEET_PKciS1_ = Module["__ZN5ImGui22RoundScalarWithFormatTIjEET_PKciS1_"] = createExportWrapper("_ZN5ImGui22RoundScalarWithFormatTIjEET_PKciS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleRatioFromValueTIxxdEEfiT_S1_S1_bff = Module["__ZN5ImGui20ScaleRatioFromValueTIxxdEEfiT_S1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleRatioFromValueTIxxdEEfiT_S1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleValueFromRatioTIxxdEET_ifS1_S1_bff = Module["__ZN5ImGui20ScaleValueFromRatioTIxxdEET_ifS1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleValueFromRatioTIxxdEET_ifS1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RoundScalarWithFormatTIxEET_PKciS1_ = Module["__ZN5ImGui22RoundScalarWithFormatTIxEET_PKciS1_"] = createExportWrapper("_ZN5ImGui22RoundScalarWithFormatTIxEET_PKciS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleRatioFromValueTIyxdEEfiT_S1_S1_bff = Module["__ZN5ImGui20ScaleRatioFromValueTIyxdEEfiT_S1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleRatioFromValueTIyxdEEfiT_S1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleValueFromRatioTIyxdEET_ifS1_S1_bff = Module["__ZN5ImGui20ScaleValueFromRatioTIyxdEET_ifS1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleValueFromRatioTIyxdEET_ifS1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RoundScalarWithFormatTIyEET_PKciS1_ = Module["__ZN5ImGui22RoundScalarWithFormatTIyEET_PKciS1_"] = createExportWrapper("_ZN5ImGui22RoundScalarWithFormatTIyEET_PKciS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleRatioFromValueTIfffEEfiT_S1_S1_bff = Module["__ZN5ImGui20ScaleRatioFromValueTIfffEEfiT_S1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleRatioFromValueTIfffEEfiT_S1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleValueFromRatioTIfffEET_ifS1_S1_bff = Module["__ZN5ImGui20ScaleValueFromRatioTIfffEET_ifS1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleValueFromRatioTIfffEET_ifS1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RoundScalarWithFormatTIfEET_PKciS1_ = Module["__ZN5ImGui22RoundScalarWithFormatTIfEET_PKciS1_"] = createExportWrapper("_ZN5ImGui22RoundScalarWithFormatTIfEET_PKciS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleRatioFromValueTIdddEEfiT_S1_S1_bff = Module["__ZN5ImGui20ScaleRatioFromValueTIdddEEfiT_S1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleRatioFromValueTIdddEEfiT_S1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20ScaleValueFromRatioTIdddEET_ifS1_S1_bff = Module["__ZN5ImGui20ScaleValueFromRatioTIdddEET_ifS1_S1_bff"] = createExportWrapper("_ZN5ImGui20ScaleValueFromRatioTIdddEET_ifS1_S1_bff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22RoundScalarWithFormatTIdEET_PKciS1_ = Module["__ZN5ImGui22RoundScalarWithFormatTIdEET_PKciS1_"] = createExportWrapper("_ZN5ImGui22RoundScalarWithFormatTIdEET_PKciS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10DragScalarEPKciPvfPKvS4_S1_i = Module["__ZN5ImGui10DragScalarEPKciPvfPKvS4_S1_i"] = createExportWrapper("_ZN5ImGui10DragScalarEPKciPvfPKvS4_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TempInputIsActiveEj = Module["__ZN5ImGui17TempInputIsActiveEj"] = createExportWrapper("_ZN5ImGui17TempInputIsActiveEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TempInputScalarERK6ImRectjPKciPvS4_PKvS7_ = Module["__ZN5ImGui15TempInputScalarERK6ImRectjPKciPvS4_PKvS7_"] = createExportWrapper("_ZN5ImGui15TempInputScalarERK6ImRectjPKciPvS4_PKvS7_");
+
+/** @type {function(...*):?} */
+var __Z22ImParseFormatFindStartPKc = Module["__Z22ImParseFormatFindStartPKc"] = createExportWrapper("_Z22ImParseFormatFindStartPKc");
+
+/** @type {function(...*):?} */
+var __Z28ImParseFormatTrimDecorationsPKcPcm = Module["__Z28ImParseFormatTrimDecorationsPKcPcm"] = createExportWrapper("_Z28ImParseFormatTrimDecorationsPKcPcm");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13TempInputTextERK6ImRectjPKcPcii = Module["__ZN5ImGui13TempInputTextERK6ImRectjPKcPcii"] = createExportWrapper("_ZN5ImGui13TempInputTextERK6ImRectjPKcPcii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11DragScalarNEPKciPvifPKvS4_S1_i = Module["__ZN5ImGui11DragScalarNEPKciPvifPKvS4_S1_i"] = createExportWrapper("_ZN5ImGui11DragScalarNEPKciPvifPKvS4_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10DragFloat2EPKcPffffS1_i = Module["__ZN5ImGui10DragFloat2EPKcPffffS1_i"] = createExportWrapper("_ZN5ImGui10DragFloat2EPKcPffffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10DragFloat3EPKcPffffS1_i = Module["__ZN5ImGui10DragFloat3EPKcPffffS1_i"] = createExportWrapper("_ZN5ImGui10DragFloat3EPKcPffffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10DragFloat4EPKcPffffS1_i = Module["__ZN5ImGui10DragFloat4EPKcPffffS1_i"] = createExportWrapper("_ZN5ImGui10DragFloat4EPKcPffffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15DragFloatRange2EPKcPfS2_fffS1_S1_i = Module["__ZN5ImGui15DragFloatRange2EPKcPfS2_fffS1_S1_i"] = createExportWrapper("_ZN5ImGui15DragFloatRange2EPKcPfS2_fffS1_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7DragIntEPKcPifiiS1_i = Module["__ZN5ImGui7DragIntEPKcPifiiS1_i"] = createExportWrapper("_ZN5ImGui7DragIntEPKcPifiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8DragInt2EPKcPifiiS1_i = Module["__ZN5ImGui8DragInt2EPKcPifiiS1_i"] = createExportWrapper("_ZN5ImGui8DragInt2EPKcPifiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8DragInt3EPKcPifiiS1_i = Module["__ZN5ImGui8DragInt3EPKcPifiiS1_i"] = createExportWrapper("_ZN5ImGui8DragInt3EPKcPifiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8DragInt4EPKcPifiiS1_i = Module["__ZN5ImGui8DragInt4EPKcPifiiS1_i"] = createExportWrapper("_ZN5ImGui8DragInt4EPKcPifiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13DragIntRange2EPKcPiS2_fiiS1_S1_i = Module["__ZN5ImGui13DragIntRange2EPKcPiS2_fiiS1_S1_i"] = createExportWrapper("_ZN5ImGui13DragIntRange2EPKcPiS2_fiiS1_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14SliderBehaviorERK6ImRectjiPvPKvS5_PKciPS0_ = Module["__ZN5ImGui14SliderBehaviorERK6ImRectjiPvPKvS5_PKciPS0_"] = createExportWrapper("_ZN5ImGui14SliderBehaviorERK6ImRectjiPvPKvS5_PKciPS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SliderBehaviorTIiifEEbRK6ImRectjiPT_S4_S4_PKciPS1_ = Module["__ZN5ImGui15SliderBehaviorTIiifEEbRK6ImRectjiPT_S4_S4_PKciPS1_"] = createExportWrapper("_ZN5ImGui15SliderBehaviorTIiifEEbRK6ImRectjiPT_S4_S4_PKciPS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SliderBehaviorTIjifEEbRK6ImRectjiPT_S4_S4_PKciPS1_ = Module["__ZN5ImGui15SliderBehaviorTIjifEEbRK6ImRectjiPT_S4_S4_PKciPS1_"] = createExportWrapper("_ZN5ImGui15SliderBehaviorTIjifEEbRK6ImRectjiPT_S4_S4_PKciPS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SliderBehaviorTIxxdEEbRK6ImRectjiPT_S4_S4_PKciPS1_ = Module["__ZN5ImGui15SliderBehaviorTIxxdEEbRK6ImRectjiPT_S4_S4_PKciPS1_"] = createExportWrapper("_ZN5ImGui15SliderBehaviorTIxxdEEbRK6ImRectjiPT_S4_S4_PKciPS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SliderBehaviorTIyxdEEbRK6ImRectjiPT_S4_S4_PKciPS1_ = Module["__ZN5ImGui15SliderBehaviorTIyxdEEbRK6ImRectjiPT_S4_S4_PKciPS1_"] = createExportWrapper("_ZN5ImGui15SliderBehaviorTIyxdEEbRK6ImRectjiPT_S4_S4_PKciPS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SliderBehaviorTIfffEEbRK6ImRectjiPT_S4_S4_PKciPS1_ = Module["__ZN5ImGui15SliderBehaviorTIfffEEbRK6ImRectjiPT_S4_S4_PKciPS1_"] = createExportWrapper("_ZN5ImGui15SliderBehaviorTIfffEEbRK6ImRectjiPT_S4_S4_PKciPS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15SliderBehaviorTIdddEEbRK6ImRectjiPT_S4_S4_PKciPS1_ = Module["__ZN5ImGui15SliderBehaviorTIdddEEbRK6ImRectjiPT_S4_S4_PKciPS1_"] = createExportWrapper("_ZN5ImGui15SliderBehaviorTIdddEEbRK6ImRectjiPT_S4_S4_PKciPS1_");
+
+/** @type {function(...*):?} */
+var __ZNK6ImVec2ixEm = Module["__ZNK6ImVec2ixEm"] = createExportWrapper("_ZNK6ImVec2ixEm");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SliderScalarEPKciPvPKvS4_S1_i = Module["__ZN5ImGui12SliderScalarEPKciPvPKvS4_S1_i"] = createExportWrapper("_ZN5ImGui12SliderScalarEPKciPvPKvS4_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13SliderScalarNEPKciPviPKvS4_S1_i = Module["__ZN5ImGui13SliderScalarNEPKciPviPKvS4_S1_i"] = createExportWrapper("_ZN5ImGui13SliderScalarNEPKciPviPKvS4_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11SliderFloatEPKcPfffS1_i = Module["__ZN5ImGui11SliderFloatEPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui11SliderFloatEPKcPfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SliderFloat2EPKcPfffS1_i = Module["__ZN5ImGui12SliderFloat2EPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui12SliderFloat2EPKcPfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SliderFloat3EPKcPfffS1_i = Module["__ZN5ImGui12SliderFloat3EPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui12SliderFloat3EPKcPfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12SliderFloat4EPKcPfffS1_i = Module["__ZN5ImGui12SliderFloat4EPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui12SliderFloat4EPKcPfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11SliderAngleEPKcPfffS1_i = Module["__ZN5ImGui11SliderAngleEPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui11SliderAngleEPKcPfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SliderInt2EPKcPiiiS1_i = Module["__ZN5ImGui10SliderInt2EPKcPiiiS1_i"] = createExportWrapper("_ZN5ImGui10SliderInt2EPKcPiiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SliderInt3EPKcPiiiS1_i = Module["__ZN5ImGui10SliderInt3EPKcPiiiS1_i"] = createExportWrapper("_ZN5ImGui10SliderInt3EPKcPiiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SliderInt4EPKcPiiiS1_i = Module["__ZN5ImGui10SliderInt4EPKcPiiiS1_i"] = createExportWrapper("_ZN5ImGui10SliderInt4EPKcPiiiS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13VSliderScalarEPKcRK6ImVec2iPvPKvS7_S1_i = Module["__ZN5ImGui13VSliderScalarEPKcRK6ImVec2iPvPKvS7_S1_i"] = createExportWrapper("_ZN5ImGui13VSliderScalarEPKcRK6ImVec2iPvPKvS7_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12VSliderFloatEPKcRK6ImVec2PfffS1_i = Module["__ZN5ImGui12VSliderFloatEPKcRK6ImVec2PfffS1_i"] = createExportWrapper("_ZN5ImGui12VSliderFloatEPKcRK6ImVec2PfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10VSliderIntEPKcRK6ImVec2PiiiS1_i = Module["__ZN5ImGui10VSliderIntEPKcRK6ImVec2PiiiS1_i"] = createExportWrapper("_ZN5ImGui10VSliderIntEPKcRK6ImVec2PiiiS1_i");
+
+/** @type {function(...*):?} */
+var __Z32ImParseFormatSanitizeForPrintingPKcPcm = Module["__Z32ImParseFormatSanitizeForPrintingPKcPcm"] = createExportWrapper("_Z32ImParseFormatSanitizeForPrintingPKcPcm");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11InputTextExEPKcS1_PciRK6ImVec2iPFiP26ImGuiInputTextCallbackDataEPv = Module["__ZN5ImGui11InputTextExEPKcS1_PciRK6ImVec2iPFiP26ImGuiInputTextCallbackDataEPv"] = createExportWrapper("_ZN5ImGui11InputTextExEPKcS1_PciRK6ImVec2iPFiP26ImGuiInputTextCallbackDataEPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17GetInputTextStateEj = Module["__ZN5ImGui17GetInputTextStateEj"] = createExportWrapper("_ZN5ImGui17GetInputTextStateEj");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextState15CursorAnimResetEv = Module["__ZN19ImGuiInputTextState15CursorAnimResetEv"] = createExportWrapper("_ZN19ImGuiInputTextState15CursorAnimResetEv");
+
+/** @type {function(...*):?} */
+var _strncmp = Module["_strncmp"] = createExportWrapper("strncmp");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextState11CursorClampEv = Module["__ZN19ImGuiInputTextState11CursorClampEv"] = createExportWrapper("_ZN19ImGuiInputTextState11CursorClampEv");
+
+/** @type {function(...*):?} */
+var __ZNK19ImGuiInputTextState12HasSelectionEv = Module["__ZNK19ImGuiInputTextState12HasSelectionEv"] = createExportWrapper("_ZNK19ImGuiInputTextState12HasSelectionEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI11ImFontGlyphE5emptyEv = Module["__ZNK8ImVectorI11ImFontGlyphE5emptyEv"] = createExportWrapper("_ZNK8ImVectorI11ImFontGlyphE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIfE5emptyEv = Module["__ZNK8ImVectorIfE5emptyEv"] = createExportWrapper("_ZNK8ImVectorIfE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextState9SelectAllEv = Module["__ZN19ImGuiInputTextState9SelectAllEv"] = createExportWrapper("_ZN19ImGuiInputTextState9SelectAllEv");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextState12OnKeyPressedEi = Module["__ZN19ImGuiInputTextState12OnKeyPressedEi"] = createExportWrapper("_ZN19ImGuiInputTextState12OnKeyPressedEi");
+
+/** @type {function(...*):?} */
+var __ZN19ImGuiInputTextState14ClearSelectionEv = Module["__ZN19ImGuiInputTextState14ClearSelectionEv"] = createExportWrapper("_ZN19ImGuiInputTextState14ClearSelectionEv");
+
+/** @type {function(...*):?} */
+var __ZN26ImGuiInputTextCallbackDataC1Ev = Module["__ZN26ImGuiInputTextCallbackDataC1Ev"] = createExportWrapper("_ZN26ImGuiInputTextCallbackDataC1Ev");
+
+/** @type {function(...*):?} */
+var __ZNK6ImFont14GetCharAdvanceEt = Module["__ZNK6ImFont14GetCharAdvanceEt"] = createExportWrapper("_ZNK6ImFont14GetCharAdvanceEt");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11InputScalarEPKciPvPKvS4_S1_i = Module["__ZN5ImGui11InputScalarEPKciPvPKvS4_S1_i"] = createExportWrapper("_ZN5ImGui11InputScalarEPKciPvPKvS4_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12InputScalarNEPKciPviPKvS4_S1_i = Module["__ZN5ImGui12InputScalarNEPKciPviPKvS4_S1_i"] = createExportWrapper("_ZN5ImGui12InputScalarNEPKciPviPKvS4_S1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10InputFloatEPKcPfffS1_i = Module["__ZN5ImGui10InputFloatEPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui10InputFloatEPKcPfffS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11InputFloat2EPKcPfS1_i = Module["__ZN5ImGui11InputFloat2EPKcPfS1_i"] = createExportWrapper("_ZN5ImGui11InputFloat2EPKcPfS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11InputFloat3EPKcPfS1_i = Module["__ZN5ImGui11InputFloat3EPKcPfS1_i"] = createExportWrapper("_ZN5ImGui11InputFloat3EPKcPfS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11InputFloat4EPKcPfS1_i = Module["__ZN5ImGui11InputFloat4EPKcPfS1_i"] = createExportWrapper("_ZN5ImGui11InputFloat4EPKcPfS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8InputIntEPKcPiiii = Module["__ZN5ImGui8InputIntEPKcPiiii"] = createExportWrapper("_ZN5ImGui8InputIntEPKcPiiii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9InputInt2EPKcPii = Module["__ZN5ImGui9InputInt2EPKcPii"] = createExportWrapper("_ZN5ImGui9InputInt2EPKcPii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9InputInt3EPKcPii = Module["__ZN5ImGui9InputInt3EPKcPii"] = createExportWrapper("_ZN5ImGui9InputInt3EPKcPii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9InputInt4EPKcPii = Module["__ZN5ImGui9InputInt4EPKcPii"] = createExportWrapper("_ZN5ImGui9InputInt4EPKcPii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11InputDoubleEPKcPdddS1_i = Module["__ZN5ImGui11InputDoubleEPKcPdddS1_i"] = createExportWrapper("_ZN5ImGui11InputDoubleEPKcPdddS1_i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17InputTextWithHintEPKcS1_PcmiPFiP26ImGuiInputTextCallbackDataEPv = Module["__ZN5ImGui17InputTextWithHintEPKcS1_PcmiPFiP26ImGuiInputTextCallbackDataEPv"] = createExportWrapper("_ZN5ImGui17InputTextWithHintEPKcS1_PcmiPFiP26ImGuiInputTextCallbackDataEPv");
+
+/** @type {function(...*):?} */
+var __ZN26ImGuiInputTextCallbackDataC2Ev = Module["__ZN26ImGuiInputTextCallbackDataC2Ev"] = createExportWrapper("_ZN26ImGuiInputTextCallbackDataC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN26ImGuiInputTextCallbackData11DeleteCharsEii = Module["__ZN26ImGuiInputTextCallbackData11DeleteCharsEii"] = createExportWrapper("_ZN26ImGuiInputTextCallbackData11DeleteCharsEii");
+
+/** @type {function(...*):?} */
+var __ZN26ImGuiInputTextCallbackData11InsertCharsEiPKcS1_ = Module["__ZN26ImGuiInputTextCallbackData11InsertCharsEiPKcS1_"] = createExportWrapper("_ZN26ImGuiInputTextCallbackData11InsertCharsEiPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorItEixEi = Module["__ZNK8ImVectorItEixEi"] = createExportWrapper("_ZNK8ImVectorItEixEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorIcE15reserve_discardEi = Module["__ZN8ImVectorIcE15reserve_discardEi"] = createExportWrapper("_ZN8ImVectorIcE15reserve_discardEi");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIfEixEi = Module["__ZNK8ImVectorIfEixEi"] = createExportWrapper("_ZNK8ImVectorIfEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10ColorEdit3EPKcPfi = Module["__ZN5ImGui10ColorEdit3EPKcPfi"] = createExportWrapper("_ZN5ImGui10ColorEdit3EPKcPfi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10ColorEdit4EPKcPfi = Module["__ZN5ImGui10ColorEdit4EPKcPfi"] = createExportWrapper("_ZN5ImGui10ColorEdit4EPKcPfi");
+
+/** @type {function(...*):?} */
+var __ZN17ImGuiNextItemData10ClearFlagsEv = Module["__ZN17ImGuiNextItemData10ClearFlagsEv"] = createExportWrapper("_ZN17ImGuiNextItemData10ClearFlagsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui21ColorEditOptionsPopupEPKfi = Module["__ZN5ImGui21ColorEditOptionsPopupEPKfi"] = createExportWrapper("_ZN5ImGui21ColorEditOptionsPopupEPKfi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11ColorButtonEPKcRK6ImVec4iRK6ImVec2 = Module["__ZN5ImGui11ColorButtonEPKcRK6ImVec4iRK6ImVec2"] = createExportWrapper("_ZN5ImGui11ColorButtonEPKcRK6ImVec4iRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ColorPicker4EPKcPfiPKf = Module["__ZN5ImGui12ColorPicker4EPKcPfiPKf"] = createExportWrapper("_ZN5ImGui12ColorPicker4EPKcPfiPKf");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ColorTooltipEPKcPKfi = Module["__ZN5ImGui12ColorTooltipEPKcPKfi"] = createExportWrapper("_ZN5ImGui12ColorTooltipEPKcPKfi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui23ColorPickerOptionsPopupEPKfi = Module["__ZN5ImGui23ColorPickerOptionsPopupEPKfi"] = createExportWrapper("_ZN5ImGui23ColorPickerOptionsPopupEPKfi");
+
+/** @type {function(...*):?} */
+var _atan2f = Module["_atan2f"] = createExportWrapper("atan2f");
+
+/** @type {function(...*):?} */
+var __ZN10ImDrawList7PrimVtxERK6ImVec2S2_j = Module["__ZN10ImDrawList7PrimVtxERK6ImVec2S2_j"] = createExportWrapper("_ZN10ImDrawList7PrimVtxERK6ImVec2S2_j");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12ColorPicker3EPKcPfi = Module["__ZN5ImGui12ColorPicker3EPKcPfi"] = createExportWrapper("_ZN5ImGui12ColorPicker3EPKcPfi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui19SetColorEditOptionsEi = Module["__ZN5ImGui19SetColorEditOptionsEi"] = createExportWrapper("_ZN5ImGui19SetColorEditOptionsEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TreeNodeExVEPKciS1_Pv = Module["__ZN5ImGui11TreeNodeExVEPKciS1_Pv"] = createExportWrapper("_ZN5ImGui11TreeNodeExVEPKciS1_Pv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16TreeNodeBehaviorEjiPKcS1_ = Module["__ZN5ImGui16TreeNodeBehaviorEjiPKcS1_"] = createExportWrapper("_ZN5ImGui16TreeNodeBehaviorEjiPKcS1_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11TreeNodeExVEPKviPKcPv = Module["__ZN5ImGui11TreeNodeExVEPKviPKcPv"] = createExportWrapper("_ZN5ImGui11TreeNodeExVEPKviPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui22TreeNodeUpdateNextOpenEji = Module["__ZN5ImGui22TreeNodeUpdateNextOpenEji"] = createExportWrapper("_ZN5ImGui22TreeNodeUpdateNextOpenEji");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui18TreePushOverrideIDEj = Module["__ZN5ImGui18TreePushOverrideIDEj"] = createExportWrapper("_ZN5ImGui18TreePushOverrideIDEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9TreeNodeVEPKcS1_Pv = Module["__ZN5ImGui9TreeNodeVEPKcS1_Pv"] = createExportWrapper("_ZN5ImGui9TreeNodeVEPKcS1_Pv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9TreeNodeVEPKvPKcPv = Module["__ZN5ImGui9TreeNodeVEPKvPKcPv"] = createExportWrapper("_ZN5ImGui9TreeNodeVEPKvPKcPv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10TreeNodeExEPKci = Module["__ZN5ImGui10TreeNodeExEPKci"] = createExportWrapper("_ZN5ImGui10TreeNodeExEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10TreeNodeExEPKviPKcz = Module["__ZN5ImGui10TreeNodeExEPKviPKcz"] = createExportWrapper("_ZN5ImGui10TreeNodeExEPKviPKcz");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TreeNodeSetOpenEjb = Module["__ZN5ImGui15TreeNodeSetOpenEjb"] = createExportWrapper("_ZN5ImGui15TreeNodeSetOpenEjb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8TreePushEPKc = Module["__ZN5ImGui8TreePushEPKc"] = createExportWrapper("_ZN5ImGui8TreePushEPKc");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8TreePushEPKv = Module["__ZN5ImGui8TreePushEPKv"] = createExportWrapper("_ZN5ImGui8TreePushEPKv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16CollapsingHeaderEPKci = Module["__ZN5ImGui16CollapsingHeaderEPKci"] = createExportWrapper("_ZN5ImGui16CollapsingHeaderEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16CollapsingHeaderEPKcPbi = Module["__ZN5ImGui16CollapsingHeaderEPKcPbi"] = createExportWrapper("_ZN5ImGui16CollapsingHeaderEPKcPbi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10SelectableEPKcPbiRK6ImVec2 = Module["__ZN5ImGui10SelectableEPKcPbiRK6ImVec2"] = createExportWrapper("_ZN5ImGui10SelectableEPKcPbiRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginListBoxEPKcRK6ImVec2 = Module["__ZN5ImGui12BeginListBoxEPKcRK6ImVec2"] = createExportWrapper("_ZN5ImGui12BeginListBoxEPKcRK6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13ListBoxHeaderEPKcii = Module["__ZN5ImGui13ListBoxHeaderEPKcii"] = createExportWrapper("_ZN5ImGui13ListBoxHeaderEPKcii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10EndListBoxEv = Module["__ZN5ImGui10EndListBoxEv"] = createExportWrapper("_ZN5ImGui10EndListBoxEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7ListBoxEPKcPiPKS1_ii = Module["__ZN5ImGui7ListBoxEPKcPiPKS1_ii"] = createExportWrapper("_ZN5ImGui7ListBoxEPKcPiPKS1_ii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7ListBoxEPKcPiPFbPviPS1_ES3_ii = Module["__ZN5ImGui7ListBoxEPKcPiPFbPviPS1_ES3_ii"] = createExportWrapper("_ZN5ImGui7ListBoxEPKcPiPFbPviPS1_ES3_ii");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui6PlotExE13ImGuiPlotTypePKcPFfPviES3_iiS2_ff6ImVec2 = Module["__ZN5ImGui6PlotExE13ImGuiPlotTypePKcPFfPviES3_iiS2_ff6ImVec2"] = createExportWrapper("_ZN5ImGui6PlotExE13ImGuiPlotTypePKcPFfPviES3_iiS2_ff6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9PlotLinesEPKcPKfiiS1_ff6ImVec2i = Module["__ZN5ImGui9PlotLinesEPKcPKfiiS1_ff6ImVec2i"] = createExportWrapper("_ZN5ImGui9PlotLinesEPKcPKfiiS1_ff6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN24ImGuiPlotArrayGetterDataC2EPKfi = Module["__ZN24ImGuiPlotArrayGetterDataC2EPKfi"] = createExportWrapper("_ZN24ImGuiPlotArrayGetterDataC2EPKfi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9PlotLinesEPKcPFfPviES2_iiS1_ff6ImVec2 = Module["__ZN5ImGui9PlotLinesEPKcPFfPviES2_iiS1_ff6ImVec2"] = createExportWrapper("_ZN5ImGui9PlotLinesEPKcPFfPviES2_iiS1_ff6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13PlotHistogramEPKcPKfiiS1_ff6ImVec2i = Module["__ZN5ImGui13PlotHistogramEPKcPKfiiS1_ff6ImVec2i"] = createExportWrapper("_ZN5ImGui13PlotHistogramEPKcPKfiiS1_ff6ImVec2i");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13PlotHistogramEPKcPFfPviES2_iiS1_ff6ImVec2 = Module["__ZN5ImGui13PlotHistogramEPKcPFfPviES2_iiS1_ff6ImVec2"] = createExportWrapper("_ZN5ImGui13PlotHistogramEPKcPFfPviES2_iiS1_ff6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ValueEPKcb = Module["__ZN5ImGui5ValueEPKcb"] = createExportWrapper("_ZN5ImGui5ValueEPKcb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ValueEPKci = Module["__ZN5ImGui5ValueEPKci"] = createExportWrapper("_ZN5ImGui5ValueEPKci");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ValueEPKcj = Module["__ZN5ImGui5ValueEPKcj"] = createExportWrapper("_ZN5ImGui5ValueEPKcj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui5ValueEPKcfS1_ = Module["__ZN5ImGui5ValueEPKcfS1_"] = createExportWrapper("_ZN5ImGui5ValueEPKcfS1_");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiMenuColumns18CalcNextTotalWidthEb = Module["__ZN16ImGuiMenuColumns18CalcNextTotalWidthEb"] = createExportWrapper("_ZN16ImGuiMenuColumns18CalcNextTotalWidthEb");
+
+/** @type {function(...*):?} */
+var __ZN16ImGuiMenuColumns11DeclColumnsEffff = Module["__ZN16ImGuiMenuColumns11DeclColumnsEffff"] = createExportWrapper("_ZN16ImGuiMenuColumns11DeclColumnsEffff");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginMenuBarEv = Module["__ZN5ImGui12BeginMenuBarEv"] = createExportWrapper("_ZN5ImGui12BeginMenuBarEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10EndMenuBarEv = Module["__ZN5ImGui10EndMenuBarEv"] = createExportWrapper("_ZN5ImGui10EndMenuBarEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20BeginViewportSideBarEPKcP13ImGuiViewportifi = Module["__ZN5ImGui20BeginViewportSideBarEPKcP13ImGuiViewportifi"] = createExportWrapper("_ZN5ImGui20BeginViewportSideBarEPKcP13ImGuiViewportifi");
+
+/** @type {function(...*):?} */
+var __ZNK14ImGuiViewportP16GetBuildWorkRectEv = Module["__ZNK14ImGuiViewportP16GetBuildWorkRectEv"] = createExportWrapper("_ZNK14ImGuiViewportP16GetBuildWorkRectEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16BeginMainMenuBarEv = Module["__ZN5ImGui16BeginMainMenuBarEv"] = createExportWrapper("_ZN5ImGui16BeginMainMenuBarEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14EndMainMenuBarEv = Module["__ZN5ImGui14EndMainMenuBarEv"] = createExportWrapper("_ZN5ImGui14EndMainMenuBarEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11BeginMenuExEPKcS1_b = Module["__ZN5ImGui11BeginMenuExEPKcS1_b"] = createExportWrapper("_ZN5ImGui11BeginMenuExEPKcS1_b");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorIjE8containsERKj = Module["__ZNK8ImVectorIjE8containsERKj"] = createExportWrapper("_ZNK8ImVectorIjE8containsERKj");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect5GetTLEv = Module["__ZNK6ImRect5GetTLEv"] = createExportWrapper("_ZNK6ImRect5GetTLEv");
+
+/** @type {function(...*):?} */
+var __ZNK6ImRect5GetTREv = Module["__ZNK6ImRect5GetTREv"] = createExportWrapper("_ZNK6ImRect5GetTREv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9BeginMenuEPKcb = Module["__ZN5ImGui9BeginMenuEPKcb"] = createExportWrapper("_ZN5ImGui9BeginMenuEPKcb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui7EndMenuEv = Module["__ZN5ImGui7EndMenuEv"] = createExportWrapper("_ZN5ImGui7EndMenuEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10MenuItemExEPKcS1_S1_bb = Module["__ZN5ImGui10MenuItemExEPKcS1_S1_bb"] = createExportWrapper("_ZN5ImGui10MenuItemExEPKcS1_S1_bb");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui8MenuItemEPKcS1_Pbb = Module["__ZN5ImGui8MenuItemEPKcS1_Pbb"] = createExportWrapper("_ZN5ImGui8MenuItemEPKcS1_Pbb");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiTabBarC2Ev = Module["__ZN11ImGuiTabBarC2Ev"] = createExportWrapper("_ZN11ImGuiTabBarC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemEC2Ev = Module["__ZN8ImVectorI12ImGuiTabItemEC2Ev"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemEC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui11BeginTabBarEPKci = Module["__ZN5ImGui11BeginTabBarEPKci"] = createExportWrapper("_ZN5ImGui11BeginTabBarEPKci");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarE13GetOrAddByKeyEj = Module["__ZN6ImPoolI11ImGuiTabBarE13GetOrAddByKeyEj"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarE13GetOrAddByKeyEj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13BeginTabBarExEP11ImGuiTabBarRK6ImRecti = Module["__ZN5ImGui13BeginTabBarExEP11ImGuiTabBarRK6ImRecti"] = createExportWrapper("_ZN5ImGui13BeginTabBarExEP11ImGuiTabBarRK6ImRecti");
+
+/** @type {function(...*):?} */
+var __ZN6ImPoolI11ImGuiTabBarE3AddEv = Module["__ZN6ImPoolI11ImGuiTabBarE3AddEv"] = createExportWrapper("_ZN6ImPoolI11ImGuiTabBarE3AddEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexE9push_backERKS0_ = Module["__ZN8ImVectorI15ImGuiPtrOrIndexE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI15ImGuiPtrOrIndexE14_grow_capacityEi = Module["__ZNK8ImVectorI15ImGuiPtrOrIndexE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI15ImGuiPtrOrIndexE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexE7reserveEi = Module["__ZN8ImVectorI15ImGuiPtrOrIndexE7reserveEi"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI11ImGuiTabBarE8ContainsEPKS0_ = Module["__ZNK6ImPoolI11ImGuiTabBarE8ContainsEPKS0_"] = createExportWrapper("_ZNK6ImPoolI11ImGuiTabBarE8ContainsEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK6ImPoolI11ImGuiTabBarE8GetIndexEPKS0_ = Module["__ZNK6ImPoolI11ImGuiTabBarE8GetIndexEPKS0_"] = createExportWrapper("_ZNK6ImPoolI11ImGuiTabBarE8GetIndexEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiPtrOrIndexC2Ei = Module["__ZN15ImGuiPtrOrIndexC2Ei"] = createExportWrapper("_ZN15ImGuiPtrOrIndexC2Ei");
+
+/** @type {function(...*):?} */
+var __ZN15ImGuiPtrOrIndexC2EPv = Module["__ZN15ImGuiPtrOrIndexC2EPv"] = createExportWrapper("_ZN15ImGuiPtrOrIndexC2EPv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexE8pop_backEv = Module["__ZN8ImVectorI15ImGuiPtrOrIndexE8pop_backEv"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexE8pop_backEv");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI15ImGuiPtrOrIndexE5emptyEv = Module["__ZNK8ImVectorI15ImGuiPtrOrIndexE5emptyEv"] = createExportWrapper("_ZNK8ImVectorI15ImGuiPtrOrIndexE5emptyEv");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI15ImGuiPtrOrIndexE4backEv = Module["__ZN8ImVectorI15ImGuiPtrOrIndexE4backEv"] = createExportWrapper("_ZN8ImVectorI15ImGuiPtrOrIndexE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN18ImGuiTabBarSectionC2Ev = Module["__ZN18ImGuiTabBarSectionC2Ev"] = createExportWrapper("_ZN18ImGuiTabBarSectionC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemE6resizeEi = Module["__ZN8ImVectorI12ImGuiTabItemE6resizeEi"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui20TabBarProcessReorderEP11ImGuiTabBar = Module["__ZN5ImGui20TabBarProcessReorderEP11ImGuiTabBar"] = createExportWrapper("_ZN5ImGui20TabBarProcessReorderEP11ImGuiTabBar");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiShrinkWidthItemE6resizeEi = Module["__ZN8ImVectorI20ImGuiShrinkWidthItemE6resizeEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiShrinkWidthItemE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TabItemCalcSizeEPKcb = Module["__ZN5ImGui15TabItemCalcSizeEPKcb"] = createExportWrapper("_ZN5ImGui15TabItemCalcSizeEPKcb");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiShrinkWidthItemEixEi = Module["__ZN8ImVectorI20ImGuiShrinkWidthItemEixEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiShrinkWidthItemEixEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TabBarFindTabByIDEP11ImGuiTabBarj = Module["__ZN5ImGui17TabBarFindTabByIDEP11ImGuiTabBarj"] = createExportWrapper("_ZN5ImGui17TabBarFindTabByIDEP11ImGuiTabBarj");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui15TabBarRemoveTabEP11ImGuiTabBarj = Module["__ZN5ImGui15TabBarRemoveTabEP11ImGuiTabBarj"] = createExportWrapper("_ZN5ImGui15TabBarRemoveTabEP11ImGuiTabBarj");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemE5eraseEPKS0_ = Module["__ZN8ImVectorI12ImGuiTabItemE5eraseEPKS0_"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemE5eraseEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui14TabBarCloseTabEP11ImGuiTabBarP12ImGuiTabItem = Module["__ZN5ImGui14TabBarCloseTabEP11ImGuiTabBarP12ImGuiTabItem"] = createExportWrapper("_ZN5ImGui14TabBarCloseTabEP11ImGuiTabBarP12ImGuiTabItem");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui30TabBarQueueReorderFromMousePosEP11ImGuiTabBarPK12ImGuiTabItem6ImVec2 = Module["__ZN5ImGui30TabBarQueueReorderFromMousePosEP11ImGuiTabBarPK12ImGuiTabItem6ImVec2"] = createExportWrapper("_ZN5ImGui30TabBarQueueReorderFromMousePosEP11ImGuiTabBarPK12ImGuiTabItem6ImVec2");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI12ImGuiTabItemE14index_from_ptrEPKS0_ = Module["__ZNK8ImVectorI12ImGuiTabItemE14index_from_ptrEPKS0_"] = createExportWrapper("_ZNK8ImVectorI12ImGuiTabItemE14index_from_ptrEPKS0_");
+
+/** @type {function(...*):?} */
+var __ZNK11ImGuiTabBar11GetTabOrderEPK12ImGuiTabItem = Module["__ZNK11ImGuiTabBar11GetTabOrderEPK12ImGuiTabItem"] = createExportWrapper("_ZNK11ImGuiTabBar11GetTabOrderEPK12ImGuiTabItem");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui12BeginTabItemEPKcPbi = Module["__ZN5ImGui12BeginTabItemEPKcPbi"] = createExportWrapper("_ZN5ImGui12BeginTabItemEPKcPbi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9TabItemExEP11ImGuiTabBarPKcPbi = Module["__ZN5ImGui9TabItemExEP11ImGuiTabBarPKcPbi"] = createExportWrapper("_ZN5ImGui9TabItemExEP11ImGuiTabBarPKcPbi");
+
+/** @type {function(...*):?} */
+var __ZN12ImGuiTabItemC2Ev = Module["__ZN12ImGuiTabItemC2Ev"] = createExportWrapper("_ZN12ImGuiTabItemC2Ev");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemE9push_backERKS0_ = Module["__ZN8ImVectorI12ImGuiTabItemE9push_backERKS0_"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemE9push_backERKS0_");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemE4backEv = Module["__ZN8ImVectorI12ImGuiTabItemE4backEv"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemE4backEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui17TabItemBackgroundEP10ImDrawListRK6ImRectij = Module["__ZN5ImGui17TabItemBackgroundEP10ImDrawListRK6ImRectij"] = createExportWrapper("_ZN5ImGui17TabItemBackgroundEP10ImDrawListRK6ImRectij");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui26TabItemLabelAndCloseButtonEP10ImDrawListRK6ImRecti6ImVec2PKcjjbPbS8_ = Module["__ZN5ImGui26TabItemLabelAndCloseButtonEP10ImDrawListRK6ImRecti6ImVec2PKcjjbPbS8_"] = createExportWrapper("_ZN5ImGui26TabItemLabelAndCloseButtonEP10ImDrawListRK6ImRecti6ImVec2PKcjjbPbS8_");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui10EndTabItemEv = Module["__ZN5ImGui10EndTabItemEv"] = createExportWrapper("_ZN5ImGui10EndTabItemEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui13TabItemButtonEPKci = Module["__ZN5ImGui13TabItemButtonEPKci"] = createExportWrapper("_ZN5ImGui13TabItemButtonEPKci");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI12ImGuiTabItemE14_grow_capacityEi = Module["__ZNK8ImVectorI12ImGuiTabItemE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI12ImGuiTabItemE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI12ImGuiTabItemE7reserveEi = Module["__ZN8ImVectorI12ImGuiTabItemE7reserveEi"] = createExportWrapper("_ZN8ImVectorI12ImGuiTabItemE7reserveEi");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui16SetTabItemClosedEPKc = Module["__ZN5ImGui16SetTabItemClosedEPKc"] = createExportWrapper("_ZN5ImGui16SetTabItemClosedEPKc");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI20ImGuiShrinkWidthItemE14_grow_capacityEi = Module["__ZNK8ImVectorI20ImGuiShrinkWidthItemE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI20ImGuiShrinkWidthItemE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI20ImGuiShrinkWidthItemE7reserveEi = Module["__ZN8ImVectorI20ImGuiShrinkWidthItemE7reserveEi"] = createExportWrapper("_ZN8ImVectorI20ImGuiShrinkWidthItemE7reserveEi");
+
+/** @type {function(...*):?} */
+var _powf = Module["_powf"] = createExportWrapper("powf");
+
+/** @type {function(...*):?} */
+var _atof = Module["_atof"] = createExportWrapper("atof");
+
+/** @type {function(...*):?} */
+var _logf = Module["_logf"] = createExportWrapper("logf");
+
+/** @type {function(...*):?} */
+var _log = Module["_log"] = createExportWrapper("log");
+
+/** @type {function(...*):?} */
+var _pow = Module["_pow"] = createExportWrapper("pow");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImGuiTabBarE6resizeEi = Module["__ZN8ImVectorI11ImGuiTabBarE6resizeEi"] = createExportWrapper("_ZN8ImVectorI11ImGuiTabBarE6resizeEi");
+
+/** @type {function(...*):?} */
+var __ZN11ImGuiTabBarC1Ev = Module["__ZN11ImGuiTabBarC1Ev"] = createExportWrapper("_ZN11ImGuiTabBarC1Ev");
+
+/** @type {function(...*):?} */
+var __ZNK8ImVectorI11ImGuiTabBarE14_grow_capacityEi = Module["__ZNK8ImVectorI11ImGuiTabBarE14_grow_capacityEi"] = createExportWrapper("_ZNK8ImVectorI11ImGuiTabBarE14_grow_capacityEi");
+
+/** @type {function(...*):?} */
+var __ZN8ImVectorI11ImGuiTabBarE7reserveEi = Module["__ZN8ImVectorI11ImGuiTabBarE7reserveEi"] = createExportWrapper("_ZN8ImVectorI11ImGuiTabBarE7reserveEi");
+
+/** @type {function(...*):?} */
+var _emscripten_GetProcAddress = Module["_emscripten_GetProcAddress"] = createExportWrapper("emscripten_GetProcAddress");
 
 /** @type {function(...*):?} */
 var _emscripten_webgl1_get_proc_address = Module["_emscripten_webgl1_get_proc_address"] = createExportWrapper("emscripten_webgl1_get_proc_address");
@@ -18201,9 +23581,6 @@ var _emscripten_webgl2_get_proc_address = Module["_emscripten_webgl2_get_proc_ad
 var __webgl2_match_ext_proc_address_without_suffix = Module["__webgl2_match_ext_proc_address_without_suffix"] = createExportWrapper("_webgl2_match_ext_proc_address_without_suffix");
 
 /** @type {function(...*):?} */
-var _free = Module["_free"] = createExportWrapper("free");
-
-/** @type {function(...*):?} */
 var _emscripten_webgl_get_proc_address = Module["_emscripten_webgl_get_proc_address"] = createExportWrapper("emscripten_webgl_get_proc_address");
 
 /** @type {function(...*):?} */
@@ -18214,9 +23591,6 @@ var _eglGetProcAddress = Module["_eglGetProcAddress"] = createExportWrapper("egl
 
 /** @type {function(...*):?} */
 var _glfwGetProcAddress = Module["_glfwGetProcAddress"] = createExportWrapper("glfwGetProcAddress");
-
-/** @type {function(...*):?} */
-var _strcmp = Module["_strcmp"] = createExportWrapper("strcmp");
 
 /** @type {function(...*):?} */
 var _glVertexAttribDivisorNV = Module["_glVertexAttribDivisorNV"] = createExportWrapper("glVertexAttribDivisorNV");
@@ -18253,15 +23627,6 @@ var _glDrawElementsInstancedARB = Module["_glDrawElementsInstancedARB"] = create
 
 /** @type {function(...*):?} */
 var _glDrawElementsInstancedANGLE = Module["_glDrawElementsInstancedANGLE"] = createExportWrapper("glDrawElementsInstancedANGLE");
-
-/** @type {function(...*):?} */
-var _glBindVertexArrayOES = Module["_glBindVertexArrayOES"] = createExportWrapper("glBindVertexArrayOES");
-
-/** @type {function(...*):?} */
-var _glDeleteVertexArraysOES = Module["_glDeleteVertexArraysOES"] = createExportWrapper("glDeleteVertexArraysOES");
-
-/** @type {function(...*):?} */
-var _glGenVertexArraysOES = Module["_glGenVertexArraysOES"] = createExportWrapper("glGenVertexArraysOES");
 
 /** @type {function(...*):?} */
 var _glIsVertexArrayOES = Module["_glIsVertexArrayOES"] = createExportWrapper("glIsVertexArrayOES");
@@ -18723,9 +24088,6 @@ var _acos = Module["_acos"] = createExportWrapper("acos");
 var _sqrt = Module["_sqrt"] = createExportWrapper("sqrt");
 
 /** @type {function(...*):?} */
-var _acosf = Module["_acosf"] = createExportWrapper("acosf");
-
-/** @type {function(...*):?} */
 var _sqrtf = Module["_sqrtf"] = createExportWrapper("sqrtf");
 
 /** @type {function(...*):?} */
@@ -18735,16 +24097,10 @@ var _acosh = Module["_acosh"] = createExportWrapper("acosh");
 var _log1p = Module["_log1p"] = createExportWrapper("log1p");
 
 /** @type {function(...*):?} */
-var _log = Module["_log"] = createExportWrapper("log");
-
-/** @type {function(...*):?} */
 var _acoshf = Module["_acoshf"] = createExportWrapper("acoshf");
 
 /** @type {function(...*):?} */
 var _log1pf = Module["_log1pf"] = createExportWrapper("log1pf");
-
-/** @type {function(...*):?} */
-var _logf = Module["_logf"] = createExportWrapper("logf");
 
 /** @type {function(...*):?} */
 var _acoshl = Module["_acoshl"] = createExportWrapper("acoshl");
@@ -18825,9 +24181,6 @@ var _atan = Module["_atan"] = createExportWrapper("atan");
 var _atan2 = Module["_atan2"] = createExportWrapper("atan2");
 
 /** @type {function(...*):?} */
-var _atan2f = Module["_atan2f"] = createExportWrapper("atan2f");
-
-/** @type {function(...*):?} */
 var _atanf = Module["_atanf"] = createExportWrapper("atanf");
 
 /** @type {function(...*):?} */
@@ -18867,9 +24220,6 @@ var ___libc_calloc = Module["___libc_calloc"] = createExportWrapper("__libc_call
 var ___atexit = Module["___atexit"] = createExportWrapper("__atexit");
 
 /** @type {function(...*):?} */
-var _atof = Module["_atof"] = createExportWrapper("atof");
-
-/** @type {function(...*):?} */
 var _strtod = Module["_strtod"] = createExportWrapper("strtod");
 
 /** @type {function(...*):?} */
@@ -18895,9 +24245,6 @@ var ___xpg_basename = Module["___xpg_basename"] = createExportWrapper("__xpg_bas
 
 /** @type {function(...*):?} */
 var _bcmp = Module["_bcmp"] = createExportWrapper("bcmp");
-
-/** @type {function(...*):?} */
-var _memcmp = Module["_memcmp"] = createExportWrapper("memcmp");
 
 /** @type {function(...*):?} */
 var _bcopy = Module["_bcopy"] = createExportWrapper("bcopy");
@@ -19278,9 +24625,6 @@ var ___crypt_md5 = Module["___crypt_md5"] = createExportWrapper("__crypt_md5");
 var _strnlen = Module["_strnlen"] = createExportWrapper("strnlen");
 
 /** @type {function(...*):?} */
-var _strncmp = Module["_strncmp"] = createExportWrapper("strncmp");
-
-/** @type {function(...*):?} */
 var ___crypt_sha256 = Module["___crypt_sha256"] = createExportWrapper("__crypt_sha256");
 
 /** @type {function(...*):?} */
@@ -19359,9 +24703,6 @@ var _dcngettext = Module["_dcngettext"] = createExportWrapper("dcngettext");
 var ___gettextdomain = Module["___gettextdomain"] = createExportWrapper("__gettextdomain");
 
 /** @type {function(...*):?} */
-var _memchr = Module["_memchr"] = createExportWrapper("memchr");
-
-/** @type {function(...*):?} */
 var _dcgettext = Module["_dcgettext"] = createExportWrapper("dcgettext");
 
 /** @type {function(...*):?} */
@@ -19390,9 +24731,6 @@ var _dlerror = Module["_dlerror"] = createExportWrapper("dlerror");
 
 /** @type {function(...*):?} */
 var ___libc_free = Module["___libc_free"] = createExportWrapper("__libc_free");
-
-/** @type {function(...*):?} */
-var _vsnprintf = Module["_vsnprintf"] = createExportWrapper("vsnprintf");
 
 /** @type {function(...*):?} */
 var ___libc_malloc = Module["___libc_malloc"] = createExportWrapper("__libc_malloc");
@@ -19804,9 +25142,6 @@ var _modf = Module["_modf"] = createExportWrapper("modf");
 var _exp2 = Module["_exp2"] = createExportWrapper("exp2");
 
 /** @type {function(...*):?} */
-var _pow = Module["_pow"] = createExportWrapper("pow");
-
-/** @type {function(...*):?} */
 var _pow10 = Module["_pow10"] = createExportWrapper("pow10");
 
 /** @type {function(...*):?} */
@@ -19853,9 +25188,6 @@ var _expm1l = Module["_expm1l"] = createExportWrapper("expm1l");
 
 /** @type {function(...*):?} */
 var __flushlbf = Module["__flushlbf"] = createExportWrapper("_flushlbf");
-
-/** @type {function(...*):?} */
-var _fflush = Module["_fflush"] = createExportWrapper("fflush");
 
 /** @type {function(...*):?} */
 var ___fsetlocking = Module["___fsetlocking"] = createExportWrapper("__fsetlocking");
@@ -19916,9 +25248,6 @@ var _fchown = Module["_fchown"] = createExportWrapper("fchown");
 
 /** @type {function(...*):?} */
 var _fchownat = Module["_fchownat"] = createExportWrapper("fchownat");
-
-/** @type {function(...*):?} */
-var _fclose = Module["_fclose"] = createExportWrapper("fclose");
 
 /** @type {function(...*):?} */
 var _fcntl = Module["_fcntl"] = createExportWrapper("fcntl");
@@ -20140,9 +25469,6 @@ var _fminl = Module["_fminl"] = createExportWrapper("fminl");
 var _fmod = Module["_fmod"] = createExportWrapper("fmod");
 
 /** @type {function(...*):?} */
-var _fmodf = Module["_fmodf"] = createExportWrapper("fmodf");
-
-/** @type {function(...*):?} */
 var _fmtmsg = Module["_fmtmsg"] = createExportWrapper("fmtmsg");
 
 /** @type {function(...*):?} */
@@ -20159,9 +25485,6 @@ var _wctype = Module["_wctype"] = createExportWrapper("wctype");
 
 /** @type {function(...*):?} */
 var _iswctype = Module["_iswctype"] = createExportWrapper("iswctype");
-
-/** @type {function(...*):?} */
-var _fopen = Module["_fopen"] = createExportWrapper("fopen");
 
 /** @type {function(...*):?} */
 var _fopen64 = Module["_fopen64"] = createExportWrapper("fopen64");
@@ -20212,9 +25535,6 @@ var ___small_vfprintf = Module["___small_vfprintf"] = createExportWrapper("__sma
 var _fputc = Module["_fputc"] = createExportWrapper("fputc");
 
 /** @type {function(...*):?} */
-var _fwrite = Module["_fwrite"] = createExportWrapper("fwrite");
-
-/** @type {function(...*):?} */
 var _fputs_unlocked = Module["_fputs_unlocked"] = createExportWrapper("fputs_unlocked");
 
 /** @type {function(...*):?} */
@@ -20240,9 +25560,6 @@ var _wcsrtombs = Module["_wcsrtombs"] = createExportWrapper("wcsrtombs");
 
 /** @type {function(...*):?} */
 var _fputws_unlocked = Module["_fputws_unlocked"] = createExportWrapper("fputws_unlocked");
-
-/** @type {function(...*):?} */
-var _fread = Module["_fread"] = createExportWrapper("fread");
 
 /** @type {function(...*):?} */
 var _fread_unlocked = Module["_fread_unlocked"] = createExportWrapper("fread_unlocked");
@@ -20275,9 +25592,6 @@ var _vfscanf = Module["_vfscanf"] = createExportWrapper("vfscanf");
 var ___isoc99_fscanf = Module["___isoc99_fscanf"] = createExportWrapper("__isoc99_fscanf");
 
 /** @type {function(...*):?} */
-var _fseek = Module["_fseek"] = createExportWrapper("fseek");
-
-/** @type {function(...*):?} */
 var _fseeko = Module["_fseeko"] = createExportWrapper("fseeko");
 
 /** @type {function(...*):?} */
@@ -20297,9 +25611,6 @@ var _fstatat64 = Module["_fstatat64"] = createExportWrapper("fstatat64");
 
 /** @type {function(...*):?} */
 var _fsync = Module["_fsync"] = createExportWrapper("fsync");
-
-/** @type {function(...*):?} */
-var _ftell = Module["_ftell"] = createExportWrapper("ftell");
 
 /** @type {function(...*):?} */
 var _ftello = Module["_ftello"] = createExportWrapper("ftello");
@@ -20533,9 +25844,6 @@ var _getwchar_unlocked = Module["_getwchar_unlocked"] = createExportWrapper("get
 var _glob = Module["_glob"] = createExportWrapper("glob");
 
 /** @type {function(...*):?} */
-var _qsort = Module["_qsort"] = createExportWrapper("qsort");
-
-/** @type {function(...*):?} */
 var _opendir = Module["_opendir"] = createExportWrapper("opendir");
 
 /** @type {function(...*):?} */
@@ -20603,9 +25911,6 @@ var _socket = Module["_socket"] = createExportWrapper("socket");
 
 /** @type {function(...*):?} */
 var _ioctl = Module["_ioctl"] = createExportWrapper("ioctl");
-
-/** @type {function(...*):?} */
-var _strncpy = Module["_strncpy"] = createExportWrapper("strncpy");
 
 /** @type {function(...*):?} */
 var _if_nameindex = Module["_if_nameindex"] = createExportWrapper("if_nameindex");
@@ -21490,9 +26795,6 @@ var _endmntent = Module["_endmntent"] = createExportWrapper("endmntent");
 var _getmntent_r = Module["_getmntent_r"] = createExportWrapper("getmntent_r");
 
 /** @type {function(...*):?} */
-var _sscanf = Module["_sscanf"] = createExportWrapper("sscanf");
-
-/** @type {function(...*):?} */
 var _getmntent = Module["_getmntent"] = createExportWrapper("getmntent");
 
 /** @type {function(...*):?} */
@@ -21751,9 +27053,6 @@ var _posix_spawnattr_setsigdefault = Module["_posix_spawnattr_setsigdefault"] = 
 var _posix_spawnattr_setsigmask = Module["_posix_spawnattr_setsigmask"] = createExportWrapper("posix_spawnattr_setsigmask");
 
 /** @type {function(...*):?} */
-var _powf = Module["_powf"] = createExportWrapper("powf");
-
-/** @type {function(...*):?} */
 var _pread = Module["_pread"] = createExportWrapper("pread");
 
 /** @type {function(...*):?} */
@@ -21769,7 +27068,7 @@ var _preadv64 = Module["_preadv64"] = createExportWrapper("preadv64");
 var _printf = Module["_printf"] = createExportWrapper("printf");
 
 /** @type {function(...*):?} */
-var _iprintf = Module["_iprintf"] = createExportWrapper("iprintf");
+var ___small_printf = Module["___small_printf"] = createExportWrapper("__small_printf");
 
 /** @type {function(...*):?} */
 var _strrchr = Module["_strrchr"] = createExportWrapper("strrchr");
@@ -22454,9 +27753,6 @@ var _strtol_l = Module["_strtol_l"] = createExportWrapper("strtol_l");
 
 /** @type {function(...*):?} */
 var _strupr = Module["_strupr"] = createExportWrapper("strupr");
-
-/** @type {function(...*):?} */
-var _toupper = Module["_toupper"] = createExportWrapper("toupper");
 
 /** @type {function(...*):?} */
 var _strverscmp = Module["_strverscmp"] = createExportWrapper("strverscmp");
@@ -36085,881 +41381,887 @@ var dynCall_iiiiijj = Module["dynCall_iiiiijj"] = createExportWrapper("dynCall_i
 /** @type {function(...*):?} */
 var dynCall_iiiiiijj = Module["dynCall_iiiiiijj"] = createExportWrapper("dynCall_iiiiiijj");
 
-var _graph = Module['_graph'] = 383048;
-var _camera = Module['_camera'] = 383072;
-var _universe = Module['_universe'] = 383344;
-var _sphere = Module['_sphere'] = 383400;
-var _line = Module['_line'] = 383664;
-var _projection = Module['_projection'] = 383212;
-var _view = Module['_view'] = 383276;
-var __ZNSt3__24coutE = Module['__ZNSt3__24coutE'] = 423412;
-var _scroll_sensitivity = Module['_scroll_sensitivity'] = 382036;
-var _mouseDown = Module['_mouseDown'] = 383208;
-var _mouseDownFirst = Module['_mouseDownFirst'] = 383209;
-var _loop = Module['_loop'] = 383800;
-var _stderr = Module['_stderr'] = 216784;
-var _autoRotateX = Module['_autoRotateX'] = 383210;
-var _mouseY = Module['_mouseY'] = 383192;
-var _mouseX = Module['_mouseX'] = 383184;
-var _drag_sensitivity = Module['_drag_sensitivity'] = 382040;
-var __ZTISt12length_error = Module['__ZTISt12length_error'] = 381608;
-var __ZTVSt12length_error = Module['__ZTVSt12length_error'] = 381568;
-var __ZTISt20bad_array_new_length = Module['__ZTISt20bad_array_new_length'] = 381380;
-var __ZNSt3__25ctypeIcE2idE = Module['__ZNSt3__25ctypeIcE2idE'] = 424480;
-var __ZTINSt3__217bad_function_callE = Module['__ZTINSt3__217bad_function_callE'] = 352292;
-var __ZTVNSt3__217bad_function_callE = Module['__ZTVNSt3__217bad_function_callE'] = 352244;
-var __ZTVSt9exception = Module['__ZTVSt9exception'] = 381228;
-var __ZTVNSt3__210__function6__baseIFvvEEE = Module['__ZTVNSt3__210__function6__baseIFvvEEE'] = 24716;
-var _n_iterations = Module['_n_iterations'] = 382032;
-var _movingUp = Module['_movingUp'] = 383040;
-var _yLocation = Module['_yLocation'] = 383044;
-var _mouseScroll = Module['_mouseScroll'] = 383200;
-var __ZTSNSt3__210__function6__baseIFvvEEE = Module['__ZTSNSt3__210__function6__baseIFvvEEE'] = 24660;
-var __ZTINSt3__210__function6__baseIFvvEEE = Module['__ZTINSt3__210__function6__baseIFvvEEE'] = 24696;
-var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 380880;
-var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 380920;
-var ___environ = Module['___environ'] = 383824;
-var ____environ = Module['____environ'] = 383824;
-var __environ = Module['__environ'] = 383824;
-var _environ = Module['_environ'] = 383824;
-var _timezone = Module['_timezone'] = 384360;
-var _daylight = Module['_daylight'] = 384364;
-var _tzname = Module['_tzname'] = 384368;
-var ___progname = Module['___progname'] = 385584;
-var _optind = Module['_optind'] = 382064;
-var ___optreset = Module['___optreset'] = 384548;
-var ___optpos = Module['___optpos'] = 384552;
-var _optarg = Module['_optarg'] = 384556;
-var _optopt = Module['_optopt'] = 384560;
-var _opterr = Module['_opterr'] = 382068;
-var _optreset = Module['_optreset'] = 384548;
-var _h_errno = Module['_h_errno'] = 384684;
-var ___signgam = Module['___signgam'] = 399884;
-var __ns_flagdata = Module['__ns_flagdata'] = 211408;
-var ___progname_full = Module['___progname_full'] = 385588;
-var _program_invocation_short_name = Module['_program_invocation_short_name'] = 385584;
-var _program_invocation_name = Module['_program_invocation_name'] = 385588;
-var ___sig_pending = Module['___sig_pending'] = 389936;
-var ___sig_actions = Module['___sig_actions'] = 390784;
-var _signgam = Module['_signgam'] = 399884;
-var _stdin = Module['_stdin'] = 216788;
-var _stdout = Module['_stdout'] = 216792;
-var ___THREW__ = Module['___THREW__'] = 406688;
-var ___threwValue = Module['___threwValue'] = 406692;
-var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 230720;
-var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 230760;
-var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 230740;
-var __ZTISt8bad_cast = Module['__ZTISt8bad_cast'] = 381948;
-var __ZTVNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTVNSt12experimental15fundamentals_v112bad_any_castE'] = 230772;
-var __ZTINSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTINSt12experimental15fundamentals_v112bad_any_castE'] = 230844;
-var __ZTSNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTSNSt12experimental15fundamentals_v112bad_any_castE'] = 230792;
-var __ZNSt3__212placeholders2_1E = Module['__ZNSt3__212placeholders2_1E'] = 230856;
-var __ZNSt3__212placeholders2_2E = Module['__ZNSt3__212placeholders2_2E'] = 230857;
-var __ZNSt3__212placeholders2_3E = Module['__ZNSt3__212placeholders2_3E'] = 230858;
-var __ZNSt3__212placeholders2_4E = Module['__ZNSt3__212placeholders2_4E'] = 230859;
-var __ZNSt3__212placeholders2_5E = Module['__ZNSt3__212placeholders2_5E'] = 230860;
-var __ZNSt3__212placeholders2_6E = Module['__ZNSt3__212placeholders2_6E'] = 230861;
-var __ZNSt3__212placeholders2_7E = Module['__ZNSt3__212placeholders2_7E'] = 230862;
-var __ZNSt3__212placeholders2_8E = Module['__ZNSt3__212placeholders2_8E'] = 230863;
-var __ZNSt3__212placeholders2_9E = Module['__ZNSt3__212placeholders2_9E'] = 230864;
-var __ZNSt3__212placeholders3_10E = Module['__ZNSt3__212placeholders3_10E'] = 230865;
-var __ZNSt3__213__DIGIT_TABLEE = Module['__ZNSt3__213__DIGIT_TABLEE'] = 230880;
-var __ZNSt3__26__itoa16_Charconv_digitsE = Module['__ZNSt3__26__itoa16_Charconv_digitsE'] = 231088;
-var __ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE'] = 231184;
-var __ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE'] = 231440;
-var __ZNSt3__225_General_precision_tablesIfE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIfE6_Max_PE'] = 231616;
-var __ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE'] = 231632;
-var __ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE'] = 233200;
-var __ZNSt3__225_General_precision_tablesIdE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIdE6_Max_PE'] = 235712;
-var __ZNSt3__26chrono12system_clock9is_steadyE = Module['__ZNSt3__26chrono12system_clock9is_steadyE'] = 235716;
-var __ZNSt3__26chrono12steady_clock9is_steadyE = Module['__ZNSt3__26chrono12steady_clock9is_steadyE'] = 235717;
-var __ZNSt3__214__POW10_OFFSETE = Module['__ZNSt3__214__POW10_OFFSETE'] = 265104;
-var __ZNSt3__213__POW10_SPLITE = Module['__ZNSt3__213__POW10_SPLITE'] = 235728;
-var __ZNSt3__213__MIN_BLOCK_2E = Module['__ZNSt3__213__MIN_BLOCK_2E'] = 265232;
-var __ZNSt3__216__POW10_OFFSET_2E = Module['__ZNSt3__216__POW10_OFFSET_2E'] = 265312;
-var __ZNSt3__215__POW10_SPLIT_2E = Module['__ZNSt3__215__POW10_SPLIT_2E'] = 265456;
-var __ZNSt3__223__DOUBLE_POW5_INV_SPLITE = Module['__ZNSt3__223__DOUBLE_POW5_INV_SPLITE'] = 340656;
-var __ZNSt3__219__DOUBLE_POW5_SPLITE = Module['__ZNSt3__219__DOUBLE_POW5_SPLITE'] = 345328;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment'] = 350544;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa'] = 350864;
-var __ZNSt3__223__libcpp_debug_functionE = Module['__ZNSt3__223__libcpp_debug_functionE'] = 382684;
-var __ZTVNSt3__28__c_nodeE = Module['__ZTVNSt3__28__c_nodeE'] = 351048;
-var __ZTINSt3__28__c_nodeE = Module['__ZTINSt3__28__c_nodeE'] = 351100;
-var __ZTSNSt3__28__c_nodeE = Module['__ZTSNSt3__28__c_nodeE'] = 351080;
-var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351108;
-var __ZTVNSt3__219__shared_weak_countE = Module['__ZTVNSt3__219__shared_weak_countE'] = 367260;
-var __ZTVNSt3__214__shared_countE = Module['__ZTVNSt3__214__shared_countE'] = 367204;
-var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351236;
-var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351224;
-var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 351136;
-var __ZTINSt3__219__shared_weak_countE = Module['__ZTINSt3__219__shared_weak_countE'] = 367320;
-var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351384;
-var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 351264;
-var __ZTVSt16nested_exception = Module['__ZTVSt16nested_exception'] = 351408;
-var __ZTISt16nested_exception = Module['__ZTISt16nested_exception'] = 351448;
-var __ZTSSt16nested_exception = Module['__ZTSSt16nested_exception'] = 351424;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment'] = 352096;
-var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa'] = 352144;
-var __ZNSt3__222__FLOAT_POW5_INV_SPLITE = Module['__ZNSt3__222__FLOAT_POW5_INV_SPLITE'] = 351456;
-var __ZNSt3__218__FLOAT_POW5_SPLITE = Module['__ZNSt3__218__FLOAT_POW5_SPLITE'] = 351712;
-var __ZTVNSt3__212format_errorE = Module['__ZTVNSt3__212format_errorE'] = 352188;
-var __ZTINSt3__212format_errorE = Module['__ZTINSt3__212format_errorE'] = 352232;
-var __ZTSNSt3__212format_errorE = Module['__ZTSNSt3__212format_errorE'] = 352208;
-var __ZTISt13runtime_error = Module['__ZTISt13runtime_error'] = 381728;
-var __ZTSNSt3__217bad_function_callE = Module['__ZTSNSt3__217bad_function_callE'] = 352264;
-var __ZTISt9exception = Module['__ZTISt9exception'] = 381264;
-var __ZTVNSt3__212future_errorE = Module['__ZTVNSt3__212future_errorE'] = 352340;
-var __ZTVNSt3__217__assoc_sub_stateE = Module['__ZTVNSt3__217__assoc_sub_stateE'] = 352360;
-var __ZTVNSt3__223__future_error_categoryE = Module['__ZTVNSt3__223__future_error_categoryE'] = 352304;
-var __ZTINSt3__223__future_error_categoryE = Module['__ZTINSt3__223__future_error_categoryE'] = 352460;
-var __ZTINSt3__212future_errorE = Module['__ZTINSt3__212future_errorE'] = 352496;
-var __ZTINSt3__217__assoc_sub_stateE = Module['__ZTINSt3__217__assoc_sub_stateE'] = 352412;
-var __ZTSNSt3__217__assoc_sub_stateE = Module['__ZTSNSt3__217__assoc_sub_stateE'] = 352384;
-var __ZTINSt3__214__shared_countE = Module['__ZTINSt3__214__shared_countE'] = 367252;
-var __ZTSNSt3__223__future_error_categoryE = Module['__ZTSNSt3__223__future_error_categoryE'] = 352424;
-var __ZTINSt3__212__do_messageE = Module['__ZTINSt3__212__do_messageE'] = 370220;
-var __ZTSNSt3__212future_errorE = Module['__ZTSNSt3__212future_errorE'] = 352472;
-var __ZTISt11logic_error = Module['__ZTISt11logic_error'] = 381488;
-var __ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 352912;
-var __ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353016;
-var __ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353064;
-var __ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424308;
-var __ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353132;
-var __ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 353160;
-var __ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353264;
-var __ZNSt3__25ctypeIwE2idE = Module['__ZNSt3__25ctypeIwE2idE'] = 424472;
-var __ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353312;
-var __ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424316;
-var __ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 353320;
-var __ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 353384;
-var __ZNSt3__27codecvtIcc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIcc11__mbstate_tE2idE'] = 424488;
-var __ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354300;
-var __ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354604;
-var __ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354784;
-var __ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 354964;
-var __ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355120;
-var __ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424292;
-var __ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424300;
-var __ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353572;
-var __ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 352976;
-var __ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353628;
-var __ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353024;
-var __ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353700;
-var __ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353072;
-var __ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353852;
-var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 353724;
-var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 353764;
-var __ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 354008;
-var __ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 353224;
-var __ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 354064;
-var __ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 353272;
-var __ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 354136;
-var __ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354228;
-var __ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 355284;
-var __ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353448;
-var __ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353508;
-var __ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 353464;
-var __ZTINSt3__28ios_baseE = Module['__ZTINSt3__28ios_baseE'] = 355500;
-var __ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 353520;
-var __ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 353580;
-var __ZTVN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTVN10__cxxabiv121__vmi_class_type_infoE'] = 381012;
-var __ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 353652;
-var __ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 353804;
-var __ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 353884;
-var __ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 353944;
-var __ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 353900;
-var __ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 353956;
-var __ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 354016;
-var __ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 354088;
-var __ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354160;
-var __ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354240;
-var __ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354552;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE'] = 354340;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354400;
-var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 354440;
-var __ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354480;
-var __ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354564;
-var __ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354732;
-var __ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 354620;
-var __ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354660;
-var __ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354744;
-var __ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354912;
-var __ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354800;
-var __ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 354840;
-var __ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 354924;
-var __ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355068;
-var __ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 354980;
-var __ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 355020;
-var __ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355080;
-var __ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355224;
-var __ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 355136;
-var __ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 355176;
-var __ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 355236;
-var __ZTVNSt3__28ios_base7failureE = Module['__ZTVNSt3__28ios_base7failureE'] = 355332;
-var __ZNSt3__28ios_base9__xindex_E = Module['__ZNSt3__28ios_base9__xindex_E'] = 423224;
-var __ZTVNSt3__28ios_baseE = Module['__ZTVNSt3__28ios_baseE'] = 355464;
-var __ZTVNSt3__219__iostream_categoryE = Module['__ZTVNSt3__219__iostream_categoryE'] = 355296;
-var __ZTINSt3__219__iostream_categoryE = Module['__ZTINSt3__219__iostream_categoryE'] = 355540;
-var __ZTINSt3__28ios_base7failureE = Module['__ZTINSt3__28ios_base7failureE'] = 355580;
-var __ZNSt3__28ios_base9boolalphaE = Module['__ZNSt3__28ios_base9boolalphaE'] = 355352;
-var __ZNSt3__28ios_base3decE = Module['__ZNSt3__28ios_base3decE'] = 355356;
-var __ZNSt3__28ios_base5fixedE = Module['__ZNSt3__28ios_base5fixedE'] = 355360;
-var __ZNSt3__28ios_base3hexE = Module['__ZNSt3__28ios_base3hexE'] = 355364;
-var __ZNSt3__28ios_base8internalE = Module['__ZNSt3__28ios_base8internalE'] = 355368;
-var __ZNSt3__28ios_base4leftE = Module['__ZNSt3__28ios_base4leftE'] = 355372;
-var __ZNSt3__28ios_base3octE = Module['__ZNSt3__28ios_base3octE'] = 355376;
-var __ZNSt3__28ios_base5rightE = Module['__ZNSt3__28ios_base5rightE'] = 355380;
-var __ZNSt3__28ios_base10scientificE = Module['__ZNSt3__28ios_base10scientificE'] = 355384;
-var __ZNSt3__28ios_base8showbaseE = Module['__ZNSt3__28ios_base8showbaseE'] = 355388;
-var __ZNSt3__28ios_base9showpointE = Module['__ZNSt3__28ios_base9showpointE'] = 355392;
-var __ZNSt3__28ios_base7showposE = Module['__ZNSt3__28ios_base7showposE'] = 355396;
-var __ZNSt3__28ios_base6skipwsE = Module['__ZNSt3__28ios_base6skipwsE'] = 355400;
-var __ZNSt3__28ios_base7unitbufE = Module['__ZNSt3__28ios_base7unitbufE'] = 355404;
-var __ZNSt3__28ios_base9uppercaseE = Module['__ZNSt3__28ios_base9uppercaseE'] = 355408;
-var __ZNSt3__28ios_base11adjustfieldE = Module['__ZNSt3__28ios_base11adjustfieldE'] = 355412;
-var __ZNSt3__28ios_base9basefieldE = Module['__ZNSt3__28ios_base9basefieldE'] = 355416;
-var __ZNSt3__28ios_base10floatfieldE = Module['__ZNSt3__28ios_base10floatfieldE'] = 355420;
-var __ZNSt3__28ios_base6badbitE = Module['__ZNSt3__28ios_base6badbitE'] = 355424;
-var __ZNSt3__28ios_base6eofbitE = Module['__ZNSt3__28ios_base6eofbitE'] = 355428;
-var __ZNSt3__28ios_base7failbitE = Module['__ZNSt3__28ios_base7failbitE'] = 355432;
-var __ZNSt3__28ios_base7goodbitE = Module['__ZNSt3__28ios_base7goodbitE'] = 355436;
-var __ZNSt3__28ios_base3appE = Module['__ZNSt3__28ios_base3appE'] = 355440;
-var __ZNSt3__28ios_base3ateE = Module['__ZNSt3__28ios_base3ateE'] = 355444;
-var __ZNSt3__28ios_base6binaryE = Module['__ZNSt3__28ios_base6binaryE'] = 355448;
-var __ZNSt3__28ios_base2inE = Module['__ZNSt3__28ios_base2inE'] = 355452;
-var __ZNSt3__28ios_base3outE = Module['__ZNSt3__28ios_base3outE'] = 355456;
-var __ZNSt3__28ios_base5truncE = Module['__ZNSt3__28ios_base5truncE'] = 355460;
-var __ZTSNSt3__28ios_baseE = Module['__ZTSNSt3__28ios_baseE'] = 355480;
-var __ZTSNSt3__219__iostream_categoryE = Module['__ZTSNSt3__219__iostream_categoryE'] = 355508;
-var __ZTSNSt3__28ios_base7failureE = Module['__ZTSNSt3__28ios_base7failureE'] = 355552;
-var __ZTINSt3__212system_errorE = Module['__ZTINSt3__212system_errorE'] = 370352;
-var __ZNSt3__219__start_std_streamsE = Module['__ZNSt3__219__start_std_streamsE'] = 423916;
-var __ZNSt3__23cinE = Module['__ZNSt3__23cinE'] = 423236;
-var __ZNSt3__24cerrE = Module['__ZNSt3__24cerrE'] = 423580;
-var __ZNSt3__24clogE = Module['__ZNSt3__24clogE'] = 423748;
-var __ZNSt3__24wcinE = Module['__ZNSt3__24wcinE'] = 423324;
-var __ZNSt3__25wcoutE = Module['__ZNSt3__25wcoutE'] = 423496;
-var __ZNSt3__25wcerrE = Module['__ZNSt3__25wcerrE'] = 423664;
-var __ZNSt3__25wclogE = Module['__ZNSt3__25wclogE'] = 423832;
-var __ZTVNSt3__210__stdinbufIcEE = Module['__ZTVNSt3__210__stdinbufIcEE'] = 355592;
-var __ZTVNSt3__211__stdoutbufIcEE = Module['__ZTVNSt3__211__stdoutbufIcEE'] = 355692;
-var __ZTVNSt3__210__stdinbufIwEE = Module['__ZTVNSt3__210__stdinbufIwEE'] = 355796;
-var __ZTVNSt3__211__stdoutbufIwEE = Module['__ZTVNSt3__211__stdoutbufIwEE'] = 355896;
-var __ZNSt3__27codecvtIwc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIwc11__mbstate_tE2idE'] = 424496;
-var __ZTINSt3__210__stdinbufIcEE = Module['__ZTINSt3__210__stdinbufIcEE'] = 355680;
-var __ZTSNSt3__210__stdinbufIcEE = Module['__ZTSNSt3__210__stdinbufIcEE'] = 355656;
-var __ZTINSt3__211__stdoutbufIcEE = Module['__ZTINSt3__211__stdoutbufIcEE'] = 355784;
-var __ZTSNSt3__211__stdoutbufIcEE = Module['__ZTSNSt3__211__stdoutbufIcEE'] = 355756;
-var __ZTINSt3__210__stdinbufIwEE = Module['__ZTINSt3__210__stdinbufIwEE'] = 355884;
-var __ZTSNSt3__210__stdinbufIwEE = Module['__ZTSNSt3__210__stdinbufIwEE'] = 355860;
-var __ZTINSt3__211__stdoutbufIwEE = Module['__ZTINSt3__211__stdoutbufIwEE'] = 355988;
-var __ZTSNSt3__211__stdoutbufIwEE = Module['__ZTSNSt3__211__stdoutbufIwEE'] = 355960;
-var __ZNSt3__28numpunctIcE2idE = Module['__ZNSt3__28numpunctIcE2idE'] = 424536;
-var __ZNSt3__214__num_get_base5__srcE = Module['__ZNSt3__214__num_get_base5__srcE'] = 356000;
-var __ZNSt3__28numpunctIwE2idE = Module['__ZNSt3__28numpunctIwE2idE'] = 424544;
-var __ZNSt3__210moneypunctIcLb1EE2idE = Module['__ZNSt3__210moneypunctIcLb1EE2idE'] = 424364;
-var __ZNSt3__210moneypunctIcLb0EE2idE = Module['__ZNSt3__210moneypunctIcLb0EE2idE'] = 424356;
-var __ZNSt3__210moneypunctIwLb1EE2idE = Module['__ZNSt3__210moneypunctIwLb1EE2idE'] = 424380;
-var __ZNSt3__210moneypunctIwLb0EE2idE = Module['__ZNSt3__210moneypunctIwLb0EE2idE'] = 424372;
-var __ZTVNSt3__26locale5__impE = Module['__ZTVNSt3__26locale5__impE'] = 356276;
-var __ZTVNSt3__26locale5facetE = Module['__ZTVNSt3__26locale5facetE'] = 358076;
-var __ZNSt3__27collateIcE2idE = Module['__ZNSt3__27collateIcE2idE'] = 424276;
-var __ZNSt3__27collateIwE2idE = Module['__ZNSt3__27collateIwE2idE'] = 424284;
-var __ZNSt3__27codecvtIDsc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsc11__mbstate_tE2idE'] = 424504;
-var __ZNSt3__27codecvtIDic11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDic11__mbstate_tE2idE'] = 424520;
-var __ZNSt3__27codecvtIDsDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsDu11__mbstate_tE2idE'] = 424512;
-var __ZNSt3__27codecvtIDiDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDiDu11__mbstate_tE2idE'] = 424528;
-var __ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424388;
-var __ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424396;
-var __ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424404;
-var __ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424412;
-var __ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424324;
-var __ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424332;
-var __ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 424340;
-var __ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 424348;
-var __ZNSt3__28messagesIcE2idE = Module['__ZNSt3__28messagesIcE2idE'] = 424420;
-var __ZNSt3__28messagesIwE2idE = Module['__ZNSt3__28messagesIwE2idE'] = 424428;
-var __ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365412;
-var __ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365516;
-var __ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365620;
-var __ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365724;
-var __ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 365828;
-var __ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 365932;
-var __ZTVNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb0EEE'] = 363980;
-var __ZTVNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb1EEE'] = 364084;
-var __ZTVNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb0EEE'] = 364188;
-var __ZTVNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb1EEE'] = 364292;
-var __ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362404;
-var __ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362700;
-var __ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363252;
-var __ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363368;
-var __ZTVNSt3__215messages_bynameIcEE = Module['__ZTVNSt3__215messages_bynameIcEE'] = 365260;
-var __ZTVNSt3__215messages_bynameIwEE = Module['__ZTVNSt3__215messages_bynameIwEE'] = 365336;
-var __ZNSt3__26locale2id9__next_idE = Module['__ZNSt3__26locale2id9__next_idE'] = 424468;
-var __ZTVNSt3__214collate_bynameIcEE = Module['__ZTVNSt3__214collate_bynameIcEE'] = 356296;
-var __ZTVNSt3__214collate_bynameIwEE = Module['__ZTVNSt3__214collate_bynameIwEE'] = 356328;
-var __ZTVNSt3__25ctypeIcEE = Module['__ZTVNSt3__25ctypeIcEE'] = 356412;
-var __ZTVNSt3__212ctype_bynameIcEE = Module['__ZTVNSt3__212ctype_bynameIcEE'] = 357488;
-var __ZTVNSt3__212ctype_bynameIwEE = Module['__ZTVNSt3__212ctype_bynameIwEE'] = 357540;
-var __ZTVNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIwc11__mbstate_tEE'] = 357608;
-var __ZTVNSt3__28numpunctIcEE = Module['__ZTVNSt3__28numpunctIcEE'] = 357656;
-var __ZTVNSt3__28numpunctIwEE = Module['__ZTVNSt3__28numpunctIwEE'] = 357696;
-var __ZTVNSt3__215numpunct_bynameIcEE = Module['__ZTVNSt3__215numpunct_bynameIcEE'] = 357780;
-var __ZTVNSt3__215numpunct_bynameIwEE = Module['__ZTVNSt3__215numpunct_bynameIwEE'] = 357820;
-var __ZTVNSt3__215__time_get_tempIcEE = Module['__ZTVNSt3__215__time_get_tempIcEE'] = 366992;
-var __ZTVNSt3__215__time_get_tempIwEE = Module['__ZTVNSt3__215__time_get_tempIwEE'] = 367088;
-var __ZTVNSt3__27collateIcEE = Module['__ZTVNSt3__27collateIcEE'] = 360952;
-var __ZTVNSt3__27collateIwEE = Module['__ZTVNSt3__27collateIwEE'] = 360984;
-var __ZTVNSt3__25ctypeIwEE = Module['__ZTVNSt3__25ctypeIwEE'] = 358132;
-var __ZTVNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIcc11__mbstate_tEE'] = 358280;
-var __ZTVNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsc11__mbstate_tEE'] = 358428;
-var __ZTVNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDic11__mbstate_tEE'] = 358660;
-var __ZTVNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358544;
-var __ZTVNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDiDu11__mbstate_tEE'] = 358776;
-var __ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361016;
-var __ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361260;
-var __ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361472;
-var __ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361704;
-var __ZTVNSt3__210moneypunctIcLb0EEE = Module['__ZTVNSt3__210moneypunctIcLb0EEE'] = 363484;
-var __ZTVNSt3__210moneypunctIcLb1EEE = Module['__ZTVNSt3__210moneypunctIcLb1EEE'] = 363632;
-var __ZTVNSt3__210moneypunctIwLb0EEE = Module['__ZTVNSt3__210moneypunctIwLb0EEE'] = 363748;
-var __ZTVNSt3__210moneypunctIwLb1EEE = Module['__ZTVNSt3__210moneypunctIwLb1EEE'] = 363864;
-var __ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364396;
-var __ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364560;
-var __ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364724;
-var __ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364888;
-var __ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361904;
-var __ZTVNSt3__220__time_get_c_storageIcEE = Module['__ZTVNSt3__220__time_get_c_storageIcEE'] = 366920;
-var __ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362168;
-var __ZTVNSt3__220__time_get_c_storageIwEE = Module['__ZTVNSt3__220__time_get_c_storageIwEE'] = 366956;
-var __ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362968;
-var __ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363124;
-var __ZTVNSt3__28messagesIcEE = Module['__ZTVNSt3__28messagesIcEE'] = 365052;
-var __ZTVNSt3__28messagesIwEE = Module['__ZTVNSt3__28messagesIwEE'] = 365172;
-var __ZNSt3__210moneypunctIcLb0EE4intlE = Module['__ZNSt3__210moneypunctIcLb0EE4intlE'] = 356240;
-var __ZNSt3__210moneypunctIcLb1EE4intlE = Module['__ZNSt3__210moneypunctIcLb1EE4intlE'] = 356241;
-var __ZNSt3__210moneypunctIwLb0EE4intlE = Module['__ZNSt3__210moneypunctIwLb0EE4intlE'] = 356242;
-var __ZNSt3__210moneypunctIwLb1EE4intlE = Module['__ZNSt3__210moneypunctIwLb1EE4intlE'] = 356243;
-var __ZNSt3__26locale4noneE = Module['__ZNSt3__26locale4noneE'] = 356244;
-var __ZNSt3__26locale7collateE = Module['__ZNSt3__26locale7collateE'] = 356248;
-var __ZNSt3__26locale5ctypeE = Module['__ZNSt3__26locale5ctypeE'] = 356252;
-var __ZNSt3__26locale8monetaryE = Module['__ZNSt3__26locale8monetaryE'] = 356256;
-var __ZNSt3__26locale7numericE = Module['__ZNSt3__26locale7numericE'] = 356260;
-var __ZNSt3__26locale4timeE = Module['__ZNSt3__26locale4timeE'] = 356264;
-var __ZNSt3__26locale8messagesE = Module['__ZNSt3__26locale8messagesE'] = 356268;
-var __ZNSt3__26locale3allE = Module['__ZNSt3__26locale3allE'] = 356272;
-var __ZTINSt3__26locale5__impE = Module['__ZTINSt3__26locale5__impE'] = 360504;
-var __ZTINSt3__214collate_bynameIcEE = Module['__ZTINSt3__214collate_bynameIcEE'] = 360576;
-var __ZTINSt3__214collate_bynameIwEE = Module['__ZTINSt3__214collate_bynameIwEE'] = 360648;
-var __ZNSt3__210ctype_base5spaceE = Module['__ZNSt3__210ctype_base5spaceE'] = 356360;
-var __ZNSt3__210ctype_base5printE = Module['__ZNSt3__210ctype_base5printE'] = 356364;
-var __ZNSt3__210ctype_base5cntrlE = Module['__ZNSt3__210ctype_base5cntrlE'] = 356368;
-var __ZNSt3__210ctype_base5upperE = Module['__ZNSt3__210ctype_base5upperE'] = 356372;
-var __ZNSt3__210ctype_base5lowerE = Module['__ZNSt3__210ctype_base5lowerE'] = 356376;
-var __ZNSt3__210ctype_base5alphaE = Module['__ZNSt3__210ctype_base5alphaE'] = 356380;
-var __ZNSt3__210ctype_base5digitE = Module['__ZNSt3__210ctype_base5digitE'] = 356384;
-var __ZNSt3__210ctype_base5punctE = Module['__ZNSt3__210ctype_base5punctE'] = 356388;
-var __ZNSt3__210ctype_base6xdigitE = Module['__ZNSt3__210ctype_base6xdigitE'] = 356392;
-var __ZNSt3__210ctype_base5blankE = Module['__ZNSt3__210ctype_base5blankE'] = 356396;
-var __ZNSt3__210ctype_base5alnumE = Module['__ZNSt3__210ctype_base5alnumE'] = 356400;
-var __ZNSt3__210ctype_base5graphE = Module['__ZNSt3__210ctype_base5graphE'] = 356404;
-var __ZNSt3__25ctypeIcE10table_sizeE = Module['__ZNSt3__25ctypeIcE10table_sizeE'] = 356408;
-var __ZTINSt3__25ctypeIcEE = Module['__ZTINSt3__25ctypeIcEE'] = 360680;
-var __ZTINSt3__212ctype_bynameIcEE = Module['__ZTINSt3__212ctype_bynameIcEE'] = 360740;
-var __ZTINSt3__212ctype_bynameIwEE = Module['__ZTINSt3__212ctype_bynameIwEE'] = 360780;
-var __ZTINSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIwc11__mbstate_tEE'] = 359388;
-var __ZTINSt3__28numpunctIcEE = Module['__ZTINSt3__28numpunctIcEE'] = 360816;
-var __ZTINSt3__28numpunctIwEE = Module['__ZTINSt3__28numpunctIwEE'] = 360852;
-var __ZTINSt3__215numpunct_bynameIcEE = Module['__ZTINSt3__215numpunct_bynameIcEE'] = 360896;
-var __ZTINSt3__215numpunct_bynameIwEE = Module['__ZTINSt3__215numpunct_bynameIwEE'] = 360940;
-var __ZTINSt3__26locale5facetE = Module['__ZTINSt3__26locale5facetE'] = 358120;
-var __ZTSNSt3__26locale5facetE = Module['__ZTSNSt3__26locale5facetE'] = 358096;
-var __ZTINSt3__25ctypeIwEE = Module['__ZTINSt3__25ctypeIwEE'] = 358248;
-var __ZTSNSt3__25ctypeIwEE = Module['__ZTSNSt3__25ctypeIwEE'] = 358200;
-var __ZTSNSt3__210ctype_baseE = Module['__ZTSNSt3__210ctype_baseE'] = 358218;
-var __ZTINSt3__210ctype_baseE = Module['__ZTINSt3__210ctype_baseE'] = 358240;
-var __ZTINSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIcc11__mbstate_tEE'] = 358396;
-var __ZTSNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIcc11__mbstate_tEE'] = 358328;
-var __ZTSNSt3__212codecvt_baseE = Module['__ZTSNSt3__212codecvt_baseE'] = 358362;
-var __ZTINSt3__212codecvt_baseE = Module['__ZTINSt3__212codecvt_baseE'] = 358388;
-var __ZTINSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsc11__mbstate_tEE'] = 358512;
-var __ZTSNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsc11__mbstate_tEE'] = 358476;
-var __ZTINSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsDu11__mbstate_tEE'] = 358628;
-var __ZTSNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsDu11__mbstate_tEE'] = 358592;
-var __ZTINSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDic11__mbstate_tEE'] = 358744;
-var __ZTSNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDic11__mbstate_tEE'] = 358708;
-var __ZTINSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDiDu11__mbstate_tEE'] = 358860;
-var __ZTSNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDiDu11__mbstate_tEE'] = 358824;
-var __ZTVNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm16EEE'] = 358892;
-var __ZTINSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm16EEE'] = 358976;
-var __ZTSNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm16EEE'] = 358940;
-var __ZTVNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm32EEE'] = 358988;
-var __ZTINSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm32EEE'] = 359072;
-var __ZTSNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm32EEE'] = 359036;
-var __ZTVNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm16EEE'] = 359084;
-var __ZTINSt3__217__widen_from_utf8ILm16EEE = Module['__ZTINSt3__217__widen_from_utf8ILm16EEE'] = 359168;
-var __ZTSNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm16EEE'] = 359132;
-var __ZTVNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm32EEE'] = 359180;
-var __ZTINSt3__217__widen_from_utf8ILm32EEE = Module['__ZTINSt3__217__widen_from_utf8ILm32EEE'] = 359264;
-var __ZTSNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm32EEE'] = 359228;
-var __ZTVNSt3__214__codecvt_utf8IwEE = Module['__ZTVNSt3__214__codecvt_utf8IwEE'] = 359276;
-var __ZTINSt3__214__codecvt_utf8IwEE = Module['__ZTINSt3__214__codecvt_utf8IwEE'] = 359420;
-var __ZTSNSt3__214__codecvt_utf8IwEE = Module['__ZTSNSt3__214__codecvt_utf8IwEE'] = 359324;
-var __ZTSNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIwc11__mbstate_tEE'] = 359352;
-var __ZTVNSt3__214__codecvt_utf8IDsEE = Module['__ZTVNSt3__214__codecvt_utf8IDsEE'] = 359432;
-var __ZTINSt3__214__codecvt_utf8IDsEE = Module['__ZTINSt3__214__codecvt_utf8IDsEE'] = 359512;
-var __ZTSNSt3__214__codecvt_utf8IDsEE = Module['__ZTSNSt3__214__codecvt_utf8IDsEE'] = 359480;
-var __ZTVNSt3__214__codecvt_utf8IDiEE = Module['__ZTVNSt3__214__codecvt_utf8IDiEE'] = 359524;
-var __ZTINSt3__214__codecvt_utf8IDiEE = Module['__ZTINSt3__214__codecvt_utf8IDiEE'] = 359604;
-var __ZTSNSt3__214__codecvt_utf8IDiEE = Module['__ZTSNSt3__214__codecvt_utf8IDiEE'] = 359572;
-var __ZTVNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb0EEE'] = 359616;
-var __ZTINSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb0EEE'] = 359700;
-var __ZTSNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb0EEE'] = 359664;
-var __ZTVNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb1EEE'] = 359712;
-var __ZTINSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb1EEE'] = 359796;
-var __ZTSNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb1EEE'] = 359760;
-var __ZTVNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb0EEE'] = 359808;
-var __ZTINSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb0EEE'] = 359892;
-var __ZTSNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb0EEE'] = 359856;
-var __ZTVNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb1EEE'] = 359904;
-var __ZTINSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb1EEE'] = 359988;
-var __ZTSNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb1EEE'] = 359952;
-var __ZTVNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb0EEE'] = 360000;
-var __ZTINSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb0EEE'] = 360084;
-var __ZTSNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb0EEE'] = 360048;
-var __ZTVNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb1EEE'] = 360096;
-var __ZTINSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb1EEE'] = 360180;
-var __ZTSNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb1EEE'] = 360144;
-var __ZTVNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IwEE'] = 360192;
-var __ZTINSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IwEE'] = 360276;
-var __ZTSNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IwEE'] = 360240;
-var __ZTVNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDiEE'] = 360288;
-var __ZTINSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDiEE'] = 360372;
-var __ZTSNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDiEE'] = 360336;
-var __ZTVNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDsEE'] = 360384;
-var __ZTINSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDsEE'] = 360468;
-var __ZTSNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDsEE'] = 360432;
-var __ZTSNSt3__26locale5__impE = Module['__ZTSNSt3__26locale5__impE'] = 360480;
-var __ZTSNSt3__214collate_bynameIcEE = Module['__ZTSNSt3__214collate_bynameIcEE'] = 360516;
-var __ZTSNSt3__27collateIcEE = Module['__ZTSNSt3__27collateIcEE'] = 360544;
-var __ZTINSt3__27collateIcEE = Module['__ZTINSt3__27collateIcEE'] = 360564;
-var __ZTSNSt3__214collate_bynameIwEE = Module['__ZTSNSt3__214collate_bynameIwEE'] = 360588;
-var __ZTSNSt3__27collateIwEE = Module['__ZTSNSt3__27collateIwEE'] = 360616;
-var __ZTINSt3__27collateIwEE = Module['__ZTINSt3__27collateIwEE'] = 360636;
-var __ZTSNSt3__25ctypeIcEE = Module['__ZTSNSt3__25ctypeIcEE'] = 360660;
-var __ZTSNSt3__212ctype_bynameIcEE = Module['__ZTSNSt3__212ctype_bynameIcEE'] = 360712;
-var __ZTSNSt3__212ctype_bynameIwEE = Module['__ZTSNSt3__212ctype_bynameIwEE'] = 360752;
-var __ZTSNSt3__28numpunctIcEE = Module['__ZTSNSt3__28numpunctIcEE'] = 360792;
-var __ZTSNSt3__28numpunctIwEE = Module['__ZTSNSt3__28numpunctIwEE'] = 360828;
-var __ZTSNSt3__215numpunct_bynameIcEE = Module['__ZTSNSt3__215numpunct_bynameIcEE'] = 360864;
-var __ZTSNSt3__215numpunct_bynameIwEE = Module['__ZTSNSt3__215numpunct_bynameIwEE'] = 360908;
-var __ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361228;
-var __ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361080;
-var __ZTSNSt3__29__num_getIcEE = Module['__ZTSNSt3__29__num_getIcEE'] = 361148;
-var __ZTSNSt3__214__num_get_baseE = Module['__ZTSNSt3__214__num_get_baseE'] = 361170;
-var __ZTINSt3__214__num_get_baseE = Module['__ZTINSt3__214__num_get_baseE'] = 361196;
-var __ZTINSt3__29__num_getIcEE = Module['__ZTINSt3__29__num_getIcEE'] = 361204;
-var __ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361440;
-var __ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361324;
-var __ZTSNSt3__29__num_getIwEE = Module['__ZTSNSt3__29__num_getIwEE'] = 361392;
-var __ZTINSt3__29__num_getIwEE = Module['__ZTINSt3__29__num_getIwEE'] = 361416;
-var __ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361672;
-var __ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361524;
-var __ZTSNSt3__29__num_putIcEE = Module['__ZTSNSt3__29__num_putIcEE'] = 361592;
-var __ZTSNSt3__214__num_put_baseE = Module['__ZTSNSt3__214__num_put_baseE'] = 361614;
-var __ZTINSt3__214__num_put_baseE = Module['__ZTINSt3__214__num_put_baseE'] = 361640;
-var __ZTINSt3__29__num_putIcEE = Module['__ZTINSt3__29__num_putIcEE'] = 361648;
-var __ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361872;
-var __ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 361756;
-var __ZTSNSt3__29__num_putIwEE = Module['__ZTSNSt3__29__num_putIwEE'] = 361824;
-var __ZTINSt3__29__num_putIwEE = Module['__ZTINSt3__29__num_putIwEE'] = 361848;
-var __ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362128;
-var __ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 361988;
-var __ZTSNSt3__29time_baseE = Module['__ZTSNSt3__29time_baseE'] = 362057;
-var __ZTINSt3__29time_baseE = Module['__ZTINSt3__29time_baseE'] = 362076;
-var __ZTSNSt3__220__time_get_c_storageIcEE = Module['__ZTSNSt3__220__time_get_c_storageIcEE'] = 362084;
-var __ZTINSt3__220__time_get_c_storageIcEE = Module['__ZTINSt3__220__time_get_c_storageIcEE'] = 362120;
-var __ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362364;
-var __ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362252;
-var __ZTSNSt3__220__time_get_c_storageIwEE = Module['__ZTSNSt3__220__time_get_c_storageIwEE'] = 362321;
-var __ZTINSt3__220__time_get_c_storageIwEE = Module['__ZTINSt3__220__time_get_c_storageIwEE'] = 362356;
-var __ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362668;
-var __ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362516;
-var __ZTSNSt3__218__time_get_storageIcEE = Module['__ZTSNSt3__218__time_get_storageIcEE'] = 362593;
-var __ZTSNSt3__210__time_getE = Module['__ZTSNSt3__210__time_getE'] = 362625;
-var __ZTINSt3__210__time_getE = Module['__ZTINSt3__210__time_getE'] = 362648;
-var __ZTINSt3__218__time_get_storageIcEE = Module['__ZTINSt3__218__time_get_storageIcEE'] = 362656;
-var __ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362936;
-var __ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 362812;
-var __ZTSNSt3__218__time_get_storageIwEE = Module['__ZTSNSt3__218__time_get_storageIwEE'] = 362889;
-var __ZTINSt3__218__time_get_storageIwEE = Module['__ZTINSt3__218__time_get_storageIwEE'] = 362924;
-var __ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363092;
-var __ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 362992;
-var __ZTSNSt3__210__time_putE = Module['__ZTSNSt3__210__time_putE'] = 363061;
-var __ZTINSt3__210__time_putE = Module['__ZTINSt3__210__time_putE'] = 363084;
-var __ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363220;
-var __ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363148;
-var __ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363356;
-var __ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 363276;
-var __ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363472;
-var __ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 363392;
-var __ZTINSt3__210moneypunctIcLb0EEE = Module['__ZTINSt3__210moneypunctIcLb0EEE'] = 363600;
-var __ZTSNSt3__210moneypunctIcLb0EEE = Module['__ZTSNSt3__210moneypunctIcLb0EEE'] = 363540;
-var __ZTSNSt3__210money_baseE = Module['__ZTSNSt3__210money_baseE'] = 363568;
-var __ZTINSt3__210money_baseE = Module['__ZTINSt3__210money_baseE'] = 363592;
-var __ZTINSt3__210moneypunctIcLb1EEE = Module['__ZTINSt3__210moneypunctIcLb1EEE'] = 363716;
-var __ZTSNSt3__210moneypunctIcLb1EEE = Module['__ZTSNSt3__210moneypunctIcLb1EEE'] = 363688;
-var __ZTINSt3__210moneypunctIwLb0EEE = Module['__ZTINSt3__210moneypunctIwLb0EEE'] = 363832;
-var __ZTSNSt3__210moneypunctIwLb0EEE = Module['__ZTSNSt3__210moneypunctIwLb0EEE'] = 363804;
-var __ZTINSt3__210moneypunctIwLb1EEE = Module['__ZTINSt3__210moneypunctIwLb1EEE'] = 363948;
-var __ZTSNSt3__210moneypunctIwLb1EEE = Module['__ZTSNSt3__210moneypunctIwLb1EEE'] = 363920;
-var __ZTINSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb0EEE'] = 364072;
-var __ZTSNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb0EEE'] = 364036;
-var __ZTINSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb1EEE'] = 364176;
-var __ZTSNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb1EEE'] = 364140;
-var __ZTINSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb0EEE'] = 364280;
-var __ZTSNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb0EEE'] = 364244;
-var __ZTINSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb1EEE'] = 364384;
-var __ZTSNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb1EEE'] = 364348;
-var __ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364528;
-var __ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364424;
-var __ZTSNSt3__211__money_getIcEE = Module['__ZTSNSt3__211__money_getIcEE'] = 364494;
-var __ZTINSt3__211__money_getIcEE = Module['__ZTINSt3__211__money_getIcEE'] = 364520;
-var __ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364692;
-var __ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364588;
-var __ZTSNSt3__211__money_getIwEE = Module['__ZTSNSt3__211__money_getIwEE'] = 364658;
-var __ZTINSt3__211__money_getIwEE = Module['__ZTINSt3__211__money_getIwEE'] = 364684;
-var __ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364856;
-var __ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 364752;
-var __ZTSNSt3__211__money_putIcEE = Module['__ZTSNSt3__211__money_putIcEE'] = 364822;
-var __ZTINSt3__211__money_putIcEE = Module['__ZTINSt3__211__money_putIcEE'] = 364848;
-var __ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 365020;
-var __ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 364916;
-var __ZTSNSt3__211__money_putIwEE = Module['__ZTSNSt3__211__money_putIwEE'] = 364986;
-var __ZTINSt3__211__money_putIwEE = Module['__ZTINSt3__211__money_putIwEE'] = 365012;
-var __ZTINSt3__28messagesIcEE = Module['__ZTINSt3__28messagesIcEE'] = 365140;
-var __ZTSNSt3__28messagesIcEE = Module['__ZTSNSt3__28messagesIcEE'] = 365084;
-var __ZTSNSt3__213messages_baseE = Module['__ZTSNSt3__213messages_baseE'] = 365105;
-var __ZTINSt3__213messages_baseE = Module['__ZTINSt3__213messages_baseE'] = 365132;
-var __ZTINSt3__28messagesIwEE = Module['__ZTINSt3__28messagesIwEE'] = 365228;
-var __ZTSNSt3__28messagesIwEE = Module['__ZTSNSt3__28messagesIwEE'] = 365204;
-var __ZTINSt3__215messages_bynameIcEE = Module['__ZTINSt3__215messages_bynameIcEE'] = 365324;
-var __ZTSNSt3__215messages_bynameIcEE = Module['__ZTSNSt3__215messages_bynameIcEE'] = 365292;
-var __ZTINSt3__215messages_bynameIwEE = Module['__ZTINSt3__215messages_bynameIwEE'] = 365400;
-var __ZTSNSt3__215messages_bynameIwEE = Module['__ZTSNSt3__215messages_bynameIwEE'] = 365368;
-var __ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365504;
-var __ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 365460;
-var __ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365608;
-var __ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 365564;
-var __ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365712;
-var __ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 365668;
-var __ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365816;
-var __ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 365772;
-var __ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 365920;
-var __ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 365876;
-var __ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 366024;
-var __ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 365980;
-var __ZTINSt3__215__time_get_tempIcEE = Module['__ZTINSt3__215__time_get_tempIcEE'] = 367076;
-var __ZTSNSt3__215__time_get_tempIcEE = Module['__ZTSNSt3__215__time_get_tempIcEE'] = 367044;
-var __ZTINSt3__215__time_get_tempIwEE = Module['__ZTINSt3__215__time_get_tempIwEE'] = 367188;
-var __ZTSNSt3__215__time_get_tempIwEE = Module['__ZTSNSt3__215__time_get_tempIwEE'] = 367156;
-var __ZNSt3__213allocator_argE = Module['__ZNSt3__213allocator_argE'] = 367200;
-var __ZTSNSt3__214__shared_countE = Module['__ZTSNSt3__214__shared_countE'] = 367224;
-var __ZTSNSt3__219__shared_weak_countE = Module['__ZTSNSt3__219__shared_weak_countE'] = 367288;
-var __ZTVNSt3__212bad_weak_ptrE = Module['__ZTVNSt3__212bad_weak_ptrE'] = 367344;
-var __ZTINSt3__212bad_weak_ptrE = Module['__ZTINSt3__212bad_weak_ptrE'] = 367388;
-var __ZTSNSt3__212bad_weak_ptrE = Module['__ZTSNSt3__212bad_weak_ptrE'] = 367364;
-var __ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367400;
-var __ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367596;
-var __ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367428;
-var __ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367676;
-var __ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 367456;
-var __ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367530;
-var __ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 367588;
-var __ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 367608;
-var __ZNSt3__210defer_lockE = Module['__ZNSt3__210defer_lockE'] = 367688;
-var __ZNSt3__211try_to_lockE = Module['__ZNSt3__211try_to_lockE'] = 367689;
-var __ZNSt3__210adopt_lockE = Module['__ZNSt3__210adopt_lockE'] = 367690;
-var __ZSt7nothrow = Module['__ZSt7nothrow'] = 367691;
-var __ZTVNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTVNSt3__24__fs10filesystem16filesystem_errorE'] = 367696;
-var __ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE = Module['__ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE'] = 367692;
-var __ZTINSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTINSt3__24__fs10filesystem16filesystem_errorE'] = 367792;
-var __ZNSt3__24__fs10filesystem4path19preferred_separatorE = Module['__ZNSt3__24__fs10filesystem4path19preferred_separatorE'] = 367744;
-var __ZTSNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTSNSt3__24__fs10filesystem16filesystem_errorE'] = 367745;
-var __ZTVSt19bad_optional_access = Module['__ZTVSt19bad_optional_access'] = 367828;
-var __ZTISt19bad_optional_access = Module['__ZTISt19bad_optional_access'] = 367872;
-var __ZTSSt19bad_optional_access = Module['__ZTSSt19bad_optional_access'] = 367848;
-var __ZTVNSt12experimental19bad_optional_accessE = Module['__ZTVNSt12experimental19bad_optional_accessE'] = 367884;
-var __ZTINSt12experimental19bad_optional_accessE = Module['__ZTINSt12experimental19bad_optional_accessE'] = 367944;
-var __ZTSNSt12experimental19bad_optional_accessE = Module['__ZTSNSt12experimental19bad_optional_accessE'] = 367904;
-var __ZNSt3__212__rs_default4__c_E = Module['__ZNSt3__212__rs_default4__c_E'] = 426712;
-var __ZTVNSt3__211regex_errorE = Module['__ZTVNSt3__211regex_errorE'] = 367956;
-var __ZTINSt3__211regex_errorE = Module['__ZTINSt3__211regex_errorE'] = 369024;
-var __ZTSNSt3__211regex_errorE = Module['__ZTSNSt3__211regex_errorE'] = 369000;
-var __ZTVSt11logic_error = Module['__ZTVSt11logic_error'] = 381392;
-var __ZTVSt13runtime_error = Module['__ZTVSt13runtime_error'] = 381412;
-var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE = Module['__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE'] = 369104;
-var __ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE = Module['__ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE'] = 369108;
-var __ZTVNSt3__212strstreambufE = Module['__ZTVNSt3__212strstreambufE'] = 369360;
-var __ZTTNSt3__210istrstreamE = Module['__ZTTNSt3__210istrstreamE'] = 369464;
-var __ZTTNSt3__210ostrstreamE = Module['__ZTTNSt3__210ostrstreamE'] = 369520;
-var __ZTTNSt3__29strstreamE = Module['__ZTTNSt3__29strstreamE'] = 369596;
-var __ZTINSt3__212strstreambufE = Module['__ZTINSt3__212strstreambufE'] = 369660;
-var __ZTVNSt3__210istrstreamE = Module['__ZTVNSt3__210istrstreamE'] = 369424;
-var __ZTINSt3__210istrstreamE = Module['__ZTINSt3__210istrstreamE'] = 369736;
-var __ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 369672;
-var __ZTVNSt3__210ostrstreamE = Module['__ZTVNSt3__210ostrstreamE'] = 369480;
-var __ZTINSt3__210ostrstreamE = Module['__ZTINSt3__210ostrstreamE'] = 369812;
-var __ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 369748;
-var __ZTVNSt3__29strstreamE = Module['__ZTVNSt3__29strstreamE'] = 369536;
-var __ZTINSt3__29strstreamE = Module['__ZTINSt3__29strstreamE'] = 369984;
-var __ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE'] = 369824;
-var __ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 369884;
-var __ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 369924;
-var __ZTSNSt3__212strstreambufE = Module['__ZTSNSt3__212strstreambufE'] = 369636;
-var __ZTSNSt3__210istrstreamE = Module['__ZTSNSt3__210istrstreamE'] = 369712;
-var __ZTSNSt3__210ostrstreamE = Module['__ZTSNSt3__210ostrstreamE'] = 369788;
-var __ZTSNSt3__29strstreamE = Module['__ZTSNSt3__29strstreamE'] = 369964;
-var __ZTVNSt3__212system_errorE = Module['__ZTVNSt3__212system_errorE'] = 370068;
-var __ZTVNSt3__224__generic_error_categoryE = Module['__ZTVNSt3__224__generic_error_categoryE'] = 369996;
-var __ZTINSt3__224__generic_error_categoryE = Module['__ZTINSt3__224__generic_error_categoryE'] = 370268;
-var __ZTVNSt3__223__system_error_categoryE = Module['__ZTVNSt3__223__system_error_categoryE'] = 370032;
-var __ZTINSt3__223__system_error_categoryE = Module['__ZTINSt3__223__system_error_categoryE'] = 370316;
-var __ZTVNSt3__214error_categoryE = Module['__ZTVNSt3__214error_categoryE'] = 370088;
-var __ZTINSt3__214error_categoryE = Module['__ZTINSt3__214error_categoryE'] = 370152;
-var __ZTSNSt3__214error_categoryE = Module['__ZTSNSt3__214error_categoryE'] = 370124;
-var __ZTVNSt3__212__do_messageE = Module['__ZTVNSt3__212__do_messageE'] = 370160;
-var __ZTSNSt3__212__do_messageE = Module['__ZTSNSt3__212__do_messageE'] = 370196;
-var __ZTSNSt3__224__generic_error_categoryE = Module['__ZTSNSt3__224__generic_error_categoryE'] = 370232;
-var __ZTSNSt3__223__system_error_categoryE = Module['__ZTSNSt3__223__system_error_categoryE'] = 370280;
-var __ZTSNSt3__212system_errorE = Module['__ZTSNSt3__212system_errorE'] = 370328;
-var __ZNSt3__219piecewise_constructE = Module['__ZNSt3__219piecewise_constructE'] = 370364;
-var __ZTVSt18bad_variant_access = Module['__ZTVSt18bad_variant_access'] = 370368;
-var __ZTISt18bad_variant_access = Module['__ZTISt18bad_variant_access'] = 370412;
-var __ZTSSt18bad_variant_access = Module['__ZTSSt18bad_variant_access'] = 370388;
-var ___cxa_unexpected_handler = Module['___cxa_unexpected_handler'] = 382792;
-var ___cxa_terminate_handler = Module['___cxa_terminate_handler'] = 382788;
-var ___cxa_new_handler = Module['___cxa_new_handler'] = 429252;
-var __ZTIN10__cxxabiv116__shim_type_infoE = Module['__ZTIN10__cxxabiv116__shim_type_infoE'] = 378992;
-var __ZTIN10__cxxabiv117__class_type_infoE = Module['__ZTIN10__cxxabiv117__class_type_infoE'] = 379040;
-var __ZTIN10__cxxabiv117__pbase_type_infoE = Module['__ZTIN10__cxxabiv117__pbase_type_infoE'] = 379088;
-var __ZTIDn = Module['__ZTIDn'] = 379436;
-var __ZTIN10__cxxabiv119__pointer_type_infoE = Module['__ZTIN10__cxxabiv119__pointer_type_infoE'] = 379136;
-var __ZTIv = Module['__ZTIv'] = 379384;
-var __ZTIN10__cxxabiv120__function_type_infoE = Module['__ZTIN10__cxxabiv120__function_type_infoE'] = 379188;
-var __ZTIN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTIN10__cxxabiv129__pointer_to_member_type_infoE'] = 379248;
-var __ZTSN10__cxxabiv116__shim_type_infoE = Module['__ZTSN10__cxxabiv116__shim_type_infoE'] = 378956;
-var __ZTISt9type_info = Module['__ZTISt9type_info'] = 381928;
-var __ZTSN10__cxxabiv117__class_type_infoE = Module['__ZTSN10__cxxabiv117__class_type_infoE'] = 379004;
-var __ZTSN10__cxxabiv117__pbase_type_infoE = Module['__ZTSN10__cxxabiv117__pbase_type_infoE'] = 379052;
-var __ZTSN10__cxxabiv119__pointer_type_infoE = Module['__ZTSN10__cxxabiv119__pointer_type_infoE'] = 379100;
-var __ZTSN10__cxxabiv120__function_type_infoE = Module['__ZTSN10__cxxabiv120__function_type_infoE'] = 379148;
-var __ZTSN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTSN10__cxxabiv129__pointer_to_member_type_infoE'] = 379200;
-var __ZTVN10__cxxabiv116__shim_type_infoE = Module['__ZTVN10__cxxabiv116__shim_type_infoE'] = 379272;
-var __ZTVN10__cxxabiv123__fundamental_type_infoE = Module['__ZTVN10__cxxabiv123__fundamental_type_infoE'] = 379300;
-var __ZTIN10__cxxabiv123__fundamental_type_infoE = Module['__ZTIN10__cxxabiv123__fundamental_type_infoE'] = 379368;
-var __ZTSN10__cxxabiv123__fundamental_type_infoE = Module['__ZTSN10__cxxabiv123__fundamental_type_infoE'] = 379328;
-var __ZTSv = Module['__ZTSv'] = 379380;
-var __ZTSPv = Module['__ZTSPv'] = 379392;
-var __ZTIPv = Module['__ZTIPv'] = 379396;
-var __ZTVN10__cxxabiv119__pointer_type_infoE = Module['__ZTVN10__cxxabiv119__pointer_type_infoE'] = 381132;
-var __ZTSPKv = Module['__ZTSPKv'] = 379412;
-var __ZTIPKv = Module['__ZTIPKv'] = 379416;
-var __ZTSDn = Module['__ZTSDn'] = 379432;
-var __ZTSPDn = Module['__ZTSPDn'] = 379444;
-var __ZTIPDn = Module['__ZTIPDn'] = 379448;
-var __ZTSPKDn = Module['__ZTSPKDn'] = 379464;
-var __ZTIPKDn = Module['__ZTIPKDn'] = 379472;
-var __ZTSb = Module['__ZTSb'] = 379488;
-var __ZTIb = Module['__ZTIb'] = 379492;
-var __ZTSPb = Module['__ZTSPb'] = 379500;
-var __ZTIPb = Module['__ZTIPb'] = 379504;
-var __ZTSPKb = Module['__ZTSPKb'] = 379520;
-var __ZTIPKb = Module['__ZTIPKb'] = 379524;
-var __ZTSw = Module['__ZTSw'] = 379540;
-var __ZTIw = Module['__ZTIw'] = 379544;
-var __ZTSPw = Module['__ZTSPw'] = 379552;
-var __ZTIPw = Module['__ZTIPw'] = 379556;
-var __ZTSPKw = Module['__ZTSPKw'] = 379572;
-var __ZTIPKw = Module['__ZTIPKw'] = 379576;
-var __ZTSc = Module['__ZTSc'] = 379592;
-var __ZTIc = Module['__ZTIc'] = 379596;
-var __ZTSPc = Module['__ZTSPc'] = 379604;
-var __ZTIPc = Module['__ZTIPc'] = 379608;
-var __ZTSPKc = Module['__ZTSPKc'] = 379624;
-var __ZTIPKc = Module['__ZTIPKc'] = 379628;
-var __ZTSh = Module['__ZTSh'] = 379644;
-var __ZTIh = Module['__ZTIh'] = 379648;
-var __ZTSPh = Module['__ZTSPh'] = 379656;
-var __ZTIPh = Module['__ZTIPh'] = 379660;
-var __ZTSPKh = Module['__ZTSPKh'] = 379676;
-var __ZTIPKh = Module['__ZTIPKh'] = 379680;
-var __ZTSa = Module['__ZTSa'] = 379696;
-var __ZTIa = Module['__ZTIa'] = 379700;
-var __ZTSPa = Module['__ZTSPa'] = 379708;
-var __ZTIPa = Module['__ZTIPa'] = 379712;
-var __ZTSPKa = Module['__ZTSPKa'] = 379728;
-var __ZTIPKa = Module['__ZTIPKa'] = 379732;
-var __ZTSs = Module['__ZTSs'] = 379748;
-var __ZTIs = Module['__ZTIs'] = 379752;
-var __ZTSPs = Module['__ZTSPs'] = 379760;
-var __ZTIPs = Module['__ZTIPs'] = 379764;
-var __ZTSPKs = Module['__ZTSPKs'] = 379780;
-var __ZTIPKs = Module['__ZTIPKs'] = 379784;
-var __ZTSt = Module['__ZTSt'] = 379800;
-var __ZTIt = Module['__ZTIt'] = 379804;
-var __ZTSPt = Module['__ZTSPt'] = 379812;
-var __ZTIPt = Module['__ZTIPt'] = 379816;
-var __ZTSPKt = Module['__ZTSPKt'] = 379832;
-var __ZTIPKt = Module['__ZTIPKt'] = 379836;
-var __ZTSi = Module['__ZTSi'] = 379852;
-var __ZTIi = Module['__ZTIi'] = 379856;
-var __ZTSPi = Module['__ZTSPi'] = 379864;
-var __ZTIPi = Module['__ZTIPi'] = 379868;
-var __ZTSPKi = Module['__ZTSPKi'] = 379884;
-var __ZTIPKi = Module['__ZTIPKi'] = 379888;
-var __ZTSj = Module['__ZTSj'] = 379904;
-var __ZTIj = Module['__ZTIj'] = 379908;
-var __ZTSPj = Module['__ZTSPj'] = 379916;
-var __ZTIPj = Module['__ZTIPj'] = 379920;
-var __ZTSPKj = Module['__ZTSPKj'] = 379936;
-var __ZTIPKj = Module['__ZTIPKj'] = 379940;
-var __ZTSl = Module['__ZTSl'] = 379956;
-var __ZTIl = Module['__ZTIl'] = 379960;
-var __ZTSPl = Module['__ZTSPl'] = 379968;
-var __ZTIPl = Module['__ZTIPl'] = 379972;
-var __ZTSPKl = Module['__ZTSPKl'] = 379988;
-var __ZTIPKl = Module['__ZTIPKl'] = 379992;
-var __ZTSm = Module['__ZTSm'] = 380008;
-var __ZTIm = Module['__ZTIm'] = 380012;
-var __ZTSPm = Module['__ZTSPm'] = 380020;
-var __ZTIPm = Module['__ZTIPm'] = 380024;
-var __ZTSPKm = Module['__ZTSPKm'] = 380040;
-var __ZTIPKm = Module['__ZTIPKm'] = 380044;
-var __ZTSx = Module['__ZTSx'] = 380060;
-var __ZTIx = Module['__ZTIx'] = 380064;
-var __ZTSPx = Module['__ZTSPx'] = 380072;
-var __ZTIPx = Module['__ZTIPx'] = 380076;
-var __ZTSPKx = Module['__ZTSPKx'] = 380092;
-var __ZTIPKx = Module['__ZTIPKx'] = 380096;
-var __ZTSy = Module['__ZTSy'] = 380112;
-var __ZTIy = Module['__ZTIy'] = 380116;
-var __ZTSPy = Module['__ZTSPy'] = 380124;
-var __ZTIPy = Module['__ZTIPy'] = 380128;
-var __ZTSPKy = Module['__ZTSPKy'] = 380144;
-var __ZTIPKy = Module['__ZTIPKy'] = 380148;
-var __ZTSn = Module['__ZTSn'] = 380164;
-var __ZTIn = Module['__ZTIn'] = 380168;
-var __ZTSPn = Module['__ZTSPn'] = 380176;
-var __ZTIPn = Module['__ZTIPn'] = 380180;
-var __ZTSPKn = Module['__ZTSPKn'] = 380196;
-var __ZTIPKn = Module['__ZTIPKn'] = 380200;
-var __ZTSo = Module['__ZTSo'] = 380216;
-var __ZTIo = Module['__ZTIo'] = 380220;
-var __ZTSPo = Module['__ZTSPo'] = 380228;
-var __ZTIPo = Module['__ZTIPo'] = 380232;
-var __ZTSPKo = Module['__ZTSPKo'] = 380248;
-var __ZTIPKo = Module['__ZTIPKo'] = 380252;
-var __ZTSDh = Module['__ZTSDh'] = 380268;
-var __ZTIDh = Module['__ZTIDh'] = 380272;
-var __ZTSPDh = Module['__ZTSPDh'] = 380280;
-var __ZTIPDh = Module['__ZTIPDh'] = 380284;
-var __ZTSPKDh = Module['__ZTSPKDh'] = 380300;
-var __ZTIPKDh = Module['__ZTIPKDh'] = 380308;
-var __ZTSf = Module['__ZTSf'] = 380324;
-var __ZTIf = Module['__ZTIf'] = 380328;
-var __ZTSPf = Module['__ZTSPf'] = 380336;
-var __ZTIPf = Module['__ZTIPf'] = 380340;
-var __ZTSPKf = Module['__ZTSPKf'] = 380356;
-var __ZTIPKf = Module['__ZTIPKf'] = 380360;
-var __ZTSd = Module['__ZTSd'] = 380376;
-var __ZTId = Module['__ZTId'] = 380380;
-var __ZTSPd = Module['__ZTSPd'] = 380388;
-var __ZTIPd = Module['__ZTIPd'] = 380392;
-var __ZTSPKd = Module['__ZTSPKd'] = 380408;
-var __ZTIPKd = Module['__ZTIPKd'] = 380412;
-var __ZTSe = Module['__ZTSe'] = 380428;
-var __ZTIe = Module['__ZTIe'] = 380432;
-var __ZTSPe = Module['__ZTSPe'] = 380440;
-var __ZTIPe = Module['__ZTIPe'] = 380444;
-var __ZTSPKe = Module['__ZTSPKe'] = 380460;
-var __ZTIPKe = Module['__ZTIPKe'] = 380464;
-var __ZTSg = Module['__ZTSg'] = 380480;
-var __ZTIg = Module['__ZTIg'] = 380484;
-var __ZTSPg = Module['__ZTSPg'] = 380492;
-var __ZTIPg = Module['__ZTIPg'] = 380496;
-var __ZTSPKg = Module['__ZTSPKg'] = 380512;
-var __ZTIPKg = Module['__ZTIPKg'] = 380516;
-var __ZTSDu = Module['__ZTSDu'] = 380532;
-var __ZTIDu = Module['__ZTIDu'] = 380536;
-var __ZTSPDu = Module['__ZTSPDu'] = 380544;
-var __ZTIPDu = Module['__ZTIPDu'] = 380548;
-var __ZTSPKDu = Module['__ZTSPKDu'] = 380564;
-var __ZTIPKDu = Module['__ZTIPKDu'] = 380572;
-var __ZTSDs = Module['__ZTSDs'] = 380588;
-var __ZTIDs = Module['__ZTIDs'] = 380592;
-var __ZTSPDs = Module['__ZTSPDs'] = 380600;
-var __ZTIPDs = Module['__ZTIPDs'] = 380604;
-var __ZTSPKDs = Module['__ZTSPKDs'] = 380620;
-var __ZTIPKDs = Module['__ZTIPKDs'] = 380628;
-var __ZTSDi = Module['__ZTSDi'] = 380644;
-var __ZTIDi = Module['__ZTIDi'] = 380648;
-var __ZTSPDi = Module['__ZTSPDi'] = 380656;
-var __ZTIPDi = Module['__ZTIPDi'] = 380660;
-var __ZTSPKDi = Module['__ZTSPKDi'] = 380676;
-var __ZTIPKDi = Module['__ZTIPKDi'] = 380684;
-var __ZTVN10__cxxabiv117__array_type_infoE = Module['__ZTVN10__cxxabiv117__array_type_infoE'] = 380700;
-var __ZTIN10__cxxabiv117__array_type_infoE = Module['__ZTIN10__cxxabiv117__array_type_infoE'] = 380764;
-var __ZTSN10__cxxabiv117__array_type_infoE = Module['__ZTSN10__cxxabiv117__array_type_infoE'] = 380728;
-var __ZTVN10__cxxabiv120__function_type_infoE = Module['__ZTVN10__cxxabiv120__function_type_infoE'] = 380776;
-var __ZTVN10__cxxabiv116__enum_type_infoE = Module['__ZTVN10__cxxabiv116__enum_type_infoE'] = 380804;
-var __ZTIN10__cxxabiv116__enum_type_infoE = Module['__ZTIN10__cxxabiv116__enum_type_infoE'] = 380868;
-var __ZTSN10__cxxabiv116__enum_type_infoE = Module['__ZTSN10__cxxabiv116__enum_type_infoE'] = 380832;
-var __ZTIN10__cxxabiv120__si_class_type_infoE = Module['__ZTIN10__cxxabiv120__si_class_type_infoE'] = 381000;
-var __ZTSN10__cxxabiv120__si_class_type_infoE = Module['__ZTSN10__cxxabiv120__si_class_type_infoE'] = 380960;
-var __ZTIN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTIN10__cxxabiv121__vmi_class_type_infoE'] = 381092;
-var __ZTSN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTSN10__cxxabiv121__vmi_class_type_infoE'] = 381052;
-var __ZTVN10__cxxabiv117__pbase_type_infoE = Module['__ZTVN10__cxxabiv117__pbase_type_infoE'] = 381104;
-var __ZTVN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTVN10__cxxabiv129__pointer_to_member_type_infoE'] = 381160;
-var __ZTVSt9bad_alloc = Module['__ZTVSt9bad_alloc'] = 381188;
-var __ZTVSt20bad_array_new_length = Module['__ZTVSt20bad_array_new_length'] = 381208;
-var __ZTISt9bad_alloc = Module['__ZTISt9bad_alloc'] = 381340;
-var __ZTSSt9exception = Module['__ZTSSt9exception'] = 381248;
-var __ZTVSt13bad_exception = Module['__ZTVSt13bad_exception'] = 381272;
-var __ZTISt13bad_exception = Module['__ZTISt13bad_exception'] = 381312;
-var __ZTSSt13bad_exception = Module['__ZTSSt13bad_exception'] = 381292;
-var __ZTSSt9bad_alloc = Module['__ZTSSt9bad_alloc'] = 381324;
-var __ZTSSt20bad_array_new_length = Module['__ZTSSt20bad_array_new_length'] = 381352;
-var __ZTVSt12domain_error = Module['__ZTVSt12domain_error'] = 381432;
-var __ZTISt12domain_error = Module['__ZTISt12domain_error'] = 381500;
-var __ZTSSt12domain_error = Module['__ZTSSt12domain_error'] = 381452;
-var __ZTSSt11logic_error = Module['__ZTSSt11logic_error'] = 381469;
-var __ZTVSt16invalid_argument = Module['__ZTVSt16invalid_argument'] = 381512;
-var __ZTISt16invalid_argument = Module['__ZTISt16invalid_argument'] = 381556;
-var __ZTSSt16invalid_argument = Module['__ZTSSt16invalid_argument'] = 381532;
-var __ZTSSt12length_error = Module['__ZTSSt12length_error'] = 381588;
-var __ZTVSt12out_of_range = Module['__ZTVSt12out_of_range'] = 381620;
-var __ZTISt12out_of_range = Module['__ZTISt12out_of_range'] = 381660;
-var __ZTSSt12out_of_range = Module['__ZTSSt12out_of_range'] = 381640;
-var __ZTVSt11range_error = Module['__ZTVSt11range_error'] = 381672;
-var __ZTISt11range_error = Module['__ZTISt11range_error'] = 381740;
-var __ZTSSt11range_error = Module['__ZTSSt11range_error'] = 381692;
-var __ZTSSt13runtime_error = Module['__ZTSSt13runtime_error'] = 381708;
-var __ZTVSt14overflow_error = Module['__ZTVSt14overflow_error'] = 381752;
-var __ZTISt14overflow_error = Module['__ZTISt14overflow_error'] = 381792;
-var __ZTSSt14overflow_error = Module['__ZTSSt14overflow_error'] = 381772;
-var __ZTVSt15underflow_error = Module['__ZTVSt15underflow_error'] = 381804;
-var __ZTISt15underflow_error = Module['__ZTISt15underflow_error'] = 381844;
-var __ZTSSt15underflow_error = Module['__ZTSSt15underflow_error'] = 381824;
-var __ZTVSt8bad_cast = Module['__ZTVSt8bad_cast'] = 381856;
-var __ZTVSt10bad_typeid = Module['__ZTVSt10bad_typeid'] = 381876;
-var __ZTISt10bad_typeid = Module['__ZTISt10bad_typeid'] = 381976;
-var __ZTVSt9type_info = Module['__ZTVSt9type_info'] = 381896;
-var __ZTSSt9type_info = Module['__ZTSSt9type_info'] = 381912;
-var __ZTSSt8bad_cast = Module['__ZTSSt8bad_cast'] = 381936;
-var __ZTSSt10bad_typeid = Module['__ZTSSt10bad_typeid'] = 381960;
-var _in6addr_any = Module['_in6addr_any'] = 381988;
-var _in6addr_loopback = Module['_in6addr_loopback'] = 382004;
+var _graph = Module['_graph'] = 454280;
+var _camera = Module['_camera'] = 454304;
+var _universe = Module['_universe'] = 454576;
+var _sphere = Module['_sphere'] = 454640;
+var _line = Module['_line'] = 454904;
+var _show_degree = Module['_show_degree'] = 454447;
+var _view = Module['_view'] = 454512;
+var _projection = Module['_projection'] = 454448;
+var __ZNSt3__24coutE = Module['__ZNSt3__24coutE'] = 516852;
+var _MIN_DISTANCE_ORIGIN = Module['_MIN_DISTANCE_ORIGIN'] = 453308;
+var _scroll_sensitivity = Module['_scroll_sensitivity'] = 453300;
+var _mouseDown = Module['_mouseDown'] = 454444;
+var _mouseDownFirst = Module['_mouseDownFirst'] = 454445;
+var _loop = Module['_loop'] = 455040;
+var _stderr = Module['_stderr'] = 288048;
+var _autoRotateX = Module['_autoRotateX'] = 454446;
+var _mouseY = Module['_mouseY'] = 454424;
+var _mouseX = Module['_mouseX'] = 454416;
+var _drag_sensitivity = Module['_drag_sensitivity'] = 453304;
+var __ZTISt12length_error = Module['__ZTISt12length_error'] = 452872;
+var __ZTVSt12length_error = Module['__ZTVSt12length_error'] = 452832;
+var __ZTISt20bad_array_new_length = Module['__ZTISt20bad_array_new_length'] = 452644;
+var __ZNSt3__25ctypeIcE2idE = Module['__ZNSt3__25ctypeIcE2idE'] = 517920;
+var __ZTINSt3__217bad_function_callE = Module['__ZTINSt3__217bad_function_callE'] = 423556;
+var __ZTVNSt3__217bad_function_callE = Module['__ZTVNSt3__217bad_function_callE'] = 423508;
+var __ZTVSt9exception = Module['__ZTVSt9exception'] = 452492;
+var __ZTVNSt3__210__function6__baseIFvvEEE = Module['__ZTVNSt3__210__function6__baseIFvvEEE'] = 66196;
+var _n_iterations = Module['_n_iterations'] = 453296;
+var _zoom_step = Module['_zoom_step'] = 453312;
+var _movingUp = Module['_movingUp'] = 454272;
+var _yLocation = Module['_yLocation'] = 454276;
+var _mouseScroll = Module['_mouseScroll'] = 454432;
+var _zoom = Module['_zoom'] = 454440;
+var __ZTSNSt3__210__function6__baseIFvvEEE = Module['__ZTSNSt3__210__function6__baseIFvvEEE'] = 66140;
+var __ZTINSt3__210__function6__baseIFvvEEE = Module['__ZTINSt3__210__function6__baseIFvvEEE'] = 66176;
+var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 452144;
+var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 452184;
+var _GImGui = Module['_GImGui'] = 455064;
+var _stdout = Module['_stdout'] = 288056;
+var __ZN15ImGuiTextBuffer11EmptyStringE = Module['__ZN15ImGuiTextBuffer11EmptyStringE'] = 455068;
+var ___environ = Module['___environ'] = 477268;
+var ____environ = Module['____environ'] = 477268;
+var __environ = Module['__environ'] = 477268;
+var _environ = Module['_environ'] = 477268;
+var _timezone = Module['_timezone'] = 477816;
+var _daylight = Module['_daylight'] = 477820;
+var _tzname = Module['_tzname'] = 477824;
+var ___progname = Module['___progname'] = 479040;
+var _optind = Module['_optind'] = 453344;
+var ___optreset = Module['___optreset'] = 478004;
+var ___optpos = Module['___optpos'] = 478008;
+var _optarg = Module['_optarg'] = 478012;
+var _optopt = Module['_optopt'] = 478016;
+var _opterr = Module['_opterr'] = 453348;
+var _optreset = Module['_optreset'] = 478004;
+var _h_errno = Module['_h_errno'] = 478140;
+var ___signgam = Module['___signgam'] = 493340;
+var __ns_flagdata = Module['__ns_flagdata'] = 282672;
+var ___progname_full = Module['___progname_full'] = 479044;
+var _program_invocation_short_name = Module['_program_invocation_short_name'] = 479040;
+var _program_invocation_name = Module['_program_invocation_name'] = 479044;
+var ___sig_pending = Module['___sig_pending'] = 483392;
+var ___sig_actions = Module['___sig_actions'] = 484240;
+var _signgam = Module['_signgam'] = 493340;
+var _stdin = Module['_stdin'] = 288052;
+var ___THREW__ = Module['___THREW__'] = 500144;
+var ___threwValue = Module['___threwValue'] = 500148;
+var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 301984;
+var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 302024;
+var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 302004;
+var __ZTISt8bad_cast = Module['__ZTISt8bad_cast'] = 453212;
+var __ZTVNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTVNSt12experimental15fundamentals_v112bad_any_castE'] = 302036;
+var __ZTINSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTINSt12experimental15fundamentals_v112bad_any_castE'] = 302108;
+var __ZTSNSt12experimental15fundamentals_v112bad_any_castE = Module['__ZTSNSt12experimental15fundamentals_v112bad_any_castE'] = 302056;
+var __ZNSt3__212placeholders2_1E = Module['__ZNSt3__212placeholders2_1E'] = 302120;
+var __ZNSt3__212placeholders2_2E = Module['__ZNSt3__212placeholders2_2E'] = 302121;
+var __ZNSt3__212placeholders2_3E = Module['__ZNSt3__212placeholders2_3E'] = 302122;
+var __ZNSt3__212placeholders2_4E = Module['__ZNSt3__212placeholders2_4E'] = 302123;
+var __ZNSt3__212placeholders2_5E = Module['__ZNSt3__212placeholders2_5E'] = 302124;
+var __ZNSt3__212placeholders2_6E = Module['__ZNSt3__212placeholders2_6E'] = 302125;
+var __ZNSt3__212placeholders2_7E = Module['__ZNSt3__212placeholders2_7E'] = 302126;
+var __ZNSt3__212placeholders2_8E = Module['__ZNSt3__212placeholders2_8E'] = 302127;
+var __ZNSt3__212placeholders2_9E = Module['__ZNSt3__212placeholders2_9E'] = 302128;
+var __ZNSt3__212placeholders3_10E = Module['__ZNSt3__212placeholders3_10E'] = 302129;
+var __ZNSt3__213__DIGIT_TABLEE = Module['__ZNSt3__213__DIGIT_TABLEE'] = 302144;
+var __ZNSt3__26__itoa16_Charconv_digitsE = Module['__ZNSt3__26__itoa16_Charconv_digitsE'] = 302352;
+var __ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE16_Special_X_tableE'] = 302448;
+var __ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIfE17_Ordinary_X_tableE'] = 302704;
+var __ZNSt3__225_General_precision_tablesIfE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIfE6_Max_PE'] = 302880;
+var __ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE16_Special_X_tableE'] = 302896;
+var __ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE = Module['__ZNSt3__225_General_precision_tablesIdE17_Ordinary_X_tableE'] = 304464;
+var __ZNSt3__225_General_precision_tablesIdE6_Max_PE = Module['__ZNSt3__225_General_precision_tablesIdE6_Max_PE'] = 306976;
+var __ZNSt3__26chrono12system_clock9is_steadyE = Module['__ZNSt3__26chrono12system_clock9is_steadyE'] = 306980;
+var __ZNSt3__26chrono12steady_clock9is_steadyE = Module['__ZNSt3__26chrono12steady_clock9is_steadyE'] = 306981;
+var __ZNSt3__214__POW10_OFFSETE = Module['__ZNSt3__214__POW10_OFFSETE'] = 336368;
+var __ZNSt3__213__POW10_SPLITE = Module['__ZNSt3__213__POW10_SPLITE'] = 306992;
+var __ZNSt3__213__MIN_BLOCK_2E = Module['__ZNSt3__213__MIN_BLOCK_2E'] = 336496;
+var __ZNSt3__216__POW10_OFFSET_2E = Module['__ZNSt3__216__POW10_OFFSET_2E'] = 336576;
+var __ZNSt3__215__POW10_SPLIT_2E = Module['__ZNSt3__215__POW10_SPLIT_2E'] = 336720;
+var __ZNSt3__223__DOUBLE_POW5_INV_SPLITE = Module['__ZNSt3__223__DOUBLE_POW5_INV_SPLITE'] = 411920;
+var __ZNSt3__219__DOUBLE_POW5_SPLITE = Module['__ZNSt3__219__DOUBLE_POW5_SPLITE'] = 416592;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE11_Adjustment'] = 421808;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_64ENS_12chars_formatEdE21_Max_shifted_mantissa'] = 422128;
+var __ZNSt3__223__libcpp_debug_functionE = Module['__ZNSt3__223__libcpp_debug_functionE'] = 453964;
+var __ZTVNSt3__28__c_nodeE = Module['__ZTVNSt3__28__c_nodeE'] = 422312;
+var __ZTINSt3__28__c_nodeE = Module['__ZTINSt3__28__c_nodeE'] = 422364;
+var __ZTSNSt3__28__c_nodeE = Module['__ZTSNSt3__28__c_nodeE'] = 422344;
+var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 422372;
+var __ZTVNSt3__219__shared_weak_countE = Module['__ZTVNSt3__219__shared_weak_countE'] = 438524;
+var __ZTVNSt3__214__shared_countE = Module['__ZTVNSt3__214__shared_countE'] = 438468;
+var __ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTVNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 422500;
+var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 422488;
+var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem12__dir_streamENS_9allocatorIS3_EEEE'] = 422400;
+var __ZTINSt3__219__shared_weak_countE = Module['__ZTINSt3__219__shared_weak_countE'] = 438584;
+var __ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTINSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 422648;
+var __ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE = Module['__ZTSNSt3__220__shared_ptr_emplaceINS_4__fs10filesystem28recursive_directory_iterator12__shared_impENS_9allocatorIS4_EEEE'] = 422528;
+var __ZTVSt16nested_exception = Module['__ZTVSt16nested_exception'] = 422672;
+var __ZTISt16nested_exception = Module['__ZTISt16nested_exception'] = 422712;
+var __ZTSSt16nested_exception = Module['__ZTSSt16nested_exception'] = 422688;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE11_Adjustment'] = 423360;
+var __ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa = Module['__ZZNSt3__210__to_charsEPcS0_NS_21__floating_decimal_32ENS_12chars_formatEjjE21_Max_shifted_mantissa'] = 423408;
+var __ZNSt3__222__FLOAT_POW5_INV_SPLITE = Module['__ZNSt3__222__FLOAT_POW5_INV_SPLITE'] = 422720;
+var __ZNSt3__218__FLOAT_POW5_SPLITE = Module['__ZNSt3__218__FLOAT_POW5_SPLITE'] = 422976;
+var __ZTVNSt3__212format_errorE = Module['__ZTVNSt3__212format_errorE'] = 423452;
+var __ZTINSt3__212format_errorE = Module['__ZTINSt3__212format_errorE'] = 423496;
+var __ZTSNSt3__212format_errorE = Module['__ZTSNSt3__212format_errorE'] = 423472;
+var __ZTISt13runtime_error = Module['__ZTISt13runtime_error'] = 452992;
+var __ZTSNSt3__217bad_function_callE = Module['__ZTSNSt3__217bad_function_callE'] = 423528;
+var __ZTISt9exception = Module['__ZTISt9exception'] = 452528;
+var __ZTVNSt3__212future_errorE = Module['__ZTVNSt3__212future_errorE'] = 423604;
+var __ZTVNSt3__217__assoc_sub_stateE = Module['__ZTVNSt3__217__assoc_sub_stateE'] = 423624;
+var __ZTVNSt3__223__future_error_categoryE = Module['__ZTVNSt3__223__future_error_categoryE'] = 423568;
+var __ZTINSt3__223__future_error_categoryE = Module['__ZTINSt3__223__future_error_categoryE'] = 423724;
+var __ZTINSt3__212future_errorE = Module['__ZTINSt3__212future_errorE'] = 423760;
+var __ZTINSt3__217__assoc_sub_stateE = Module['__ZTINSt3__217__assoc_sub_stateE'] = 423676;
+var __ZTSNSt3__217__assoc_sub_stateE = Module['__ZTSNSt3__217__assoc_sub_stateE'] = 423648;
+var __ZTINSt3__214__shared_countE = Module['__ZTINSt3__214__shared_countE'] = 438516;
+var __ZTSNSt3__223__future_error_categoryE = Module['__ZTSNSt3__223__future_error_categoryE'] = 423688;
+var __ZTINSt3__212__do_messageE = Module['__ZTINSt3__212__do_messageE'] = 441484;
+var __ZTSNSt3__212future_errorE = Module['__ZTSNSt3__212future_errorE'] = 423736;
+var __ZTISt11logic_error = Module['__ZTISt11logic_error'] = 452752;
+var __ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 424176;
+var __ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 424280;
+var __ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 424328;
+var __ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 517748;
+var __ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 424396;
+var __ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 424424;
+var __ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 424528;
+var __ZNSt3__25ctypeIwE2idE = Module['__ZNSt3__25ctypeIwE2idE'] = 517912;
+var __ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTTNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 424576;
+var __ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 517756;
+var __ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 424584;
+var __ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 424648;
+var __ZNSt3__27codecvtIcc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIcc11__mbstate_tE2idE'] = 517928;
+var __ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425564;
+var __ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425868;
+var __ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTTNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 426048;
+var __ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 426228;
+var __ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTTNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 426384;
+var __ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 517732;
+var __ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 517740;
+var __ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 424836;
+var __ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 424240;
+var __ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 424892;
+var __ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 424288;
+var __ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 424964;
+var __ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 424336;
+var __ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 425116;
+var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 424988;
+var __ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 425028;
+var __ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 425272;
+var __ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 424488;
+var __ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 425328;
+var __ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 424536;
+var __ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 425400;
+var __ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425492;
+var __ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 426548;
+var __ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 424712;
+var __ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 424772;
+var __ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__29basic_iosIcNS_11char_traitsIcEEEE'] = 424728;
+var __ZTINSt3__28ios_baseE = Module['__ZTINSt3__28ios_baseE'] = 426764;
+var __ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__215basic_streambufIcNS_11char_traitsIcEEEE'] = 424784;
+var __ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_istreamIcNS_11char_traitsIcEEEE'] = 424844;
+var __ZTVN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTVN10__cxxabiv121__vmi_class_type_infoE'] = 452276;
+var __ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_ostreamIcNS_11char_traitsIcEEEE'] = 424916;
+var __ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_iostreamIcNS_11char_traitsIcEEEE'] = 425068;
+var __ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTVNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 425148;
+var __ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTINSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 425208;
+var __ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__29basic_iosIwNS_11char_traitsIwEEEE'] = 425164;
+var __ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__215basic_streambufIwNS_11char_traitsIwEEEE'] = 425220;
+var __ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_istreamIwNS_11char_traitsIwEEEE'] = 425280;
+var __ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE = Module['__ZTSNSt3__213basic_ostreamIwNS_11char_traitsIwEEEE'] = 425352;
+var __ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__215basic_stringbufIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425424;
+var __ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425504;
+var __ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425816;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_14basic_iostreamIcS2_EE'] = 425604;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 425664;
+var __ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE8_NS_13basic_ostreamIcS2_EE'] = 425704;
+var __ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__218basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425744;
+var __ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425828;
+var __ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425996;
+var __ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 425884;
+var __ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_ostringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 425924;
+var __ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTVNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 426008;
+var __ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTINSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 426176;
+var __ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE0_NS_13basic_istreamIcS2_EE'] = 426064;
+var __ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE = Module['__ZTSNSt3__219basic_istringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEEE'] = 426104;
+var __ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 426188;
+var __ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 426332;
+var __ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE = Module['__ZTCNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE0_NS_13basic_istreamIcS2_EE'] = 426244;
+var __ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ifstreamIcNS_11char_traitsIcEEEE'] = 426284;
+var __ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTVNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 426344;
+var __ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTINSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 426488;
+var __ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE = Module['__ZTCNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE0_NS_13basic_ostreamIcS2_EE'] = 426400;
+var __ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__214basic_ofstreamIcNS_11char_traitsIcEEEE'] = 426440;
+var __ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE = Module['__ZTSNSt3__213basic_filebufIcNS_11char_traitsIcEEEE'] = 426500;
+var __ZTVNSt3__28ios_base7failureE = Module['__ZTVNSt3__28ios_base7failureE'] = 426596;
+var __ZNSt3__28ios_base9__xindex_E = Module['__ZNSt3__28ios_base9__xindex_E'] = 516664;
+var __ZTVNSt3__28ios_baseE = Module['__ZTVNSt3__28ios_baseE'] = 426728;
+var __ZTVNSt3__219__iostream_categoryE = Module['__ZTVNSt3__219__iostream_categoryE'] = 426560;
+var __ZTINSt3__219__iostream_categoryE = Module['__ZTINSt3__219__iostream_categoryE'] = 426804;
+var __ZTINSt3__28ios_base7failureE = Module['__ZTINSt3__28ios_base7failureE'] = 426844;
+var __ZNSt3__28ios_base9boolalphaE = Module['__ZNSt3__28ios_base9boolalphaE'] = 426616;
+var __ZNSt3__28ios_base3decE = Module['__ZNSt3__28ios_base3decE'] = 426620;
+var __ZNSt3__28ios_base5fixedE = Module['__ZNSt3__28ios_base5fixedE'] = 426624;
+var __ZNSt3__28ios_base3hexE = Module['__ZNSt3__28ios_base3hexE'] = 426628;
+var __ZNSt3__28ios_base8internalE = Module['__ZNSt3__28ios_base8internalE'] = 426632;
+var __ZNSt3__28ios_base4leftE = Module['__ZNSt3__28ios_base4leftE'] = 426636;
+var __ZNSt3__28ios_base3octE = Module['__ZNSt3__28ios_base3octE'] = 426640;
+var __ZNSt3__28ios_base5rightE = Module['__ZNSt3__28ios_base5rightE'] = 426644;
+var __ZNSt3__28ios_base10scientificE = Module['__ZNSt3__28ios_base10scientificE'] = 426648;
+var __ZNSt3__28ios_base8showbaseE = Module['__ZNSt3__28ios_base8showbaseE'] = 426652;
+var __ZNSt3__28ios_base9showpointE = Module['__ZNSt3__28ios_base9showpointE'] = 426656;
+var __ZNSt3__28ios_base7showposE = Module['__ZNSt3__28ios_base7showposE'] = 426660;
+var __ZNSt3__28ios_base6skipwsE = Module['__ZNSt3__28ios_base6skipwsE'] = 426664;
+var __ZNSt3__28ios_base7unitbufE = Module['__ZNSt3__28ios_base7unitbufE'] = 426668;
+var __ZNSt3__28ios_base9uppercaseE = Module['__ZNSt3__28ios_base9uppercaseE'] = 426672;
+var __ZNSt3__28ios_base11adjustfieldE = Module['__ZNSt3__28ios_base11adjustfieldE'] = 426676;
+var __ZNSt3__28ios_base9basefieldE = Module['__ZNSt3__28ios_base9basefieldE'] = 426680;
+var __ZNSt3__28ios_base10floatfieldE = Module['__ZNSt3__28ios_base10floatfieldE'] = 426684;
+var __ZNSt3__28ios_base6badbitE = Module['__ZNSt3__28ios_base6badbitE'] = 426688;
+var __ZNSt3__28ios_base6eofbitE = Module['__ZNSt3__28ios_base6eofbitE'] = 426692;
+var __ZNSt3__28ios_base7failbitE = Module['__ZNSt3__28ios_base7failbitE'] = 426696;
+var __ZNSt3__28ios_base7goodbitE = Module['__ZNSt3__28ios_base7goodbitE'] = 426700;
+var __ZNSt3__28ios_base3appE = Module['__ZNSt3__28ios_base3appE'] = 426704;
+var __ZNSt3__28ios_base3ateE = Module['__ZNSt3__28ios_base3ateE'] = 426708;
+var __ZNSt3__28ios_base6binaryE = Module['__ZNSt3__28ios_base6binaryE'] = 426712;
+var __ZNSt3__28ios_base2inE = Module['__ZNSt3__28ios_base2inE'] = 426716;
+var __ZNSt3__28ios_base3outE = Module['__ZNSt3__28ios_base3outE'] = 426720;
+var __ZNSt3__28ios_base5truncE = Module['__ZNSt3__28ios_base5truncE'] = 426724;
+var __ZTSNSt3__28ios_baseE = Module['__ZTSNSt3__28ios_baseE'] = 426744;
+var __ZTSNSt3__219__iostream_categoryE = Module['__ZTSNSt3__219__iostream_categoryE'] = 426772;
+var __ZTSNSt3__28ios_base7failureE = Module['__ZTSNSt3__28ios_base7failureE'] = 426816;
+var __ZTINSt3__212system_errorE = Module['__ZTINSt3__212system_errorE'] = 441616;
+var __ZNSt3__219__start_std_streamsE = Module['__ZNSt3__219__start_std_streamsE'] = 517356;
+var __ZNSt3__23cinE = Module['__ZNSt3__23cinE'] = 516676;
+var __ZNSt3__24cerrE = Module['__ZNSt3__24cerrE'] = 517020;
+var __ZNSt3__24clogE = Module['__ZNSt3__24clogE'] = 517188;
+var __ZNSt3__24wcinE = Module['__ZNSt3__24wcinE'] = 516764;
+var __ZNSt3__25wcoutE = Module['__ZNSt3__25wcoutE'] = 516936;
+var __ZNSt3__25wcerrE = Module['__ZNSt3__25wcerrE'] = 517104;
+var __ZNSt3__25wclogE = Module['__ZNSt3__25wclogE'] = 517272;
+var __ZTVNSt3__210__stdinbufIcEE = Module['__ZTVNSt3__210__stdinbufIcEE'] = 426856;
+var __ZTVNSt3__211__stdoutbufIcEE = Module['__ZTVNSt3__211__stdoutbufIcEE'] = 426956;
+var __ZTVNSt3__210__stdinbufIwEE = Module['__ZTVNSt3__210__stdinbufIwEE'] = 427060;
+var __ZTVNSt3__211__stdoutbufIwEE = Module['__ZTVNSt3__211__stdoutbufIwEE'] = 427160;
+var __ZNSt3__27codecvtIwc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIwc11__mbstate_tE2idE'] = 517936;
+var __ZTINSt3__210__stdinbufIcEE = Module['__ZTINSt3__210__stdinbufIcEE'] = 426944;
+var __ZTSNSt3__210__stdinbufIcEE = Module['__ZTSNSt3__210__stdinbufIcEE'] = 426920;
+var __ZTINSt3__211__stdoutbufIcEE = Module['__ZTINSt3__211__stdoutbufIcEE'] = 427048;
+var __ZTSNSt3__211__stdoutbufIcEE = Module['__ZTSNSt3__211__stdoutbufIcEE'] = 427020;
+var __ZTINSt3__210__stdinbufIwEE = Module['__ZTINSt3__210__stdinbufIwEE'] = 427148;
+var __ZTSNSt3__210__stdinbufIwEE = Module['__ZTSNSt3__210__stdinbufIwEE'] = 427124;
+var __ZTINSt3__211__stdoutbufIwEE = Module['__ZTINSt3__211__stdoutbufIwEE'] = 427252;
+var __ZTSNSt3__211__stdoutbufIwEE = Module['__ZTSNSt3__211__stdoutbufIwEE'] = 427224;
+var __ZNSt3__28numpunctIcE2idE = Module['__ZNSt3__28numpunctIcE2idE'] = 517976;
+var __ZNSt3__214__num_get_base5__srcE = Module['__ZNSt3__214__num_get_base5__srcE'] = 427264;
+var __ZNSt3__28numpunctIwE2idE = Module['__ZNSt3__28numpunctIwE2idE'] = 517984;
+var __ZNSt3__210moneypunctIcLb1EE2idE = Module['__ZNSt3__210moneypunctIcLb1EE2idE'] = 517804;
+var __ZNSt3__210moneypunctIcLb0EE2idE = Module['__ZNSt3__210moneypunctIcLb0EE2idE'] = 517796;
+var __ZNSt3__210moneypunctIwLb1EE2idE = Module['__ZNSt3__210moneypunctIwLb1EE2idE'] = 517820;
+var __ZNSt3__210moneypunctIwLb0EE2idE = Module['__ZNSt3__210moneypunctIwLb0EE2idE'] = 517812;
+var __ZTVNSt3__26locale5__impE = Module['__ZTVNSt3__26locale5__impE'] = 427540;
+var __ZTVNSt3__26locale5facetE = Module['__ZTVNSt3__26locale5facetE'] = 429340;
+var __ZNSt3__27collateIcE2idE = Module['__ZNSt3__27collateIcE2idE'] = 517716;
+var __ZNSt3__27collateIwE2idE = Module['__ZNSt3__27collateIwE2idE'] = 517724;
+var __ZNSt3__27codecvtIDsc11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsc11__mbstate_tE2idE'] = 517944;
+var __ZNSt3__27codecvtIDic11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDic11__mbstate_tE2idE'] = 517960;
+var __ZNSt3__27codecvtIDsDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDsDu11__mbstate_tE2idE'] = 517952;
+var __ZNSt3__27codecvtIDiDu11__mbstate_tE2idE = Module['__ZNSt3__27codecvtIDiDu11__mbstate_tE2idE'] = 517968;
+var __ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 517828;
+var __ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 517836;
+var __ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 517844;
+var __ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 517852;
+var __ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 517764;
+var __ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 517772;
+var __ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE = Module['__ZNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEE2idE'] = 517780;
+var __ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE = Module['__ZNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEE2idE'] = 517788;
+var __ZNSt3__28messagesIcE2idE = Module['__ZNSt3__28messagesIcE2idE'] = 517860;
+var __ZNSt3__28messagesIwE2idE = Module['__ZNSt3__28messagesIwE2idE'] = 517868;
+var __ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 436676;
+var __ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 436780;
+var __ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 436884;
+var __ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 436988;
+var __ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 437092;
+var __ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTVNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 437196;
+var __ZTVNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb0EEE'] = 435244;
+var __ZTVNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIcLb1EEE'] = 435348;
+var __ZTVNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb0EEE'] = 435452;
+var __ZTVNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTVNSt3__217moneypunct_bynameIwLb1EEE'] = 435556;
+var __ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 433668;
+var __ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 433964;
+var __ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 434516;
+var __ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434632;
+var __ZTVNSt3__215messages_bynameIcEE = Module['__ZTVNSt3__215messages_bynameIcEE'] = 436524;
+var __ZTVNSt3__215messages_bynameIwEE = Module['__ZTVNSt3__215messages_bynameIwEE'] = 436600;
+var __ZNSt3__26locale2id9__next_idE = Module['__ZNSt3__26locale2id9__next_idE'] = 517908;
+var __ZTVNSt3__214collate_bynameIcEE = Module['__ZTVNSt3__214collate_bynameIcEE'] = 427560;
+var __ZTVNSt3__214collate_bynameIwEE = Module['__ZTVNSt3__214collate_bynameIwEE'] = 427592;
+var __ZTVNSt3__25ctypeIcEE = Module['__ZTVNSt3__25ctypeIcEE'] = 427676;
+var __ZTVNSt3__212ctype_bynameIcEE = Module['__ZTVNSt3__212ctype_bynameIcEE'] = 428752;
+var __ZTVNSt3__212ctype_bynameIwEE = Module['__ZTVNSt3__212ctype_bynameIwEE'] = 428804;
+var __ZTVNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIwc11__mbstate_tEE'] = 428872;
+var __ZTVNSt3__28numpunctIcEE = Module['__ZTVNSt3__28numpunctIcEE'] = 428920;
+var __ZTVNSt3__28numpunctIwEE = Module['__ZTVNSt3__28numpunctIwEE'] = 428960;
+var __ZTVNSt3__215numpunct_bynameIcEE = Module['__ZTVNSt3__215numpunct_bynameIcEE'] = 429044;
+var __ZTVNSt3__215numpunct_bynameIwEE = Module['__ZTVNSt3__215numpunct_bynameIwEE'] = 429084;
+var __ZTVNSt3__215__time_get_tempIcEE = Module['__ZTVNSt3__215__time_get_tempIcEE'] = 438256;
+var __ZTVNSt3__215__time_get_tempIwEE = Module['__ZTVNSt3__215__time_get_tempIwEE'] = 438352;
+var __ZTVNSt3__27collateIcEE = Module['__ZTVNSt3__27collateIcEE'] = 432216;
+var __ZTVNSt3__27collateIwEE = Module['__ZTVNSt3__27collateIwEE'] = 432248;
+var __ZTVNSt3__25ctypeIwEE = Module['__ZTVNSt3__25ctypeIwEE'] = 429396;
+var __ZTVNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIcc11__mbstate_tEE'] = 429544;
+var __ZTVNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsc11__mbstate_tEE'] = 429692;
+var __ZTVNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDic11__mbstate_tEE'] = 429924;
+var __ZTVNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDsDu11__mbstate_tEE'] = 429808;
+var __ZTVNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTVNSt3__27codecvtIDiDu11__mbstate_tEE'] = 430040;
+var __ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 432280;
+var __ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 432524;
+var __ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 432736;
+var __ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 432968;
+var __ZTVNSt3__210moneypunctIcLb0EEE = Module['__ZTVNSt3__210moneypunctIcLb0EEE'] = 434748;
+var __ZTVNSt3__210moneypunctIcLb1EEE = Module['__ZTVNSt3__210moneypunctIcLb1EEE'] = 434896;
+var __ZTVNSt3__210moneypunctIwLb0EEE = Module['__ZTVNSt3__210moneypunctIwLb0EEE'] = 435012;
+var __ZTVNSt3__210moneypunctIwLb1EEE = Module['__ZTVNSt3__210moneypunctIwLb1EEE'] = 435128;
+var __ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 435660;
+var __ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 435824;
+var __ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 435988;
+var __ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 436152;
+var __ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 433168;
+var __ZTVNSt3__220__time_get_c_storageIcEE = Module['__ZTVNSt3__220__time_get_c_storageIcEE'] = 438184;
+var __ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 433432;
+var __ZTVNSt3__220__time_get_c_storageIwEE = Module['__ZTVNSt3__220__time_get_c_storageIwEE'] = 438220;
+var __ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTVNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 434232;
+var __ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTVNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434388;
+var __ZTVNSt3__28messagesIcEE = Module['__ZTVNSt3__28messagesIcEE'] = 436316;
+var __ZTVNSt3__28messagesIwEE = Module['__ZTVNSt3__28messagesIwEE'] = 436436;
+var __ZNSt3__210moneypunctIcLb0EE4intlE = Module['__ZNSt3__210moneypunctIcLb0EE4intlE'] = 427504;
+var __ZNSt3__210moneypunctIcLb1EE4intlE = Module['__ZNSt3__210moneypunctIcLb1EE4intlE'] = 427505;
+var __ZNSt3__210moneypunctIwLb0EE4intlE = Module['__ZNSt3__210moneypunctIwLb0EE4intlE'] = 427506;
+var __ZNSt3__210moneypunctIwLb1EE4intlE = Module['__ZNSt3__210moneypunctIwLb1EE4intlE'] = 427507;
+var __ZNSt3__26locale4noneE = Module['__ZNSt3__26locale4noneE'] = 427508;
+var __ZNSt3__26locale7collateE = Module['__ZNSt3__26locale7collateE'] = 427512;
+var __ZNSt3__26locale5ctypeE = Module['__ZNSt3__26locale5ctypeE'] = 427516;
+var __ZNSt3__26locale8monetaryE = Module['__ZNSt3__26locale8monetaryE'] = 427520;
+var __ZNSt3__26locale7numericE = Module['__ZNSt3__26locale7numericE'] = 427524;
+var __ZNSt3__26locale4timeE = Module['__ZNSt3__26locale4timeE'] = 427528;
+var __ZNSt3__26locale8messagesE = Module['__ZNSt3__26locale8messagesE'] = 427532;
+var __ZNSt3__26locale3allE = Module['__ZNSt3__26locale3allE'] = 427536;
+var __ZTINSt3__26locale5__impE = Module['__ZTINSt3__26locale5__impE'] = 431768;
+var __ZTINSt3__214collate_bynameIcEE = Module['__ZTINSt3__214collate_bynameIcEE'] = 431840;
+var __ZTINSt3__214collate_bynameIwEE = Module['__ZTINSt3__214collate_bynameIwEE'] = 431912;
+var __ZNSt3__210ctype_base5spaceE = Module['__ZNSt3__210ctype_base5spaceE'] = 427624;
+var __ZNSt3__210ctype_base5printE = Module['__ZNSt3__210ctype_base5printE'] = 427628;
+var __ZNSt3__210ctype_base5cntrlE = Module['__ZNSt3__210ctype_base5cntrlE'] = 427632;
+var __ZNSt3__210ctype_base5upperE = Module['__ZNSt3__210ctype_base5upperE'] = 427636;
+var __ZNSt3__210ctype_base5lowerE = Module['__ZNSt3__210ctype_base5lowerE'] = 427640;
+var __ZNSt3__210ctype_base5alphaE = Module['__ZNSt3__210ctype_base5alphaE'] = 427644;
+var __ZNSt3__210ctype_base5digitE = Module['__ZNSt3__210ctype_base5digitE'] = 427648;
+var __ZNSt3__210ctype_base5punctE = Module['__ZNSt3__210ctype_base5punctE'] = 427652;
+var __ZNSt3__210ctype_base6xdigitE = Module['__ZNSt3__210ctype_base6xdigitE'] = 427656;
+var __ZNSt3__210ctype_base5blankE = Module['__ZNSt3__210ctype_base5blankE'] = 427660;
+var __ZNSt3__210ctype_base5alnumE = Module['__ZNSt3__210ctype_base5alnumE'] = 427664;
+var __ZNSt3__210ctype_base5graphE = Module['__ZNSt3__210ctype_base5graphE'] = 427668;
+var __ZNSt3__25ctypeIcE10table_sizeE = Module['__ZNSt3__25ctypeIcE10table_sizeE'] = 427672;
+var __ZTINSt3__25ctypeIcEE = Module['__ZTINSt3__25ctypeIcEE'] = 431944;
+var __ZTINSt3__212ctype_bynameIcEE = Module['__ZTINSt3__212ctype_bynameIcEE'] = 432004;
+var __ZTINSt3__212ctype_bynameIwEE = Module['__ZTINSt3__212ctype_bynameIwEE'] = 432044;
+var __ZTINSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIwc11__mbstate_tEE'] = 430652;
+var __ZTINSt3__28numpunctIcEE = Module['__ZTINSt3__28numpunctIcEE'] = 432080;
+var __ZTINSt3__28numpunctIwEE = Module['__ZTINSt3__28numpunctIwEE'] = 432116;
+var __ZTINSt3__215numpunct_bynameIcEE = Module['__ZTINSt3__215numpunct_bynameIcEE'] = 432160;
+var __ZTINSt3__215numpunct_bynameIwEE = Module['__ZTINSt3__215numpunct_bynameIwEE'] = 432204;
+var __ZTINSt3__26locale5facetE = Module['__ZTINSt3__26locale5facetE'] = 429384;
+var __ZTSNSt3__26locale5facetE = Module['__ZTSNSt3__26locale5facetE'] = 429360;
+var __ZTINSt3__25ctypeIwEE = Module['__ZTINSt3__25ctypeIwEE'] = 429512;
+var __ZTSNSt3__25ctypeIwEE = Module['__ZTSNSt3__25ctypeIwEE'] = 429464;
+var __ZTSNSt3__210ctype_baseE = Module['__ZTSNSt3__210ctype_baseE'] = 429482;
+var __ZTINSt3__210ctype_baseE = Module['__ZTINSt3__210ctype_baseE'] = 429504;
+var __ZTINSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIcc11__mbstate_tEE'] = 429660;
+var __ZTSNSt3__27codecvtIcc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIcc11__mbstate_tEE'] = 429592;
+var __ZTSNSt3__212codecvt_baseE = Module['__ZTSNSt3__212codecvt_baseE'] = 429626;
+var __ZTINSt3__212codecvt_baseE = Module['__ZTINSt3__212codecvt_baseE'] = 429652;
+var __ZTINSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsc11__mbstate_tEE'] = 429776;
+var __ZTSNSt3__27codecvtIDsc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsc11__mbstate_tEE'] = 429740;
+var __ZTINSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDsDu11__mbstate_tEE'] = 429892;
+var __ZTSNSt3__27codecvtIDsDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDsDu11__mbstate_tEE'] = 429856;
+var __ZTINSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDic11__mbstate_tEE'] = 430008;
+var __ZTSNSt3__27codecvtIDic11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDic11__mbstate_tEE'] = 429972;
+var __ZTINSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTINSt3__27codecvtIDiDu11__mbstate_tEE'] = 430124;
+var __ZTSNSt3__27codecvtIDiDu11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIDiDu11__mbstate_tEE'] = 430088;
+var __ZTVNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm16EEE'] = 430156;
+var __ZTINSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm16EEE'] = 430240;
+var __ZTSNSt3__216__narrow_to_utf8ILm16EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm16EEE'] = 430204;
+var __ZTVNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTVNSt3__216__narrow_to_utf8ILm32EEE'] = 430252;
+var __ZTINSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTINSt3__216__narrow_to_utf8ILm32EEE'] = 430336;
+var __ZTSNSt3__216__narrow_to_utf8ILm32EEE = Module['__ZTSNSt3__216__narrow_to_utf8ILm32EEE'] = 430300;
+var __ZTVNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm16EEE'] = 430348;
+var __ZTINSt3__217__widen_from_utf8ILm16EEE = Module['__ZTINSt3__217__widen_from_utf8ILm16EEE'] = 430432;
+var __ZTSNSt3__217__widen_from_utf8ILm16EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm16EEE'] = 430396;
+var __ZTVNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTVNSt3__217__widen_from_utf8ILm32EEE'] = 430444;
+var __ZTINSt3__217__widen_from_utf8ILm32EEE = Module['__ZTINSt3__217__widen_from_utf8ILm32EEE'] = 430528;
+var __ZTSNSt3__217__widen_from_utf8ILm32EEE = Module['__ZTSNSt3__217__widen_from_utf8ILm32EEE'] = 430492;
+var __ZTVNSt3__214__codecvt_utf8IwEE = Module['__ZTVNSt3__214__codecvt_utf8IwEE'] = 430540;
+var __ZTINSt3__214__codecvt_utf8IwEE = Module['__ZTINSt3__214__codecvt_utf8IwEE'] = 430684;
+var __ZTSNSt3__214__codecvt_utf8IwEE = Module['__ZTSNSt3__214__codecvt_utf8IwEE'] = 430588;
+var __ZTSNSt3__27codecvtIwc11__mbstate_tEE = Module['__ZTSNSt3__27codecvtIwc11__mbstate_tEE'] = 430616;
+var __ZTVNSt3__214__codecvt_utf8IDsEE = Module['__ZTVNSt3__214__codecvt_utf8IDsEE'] = 430696;
+var __ZTINSt3__214__codecvt_utf8IDsEE = Module['__ZTINSt3__214__codecvt_utf8IDsEE'] = 430776;
+var __ZTSNSt3__214__codecvt_utf8IDsEE = Module['__ZTSNSt3__214__codecvt_utf8IDsEE'] = 430744;
+var __ZTVNSt3__214__codecvt_utf8IDiEE = Module['__ZTVNSt3__214__codecvt_utf8IDiEE'] = 430788;
+var __ZTINSt3__214__codecvt_utf8IDiEE = Module['__ZTINSt3__214__codecvt_utf8IDiEE'] = 430868;
+var __ZTSNSt3__214__codecvt_utf8IDiEE = Module['__ZTSNSt3__214__codecvt_utf8IDiEE'] = 430836;
+var __ZTVNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb0EEE'] = 430880;
+var __ZTINSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb0EEE'] = 430964;
+var __ZTSNSt3__215__codecvt_utf16IwLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb0EEE'] = 430928;
+var __ZTVNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IwLb1EEE'] = 430976;
+var __ZTINSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IwLb1EEE'] = 431060;
+var __ZTSNSt3__215__codecvt_utf16IwLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IwLb1EEE'] = 431024;
+var __ZTVNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb0EEE'] = 431072;
+var __ZTINSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb0EEE'] = 431156;
+var __ZTSNSt3__215__codecvt_utf16IDsLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb0EEE'] = 431120;
+var __ZTVNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDsLb1EEE'] = 431168;
+var __ZTINSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDsLb1EEE'] = 431252;
+var __ZTSNSt3__215__codecvt_utf16IDsLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDsLb1EEE'] = 431216;
+var __ZTVNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb0EEE'] = 431264;
+var __ZTINSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb0EEE'] = 431348;
+var __ZTSNSt3__215__codecvt_utf16IDiLb0EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb0EEE'] = 431312;
+var __ZTVNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTVNSt3__215__codecvt_utf16IDiLb1EEE'] = 431360;
+var __ZTINSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTINSt3__215__codecvt_utf16IDiLb1EEE'] = 431444;
+var __ZTSNSt3__215__codecvt_utf16IDiLb1EEE = Module['__ZTSNSt3__215__codecvt_utf16IDiLb1EEE'] = 431408;
+var __ZTVNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IwEE'] = 431456;
+var __ZTINSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IwEE'] = 431540;
+var __ZTSNSt3__220__codecvt_utf8_utf16IwEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IwEE'] = 431504;
+var __ZTVNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDiEE'] = 431552;
+var __ZTINSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDiEE'] = 431636;
+var __ZTSNSt3__220__codecvt_utf8_utf16IDiEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDiEE'] = 431600;
+var __ZTVNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTVNSt3__220__codecvt_utf8_utf16IDsEE'] = 431648;
+var __ZTINSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTINSt3__220__codecvt_utf8_utf16IDsEE'] = 431732;
+var __ZTSNSt3__220__codecvt_utf8_utf16IDsEE = Module['__ZTSNSt3__220__codecvt_utf8_utf16IDsEE'] = 431696;
+var __ZTSNSt3__26locale5__impE = Module['__ZTSNSt3__26locale5__impE'] = 431744;
+var __ZTSNSt3__214collate_bynameIcEE = Module['__ZTSNSt3__214collate_bynameIcEE'] = 431780;
+var __ZTSNSt3__27collateIcEE = Module['__ZTSNSt3__27collateIcEE'] = 431808;
+var __ZTINSt3__27collateIcEE = Module['__ZTINSt3__27collateIcEE'] = 431828;
+var __ZTSNSt3__214collate_bynameIwEE = Module['__ZTSNSt3__214collate_bynameIwEE'] = 431852;
+var __ZTSNSt3__27collateIwEE = Module['__ZTSNSt3__27collateIwEE'] = 431880;
+var __ZTINSt3__27collateIwEE = Module['__ZTINSt3__27collateIwEE'] = 431900;
+var __ZTSNSt3__25ctypeIcEE = Module['__ZTSNSt3__25ctypeIcEE'] = 431924;
+var __ZTSNSt3__212ctype_bynameIcEE = Module['__ZTSNSt3__212ctype_bynameIcEE'] = 431976;
+var __ZTSNSt3__212ctype_bynameIwEE = Module['__ZTSNSt3__212ctype_bynameIwEE'] = 432016;
+var __ZTSNSt3__28numpunctIcEE = Module['__ZTSNSt3__28numpunctIcEE'] = 432056;
+var __ZTSNSt3__28numpunctIwEE = Module['__ZTSNSt3__28numpunctIwEE'] = 432092;
+var __ZTSNSt3__215numpunct_bynameIcEE = Module['__ZTSNSt3__215numpunct_bynameIcEE'] = 432128;
+var __ZTSNSt3__215numpunct_bynameIwEE = Module['__ZTSNSt3__215numpunct_bynameIwEE'] = 432172;
+var __ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 432492;
+var __ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 432344;
+var __ZTSNSt3__29__num_getIcEE = Module['__ZTSNSt3__29__num_getIcEE'] = 432412;
+var __ZTSNSt3__214__num_get_baseE = Module['__ZTSNSt3__214__num_get_baseE'] = 432434;
+var __ZTINSt3__214__num_get_baseE = Module['__ZTINSt3__214__num_get_baseE'] = 432460;
+var __ZTINSt3__29__num_getIcEE = Module['__ZTINSt3__29__num_getIcEE'] = 432468;
+var __ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 432704;
+var __ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 432588;
+var __ZTSNSt3__29__num_getIwEE = Module['__ZTSNSt3__29__num_getIwEE'] = 432656;
+var __ZTINSt3__29__num_getIwEE = Module['__ZTINSt3__29__num_getIwEE'] = 432680;
+var __ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 432936;
+var __ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__27num_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 432788;
+var __ZTSNSt3__29__num_putIcEE = Module['__ZTSNSt3__29__num_putIcEE'] = 432856;
+var __ZTSNSt3__214__num_put_baseE = Module['__ZTSNSt3__214__num_put_baseE'] = 432878;
+var __ZTINSt3__214__num_put_baseE = Module['__ZTINSt3__214__num_put_baseE'] = 432904;
+var __ZTINSt3__29__num_putIcEE = Module['__ZTINSt3__29__num_putIcEE'] = 432912;
+var __ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 433136;
+var __ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__27num_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 433020;
+var __ZTSNSt3__29__num_putIwEE = Module['__ZTSNSt3__29__num_putIwEE'] = 433088;
+var __ZTINSt3__29__num_putIwEE = Module['__ZTINSt3__29__num_putIwEE'] = 433112;
+var __ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 433392;
+var __ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 433252;
+var __ZTSNSt3__29time_baseE = Module['__ZTSNSt3__29time_baseE'] = 433321;
+var __ZTINSt3__29time_baseE = Module['__ZTINSt3__29time_baseE'] = 433340;
+var __ZTSNSt3__220__time_get_c_storageIcEE = Module['__ZTSNSt3__220__time_get_c_storageIcEE'] = 433348;
+var __ZTINSt3__220__time_get_c_storageIcEE = Module['__ZTINSt3__220__time_get_c_storageIcEE'] = 433384;
+var __ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 433628;
+var __ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 433516;
+var __ZTSNSt3__220__time_get_c_storageIwEE = Module['__ZTSNSt3__220__time_get_c_storageIwEE'] = 433585;
+var __ZTINSt3__220__time_get_c_storageIwEE = Module['__ZTINSt3__220__time_get_c_storageIwEE'] = 433620;
+var __ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 433932;
+var __ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_get_bynameIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 433780;
+var __ZTSNSt3__218__time_get_storageIcEE = Module['__ZTSNSt3__218__time_get_storageIcEE'] = 433857;
+var __ZTSNSt3__210__time_getE = Module['__ZTSNSt3__210__time_getE'] = 433889;
+var __ZTINSt3__210__time_getE = Module['__ZTINSt3__210__time_getE'] = 433912;
+var __ZTINSt3__218__time_get_storageIcEE = Module['__ZTINSt3__218__time_get_storageIcEE'] = 433920;
+var __ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434200;
+var __ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_get_bynameIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434076;
+var __ZTSNSt3__218__time_get_storageIwEE = Module['__ZTSNSt3__218__time_get_storageIwEE'] = 434153;
+var __ZTINSt3__218__time_get_storageIwEE = Module['__ZTINSt3__218__time_get_storageIwEE'] = 434188;
+var __ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 434356;
+var __ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__28time_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 434256;
+var __ZTSNSt3__210__time_putE = Module['__ZTSNSt3__210__time_putE'] = 434325;
+var __ZTINSt3__210__time_putE = Module['__ZTINSt3__210__time_putE'] = 434348;
+var __ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434484;
+var __ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__28time_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434412;
+var __ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 434620;
+var __ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__215time_put_bynameIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 434540;
+var __ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434736;
+var __ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__215time_put_bynameIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 434656;
+var __ZTINSt3__210moneypunctIcLb0EEE = Module['__ZTINSt3__210moneypunctIcLb0EEE'] = 434864;
+var __ZTSNSt3__210moneypunctIcLb0EEE = Module['__ZTSNSt3__210moneypunctIcLb0EEE'] = 434804;
+var __ZTSNSt3__210money_baseE = Module['__ZTSNSt3__210money_baseE'] = 434832;
+var __ZTINSt3__210money_baseE = Module['__ZTINSt3__210money_baseE'] = 434856;
+var __ZTINSt3__210moneypunctIcLb1EEE = Module['__ZTINSt3__210moneypunctIcLb1EEE'] = 434980;
+var __ZTSNSt3__210moneypunctIcLb1EEE = Module['__ZTSNSt3__210moneypunctIcLb1EEE'] = 434952;
+var __ZTINSt3__210moneypunctIwLb0EEE = Module['__ZTINSt3__210moneypunctIwLb0EEE'] = 435096;
+var __ZTSNSt3__210moneypunctIwLb0EEE = Module['__ZTSNSt3__210moneypunctIwLb0EEE'] = 435068;
+var __ZTINSt3__210moneypunctIwLb1EEE = Module['__ZTINSt3__210moneypunctIwLb1EEE'] = 435212;
+var __ZTSNSt3__210moneypunctIwLb1EEE = Module['__ZTSNSt3__210moneypunctIwLb1EEE'] = 435184;
+var __ZTINSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb0EEE'] = 435336;
+var __ZTSNSt3__217moneypunct_bynameIcLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb0EEE'] = 435300;
+var __ZTINSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIcLb1EEE'] = 435440;
+var __ZTSNSt3__217moneypunct_bynameIcLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIcLb1EEE'] = 435404;
+var __ZTINSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb0EEE'] = 435544;
+var __ZTSNSt3__217moneypunct_bynameIwLb0EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb0EEE'] = 435508;
+var __ZTINSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTINSt3__217moneypunct_bynameIwLb1EEE'] = 435648;
+var __ZTSNSt3__217moneypunct_bynameIwLb1EEE = Module['__ZTSNSt3__217moneypunct_bynameIwLb1EEE'] = 435612;
+var __ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 435792;
+var __ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_getIcNS_19istreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 435688;
+var __ZTSNSt3__211__money_getIcEE = Module['__ZTSNSt3__211__money_getIcEE'] = 435758;
+var __ZTINSt3__211__money_getIcEE = Module['__ZTINSt3__211__money_getIcEE'] = 435784;
+var __ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 435956;
+var __ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_getIwNS_19istreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 435852;
+var __ZTSNSt3__211__money_getIwEE = Module['__ZTSNSt3__211__money_getIwEE'] = 435922;
+var __ZTINSt3__211__money_getIwEE = Module['__ZTINSt3__211__money_getIwEE'] = 435948;
+var __ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTINSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 436120;
+var __ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE = Module['__ZTSNSt3__29money_putIcNS_19ostreambuf_iteratorIcNS_11char_traitsIcEEEEEE'] = 436016;
+var __ZTSNSt3__211__money_putIcEE = Module['__ZTSNSt3__211__money_putIcEE'] = 436086;
+var __ZTINSt3__211__money_putIcEE = Module['__ZTINSt3__211__money_putIcEE'] = 436112;
+var __ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTINSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 436284;
+var __ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE = Module['__ZTSNSt3__29money_putIwNS_19ostreambuf_iteratorIwNS_11char_traitsIwEEEEEE'] = 436180;
+var __ZTSNSt3__211__money_putIwEE = Module['__ZTSNSt3__211__money_putIwEE'] = 436250;
+var __ZTINSt3__211__money_putIwEE = Module['__ZTINSt3__211__money_putIwEE'] = 436276;
+var __ZTINSt3__28messagesIcEE = Module['__ZTINSt3__28messagesIcEE'] = 436404;
+var __ZTSNSt3__28messagesIcEE = Module['__ZTSNSt3__28messagesIcEE'] = 436348;
+var __ZTSNSt3__213messages_baseE = Module['__ZTSNSt3__213messages_baseE'] = 436369;
+var __ZTINSt3__213messages_baseE = Module['__ZTINSt3__213messages_baseE'] = 436396;
+var __ZTINSt3__28messagesIwEE = Module['__ZTINSt3__28messagesIwEE'] = 436492;
+var __ZTSNSt3__28messagesIwEE = Module['__ZTSNSt3__28messagesIwEE'] = 436468;
+var __ZTINSt3__215messages_bynameIcEE = Module['__ZTINSt3__215messages_bynameIcEE'] = 436588;
+var __ZTSNSt3__215messages_bynameIcEE = Module['__ZTSNSt3__215messages_bynameIcEE'] = 436556;
+var __ZTINSt3__215messages_bynameIwEE = Module['__ZTINSt3__215messages_bynameIwEE'] = 436664;
+var __ZTSNSt3__215messages_bynameIwEE = Module['__ZTSNSt3__215messages_bynameIwEE'] = 436632;
+var __ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 436768;
+var __ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIcc11__mbstate_tEE'] = 436724;
+var __ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 436872;
+var __ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIwc11__mbstate_tEE'] = 436828;
+var __ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 436976;
+var __ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsc11__mbstate_tEE'] = 436932;
+var __ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 437080;
+var __ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDic11__mbstate_tEE'] = 437036;
+var __ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 437184;
+var __ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDsDu11__mbstate_tEE'] = 437140;
+var __ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTINSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 437288;
+var __ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE = Module['__ZTSNSt3__214codecvt_bynameIDiDu11__mbstate_tEE'] = 437244;
+var __ZTINSt3__215__time_get_tempIcEE = Module['__ZTINSt3__215__time_get_tempIcEE'] = 438340;
+var __ZTSNSt3__215__time_get_tempIcEE = Module['__ZTSNSt3__215__time_get_tempIcEE'] = 438308;
+var __ZTINSt3__215__time_get_tempIwEE = Module['__ZTINSt3__215__time_get_tempIwEE'] = 438452;
+var __ZTSNSt3__215__time_get_tempIwEE = Module['__ZTSNSt3__215__time_get_tempIwEE'] = 438420;
+var __ZNSt3__213allocator_argE = Module['__ZNSt3__213allocator_argE'] = 438464;
+var __ZTSNSt3__214__shared_countE = Module['__ZTSNSt3__214__shared_countE'] = 438488;
+var __ZTSNSt3__219__shared_weak_countE = Module['__ZTSNSt3__219__shared_weak_countE'] = 438552;
+var __ZTVNSt3__212bad_weak_ptrE = Module['__ZTVNSt3__212bad_weak_ptrE'] = 438608;
+var __ZTINSt3__212bad_weak_ptrE = Module['__ZTINSt3__212bad_weak_ptrE'] = 438652;
+var __ZTSNSt3__212bad_weak_ptrE = Module['__ZTSNSt3__212bad_weak_ptrE'] = 438628;
+var __ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 438664;
+var __ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 438860;
+var __ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTVNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 438692;
+var __ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTINSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 438940;
+var __ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr32__new_delete_memory_resource_impE'] = 438720;
+var __ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTSNSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 438794;
+var __ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE = Module['__ZTINSt12experimental15fundamentals_v13pmr15memory_resourceE'] = 438852;
+var __ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE = Module['__ZTSNSt12experimental15fundamentals_v13pmr26__null_memory_resource_impE'] = 438872;
+var __ZNSt3__210defer_lockE = Module['__ZNSt3__210defer_lockE'] = 438952;
+var __ZNSt3__211try_to_lockE = Module['__ZNSt3__211try_to_lockE'] = 438953;
+var __ZNSt3__210adopt_lockE = Module['__ZNSt3__210adopt_lockE'] = 438954;
+var __ZSt7nothrow = Module['__ZSt7nothrow'] = 438955;
+var __ZTVNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTVNSt3__24__fs10filesystem16filesystem_errorE'] = 438960;
+var __ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE = Module['__ZNSt3__24__fs10filesystem16_FilesystemClock9is_steadyE'] = 438956;
+var __ZTINSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTINSt3__24__fs10filesystem16filesystem_errorE'] = 439056;
+var __ZNSt3__24__fs10filesystem4path19preferred_separatorE = Module['__ZNSt3__24__fs10filesystem4path19preferred_separatorE'] = 439008;
+var __ZTSNSt3__24__fs10filesystem16filesystem_errorE = Module['__ZTSNSt3__24__fs10filesystem16filesystem_errorE'] = 439009;
+var __ZTVSt19bad_optional_access = Module['__ZTVSt19bad_optional_access'] = 439092;
+var __ZTISt19bad_optional_access = Module['__ZTISt19bad_optional_access'] = 439136;
+var __ZTSSt19bad_optional_access = Module['__ZTSSt19bad_optional_access'] = 439112;
+var __ZTVNSt12experimental19bad_optional_accessE = Module['__ZTVNSt12experimental19bad_optional_accessE'] = 439148;
+var __ZTINSt12experimental19bad_optional_accessE = Module['__ZTINSt12experimental19bad_optional_accessE'] = 439208;
+var __ZTSNSt12experimental19bad_optional_accessE = Module['__ZTSNSt12experimental19bad_optional_accessE'] = 439168;
+var __ZNSt3__212__rs_default4__c_E = Module['__ZNSt3__212__rs_default4__c_E'] = 520152;
+var __ZTVNSt3__211regex_errorE = Module['__ZTVNSt3__211regex_errorE'] = 439220;
+var __ZTINSt3__211regex_errorE = Module['__ZTINSt3__211regex_errorE'] = 440288;
+var __ZTSNSt3__211regex_errorE = Module['__ZTSNSt3__211regex_errorE'] = 440264;
+var __ZTVSt11logic_error = Module['__ZTVSt11logic_error'] = 452656;
+var __ZTVSt13runtime_error = Module['__ZTVSt13runtime_error'] = 452676;
+var __ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE = Module['__ZNSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE4nposE'] = 440368;
+var __ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE = Module['__ZNSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEE4nposE'] = 440372;
+var __ZTVNSt3__212strstreambufE = Module['__ZTVNSt3__212strstreambufE'] = 440624;
+var __ZTTNSt3__210istrstreamE = Module['__ZTTNSt3__210istrstreamE'] = 440728;
+var __ZTTNSt3__210ostrstreamE = Module['__ZTTNSt3__210ostrstreamE'] = 440784;
+var __ZTTNSt3__29strstreamE = Module['__ZTTNSt3__29strstreamE'] = 440860;
+var __ZTINSt3__212strstreambufE = Module['__ZTINSt3__212strstreambufE'] = 440924;
+var __ZTVNSt3__210istrstreamE = Module['__ZTVNSt3__210istrstreamE'] = 440688;
+var __ZTINSt3__210istrstreamE = Module['__ZTINSt3__210istrstreamE'] = 441000;
+var __ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210istrstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 440936;
+var __ZTVNSt3__210ostrstreamE = Module['__ZTVNSt3__210ostrstreamE'] = 440744;
+var __ZTINSt3__210ostrstreamE = Module['__ZTINSt3__210ostrstreamE'] = 441076;
+var __ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__210ostrstreamE0_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 441012;
+var __ZTVNSt3__29strstreamE = Module['__ZTVNSt3__29strstreamE'] = 440800;
+var __ZTINSt3__29strstreamE = Module['__ZTINSt3__29strstreamE'] = 441248;
+var __ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_14basic_iostreamIcNS_11char_traitsIcEEEE'] = 441088;
+var __ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE0_NS_13basic_istreamIcNS_11char_traitsIcEEEE'] = 441148;
+var __ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE = Module['__ZTCNSt3__29strstreamE8_NS_13basic_ostreamIcNS_11char_traitsIcEEEE'] = 441188;
+var __ZTSNSt3__212strstreambufE = Module['__ZTSNSt3__212strstreambufE'] = 440900;
+var __ZTSNSt3__210istrstreamE = Module['__ZTSNSt3__210istrstreamE'] = 440976;
+var __ZTSNSt3__210ostrstreamE = Module['__ZTSNSt3__210ostrstreamE'] = 441052;
+var __ZTSNSt3__29strstreamE = Module['__ZTSNSt3__29strstreamE'] = 441228;
+var __ZTVNSt3__212system_errorE = Module['__ZTVNSt3__212system_errorE'] = 441332;
+var __ZTVNSt3__224__generic_error_categoryE = Module['__ZTVNSt3__224__generic_error_categoryE'] = 441260;
+var __ZTINSt3__224__generic_error_categoryE = Module['__ZTINSt3__224__generic_error_categoryE'] = 441532;
+var __ZTVNSt3__223__system_error_categoryE = Module['__ZTVNSt3__223__system_error_categoryE'] = 441296;
+var __ZTINSt3__223__system_error_categoryE = Module['__ZTINSt3__223__system_error_categoryE'] = 441580;
+var __ZTVNSt3__214error_categoryE = Module['__ZTVNSt3__214error_categoryE'] = 441352;
+var __ZTINSt3__214error_categoryE = Module['__ZTINSt3__214error_categoryE'] = 441416;
+var __ZTSNSt3__214error_categoryE = Module['__ZTSNSt3__214error_categoryE'] = 441388;
+var __ZTVNSt3__212__do_messageE = Module['__ZTVNSt3__212__do_messageE'] = 441424;
+var __ZTSNSt3__212__do_messageE = Module['__ZTSNSt3__212__do_messageE'] = 441460;
+var __ZTSNSt3__224__generic_error_categoryE = Module['__ZTSNSt3__224__generic_error_categoryE'] = 441496;
+var __ZTSNSt3__223__system_error_categoryE = Module['__ZTSNSt3__223__system_error_categoryE'] = 441544;
+var __ZTSNSt3__212system_errorE = Module['__ZTSNSt3__212system_errorE'] = 441592;
+var __ZNSt3__219piecewise_constructE = Module['__ZNSt3__219piecewise_constructE'] = 441628;
+var __ZTVSt18bad_variant_access = Module['__ZTVSt18bad_variant_access'] = 441632;
+var __ZTISt18bad_variant_access = Module['__ZTISt18bad_variant_access'] = 441676;
+var __ZTSSt18bad_variant_access = Module['__ZTSSt18bad_variant_access'] = 441652;
+var ___cxa_unexpected_handler = Module['___cxa_unexpected_handler'] = 454072;
+var ___cxa_terminate_handler = Module['___cxa_terminate_handler'] = 454068;
+var ___cxa_new_handler = Module['___cxa_new_handler'] = 522692;
+var __ZTIN10__cxxabiv116__shim_type_infoE = Module['__ZTIN10__cxxabiv116__shim_type_infoE'] = 450256;
+var __ZTIN10__cxxabiv117__class_type_infoE = Module['__ZTIN10__cxxabiv117__class_type_infoE'] = 450304;
+var __ZTIN10__cxxabiv117__pbase_type_infoE = Module['__ZTIN10__cxxabiv117__pbase_type_infoE'] = 450352;
+var __ZTIDn = Module['__ZTIDn'] = 450700;
+var __ZTIN10__cxxabiv119__pointer_type_infoE = Module['__ZTIN10__cxxabiv119__pointer_type_infoE'] = 450400;
+var __ZTIv = Module['__ZTIv'] = 450648;
+var __ZTIN10__cxxabiv120__function_type_infoE = Module['__ZTIN10__cxxabiv120__function_type_infoE'] = 450452;
+var __ZTIN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTIN10__cxxabiv129__pointer_to_member_type_infoE'] = 450512;
+var __ZTSN10__cxxabiv116__shim_type_infoE = Module['__ZTSN10__cxxabiv116__shim_type_infoE'] = 450220;
+var __ZTISt9type_info = Module['__ZTISt9type_info'] = 453192;
+var __ZTSN10__cxxabiv117__class_type_infoE = Module['__ZTSN10__cxxabiv117__class_type_infoE'] = 450268;
+var __ZTSN10__cxxabiv117__pbase_type_infoE = Module['__ZTSN10__cxxabiv117__pbase_type_infoE'] = 450316;
+var __ZTSN10__cxxabiv119__pointer_type_infoE = Module['__ZTSN10__cxxabiv119__pointer_type_infoE'] = 450364;
+var __ZTSN10__cxxabiv120__function_type_infoE = Module['__ZTSN10__cxxabiv120__function_type_infoE'] = 450412;
+var __ZTSN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTSN10__cxxabiv129__pointer_to_member_type_infoE'] = 450464;
+var __ZTVN10__cxxabiv116__shim_type_infoE = Module['__ZTVN10__cxxabiv116__shim_type_infoE'] = 450536;
+var __ZTVN10__cxxabiv123__fundamental_type_infoE = Module['__ZTVN10__cxxabiv123__fundamental_type_infoE'] = 450564;
+var __ZTIN10__cxxabiv123__fundamental_type_infoE = Module['__ZTIN10__cxxabiv123__fundamental_type_infoE'] = 450632;
+var __ZTSN10__cxxabiv123__fundamental_type_infoE = Module['__ZTSN10__cxxabiv123__fundamental_type_infoE'] = 450592;
+var __ZTSv = Module['__ZTSv'] = 450644;
+var __ZTSPv = Module['__ZTSPv'] = 450656;
+var __ZTIPv = Module['__ZTIPv'] = 450660;
+var __ZTVN10__cxxabiv119__pointer_type_infoE = Module['__ZTVN10__cxxabiv119__pointer_type_infoE'] = 452396;
+var __ZTSPKv = Module['__ZTSPKv'] = 450676;
+var __ZTIPKv = Module['__ZTIPKv'] = 450680;
+var __ZTSDn = Module['__ZTSDn'] = 450696;
+var __ZTSPDn = Module['__ZTSPDn'] = 450708;
+var __ZTIPDn = Module['__ZTIPDn'] = 450712;
+var __ZTSPKDn = Module['__ZTSPKDn'] = 450728;
+var __ZTIPKDn = Module['__ZTIPKDn'] = 450736;
+var __ZTSb = Module['__ZTSb'] = 450752;
+var __ZTIb = Module['__ZTIb'] = 450756;
+var __ZTSPb = Module['__ZTSPb'] = 450764;
+var __ZTIPb = Module['__ZTIPb'] = 450768;
+var __ZTSPKb = Module['__ZTSPKb'] = 450784;
+var __ZTIPKb = Module['__ZTIPKb'] = 450788;
+var __ZTSw = Module['__ZTSw'] = 450804;
+var __ZTIw = Module['__ZTIw'] = 450808;
+var __ZTSPw = Module['__ZTSPw'] = 450816;
+var __ZTIPw = Module['__ZTIPw'] = 450820;
+var __ZTSPKw = Module['__ZTSPKw'] = 450836;
+var __ZTIPKw = Module['__ZTIPKw'] = 450840;
+var __ZTSc = Module['__ZTSc'] = 450856;
+var __ZTIc = Module['__ZTIc'] = 450860;
+var __ZTSPc = Module['__ZTSPc'] = 450868;
+var __ZTIPc = Module['__ZTIPc'] = 450872;
+var __ZTSPKc = Module['__ZTSPKc'] = 450888;
+var __ZTIPKc = Module['__ZTIPKc'] = 450892;
+var __ZTSh = Module['__ZTSh'] = 450908;
+var __ZTIh = Module['__ZTIh'] = 450912;
+var __ZTSPh = Module['__ZTSPh'] = 450920;
+var __ZTIPh = Module['__ZTIPh'] = 450924;
+var __ZTSPKh = Module['__ZTSPKh'] = 450940;
+var __ZTIPKh = Module['__ZTIPKh'] = 450944;
+var __ZTSa = Module['__ZTSa'] = 450960;
+var __ZTIa = Module['__ZTIa'] = 450964;
+var __ZTSPa = Module['__ZTSPa'] = 450972;
+var __ZTIPa = Module['__ZTIPa'] = 450976;
+var __ZTSPKa = Module['__ZTSPKa'] = 450992;
+var __ZTIPKa = Module['__ZTIPKa'] = 450996;
+var __ZTSs = Module['__ZTSs'] = 451012;
+var __ZTIs = Module['__ZTIs'] = 451016;
+var __ZTSPs = Module['__ZTSPs'] = 451024;
+var __ZTIPs = Module['__ZTIPs'] = 451028;
+var __ZTSPKs = Module['__ZTSPKs'] = 451044;
+var __ZTIPKs = Module['__ZTIPKs'] = 451048;
+var __ZTSt = Module['__ZTSt'] = 451064;
+var __ZTIt = Module['__ZTIt'] = 451068;
+var __ZTSPt = Module['__ZTSPt'] = 451076;
+var __ZTIPt = Module['__ZTIPt'] = 451080;
+var __ZTSPKt = Module['__ZTSPKt'] = 451096;
+var __ZTIPKt = Module['__ZTIPKt'] = 451100;
+var __ZTSi = Module['__ZTSi'] = 451116;
+var __ZTIi = Module['__ZTIi'] = 451120;
+var __ZTSPi = Module['__ZTSPi'] = 451128;
+var __ZTIPi = Module['__ZTIPi'] = 451132;
+var __ZTSPKi = Module['__ZTSPKi'] = 451148;
+var __ZTIPKi = Module['__ZTIPKi'] = 451152;
+var __ZTSj = Module['__ZTSj'] = 451168;
+var __ZTIj = Module['__ZTIj'] = 451172;
+var __ZTSPj = Module['__ZTSPj'] = 451180;
+var __ZTIPj = Module['__ZTIPj'] = 451184;
+var __ZTSPKj = Module['__ZTSPKj'] = 451200;
+var __ZTIPKj = Module['__ZTIPKj'] = 451204;
+var __ZTSl = Module['__ZTSl'] = 451220;
+var __ZTIl = Module['__ZTIl'] = 451224;
+var __ZTSPl = Module['__ZTSPl'] = 451232;
+var __ZTIPl = Module['__ZTIPl'] = 451236;
+var __ZTSPKl = Module['__ZTSPKl'] = 451252;
+var __ZTIPKl = Module['__ZTIPKl'] = 451256;
+var __ZTSm = Module['__ZTSm'] = 451272;
+var __ZTIm = Module['__ZTIm'] = 451276;
+var __ZTSPm = Module['__ZTSPm'] = 451284;
+var __ZTIPm = Module['__ZTIPm'] = 451288;
+var __ZTSPKm = Module['__ZTSPKm'] = 451304;
+var __ZTIPKm = Module['__ZTIPKm'] = 451308;
+var __ZTSx = Module['__ZTSx'] = 451324;
+var __ZTIx = Module['__ZTIx'] = 451328;
+var __ZTSPx = Module['__ZTSPx'] = 451336;
+var __ZTIPx = Module['__ZTIPx'] = 451340;
+var __ZTSPKx = Module['__ZTSPKx'] = 451356;
+var __ZTIPKx = Module['__ZTIPKx'] = 451360;
+var __ZTSy = Module['__ZTSy'] = 451376;
+var __ZTIy = Module['__ZTIy'] = 451380;
+var __ZTSPy = Module['__ZTSPy'] = 451388;
+var __ZTIPy = Module['__ZTIPy'] = 451392;
+var __ZTSPKy = Module['__ZTSPKy'] = 451408;
+var __ZTIPKy = Module['__ZTIPKy'] = 451412;
+var __ZTSn = Module['__ZTSn'] = 451428;
+var __ZTIn = Module['__ZTIn'] = 451432;
+var __ZTSPn = Module['__ZTSPn'] = 451440;
+var __ZTIPn = Module['__ZTIPn'] = 451444;
+var __ZTSPKn = Module['__ZTSPKn'] = 451460;
+var __ZTIPKn = Module['__ZTIPKn'] = 451464;
+var __ZTSo = Module['__ZTSo'] = 451480;
+var __ZTIo = Module['__ZTIo'] = 451484;
+var __ZTSPo = Module['__ZTSPo'] = 451492;
+var __ZTIPo = Module['__ZTIPo'] = 451496;
+var __ZTSPKo = Module['__ZTSPKo'] = 451512;
+var __ZTIPKo = Module['__ZTIPKo'] = 451516;
+var __ZTSDh = Module['__ZTSDh'] = 451532;
+var __ZTIDh = Module['__ZTIDh'] = 451536;
+var __ZTSPDh = Module['__ZTSPDh'] = 451544;
+var __ZTIPDh = Module['__ZTIPDh'] = 451548;
+var __ZTSPKDh = Module['__ZTSPKDh'] = 451564;
+var __ZTIPKDh = Module['__ZTIPKDh'] = 451572;
+var __ZTSf = Module['__ZTSf'] = 451588;
+var __ZTIf = Module['__ZTIf'] = 451592;
+var __ZTSPf = Module['__ZTSPf'] = 451600;
+var __ZTIPf = Module['__ZTIPf'] = 451604;
+var __ZTSPKf = Module['__ZTSPKf'] = 451620;
+var __ZTIPKf = Module['__ZTIPKf'] = 451624;
+var __ZTSd = Module['__ZTSd'] = 451640;
+var __ZTId = Module['__ZTId'] = 451644;
+var __ZTSPd = Module['__ZTSPd'] = 451652;
+var __ZTIPd = Module['__ZTIPd'] = 451656;
+var __ZTSPKd = Module['__ZTSPKd'] = 451672;
+var __ZTIPKd = Module['__ZTIPKd'] = 451676;
+var __ZTSe = Module['__ZTSe'] = 451692;
+var __ZTIe = Module['__ZTIe'] = 451696;
+var __ZTSPe = Module['__ZTSPe'] = 451704;
+var __ZTIPe = Module['__ZTIPe'] = 451708;
+var __ZTSPKe = Module['__ZTSPKe'] = 451724;
+var __ZTIPKe = Module['__ZTIPKe'] = 451728;
+var __ZTSg = Module['__ZTSg'] = 451744;
+var __ZTIg = Module['__ZTIg'] = 451748;
+var __ZTSPg = Module['__ZTSPg'] = 451756;
+var __ZTIPg = Module['__ZTIPg'] = 451760;
+var __ZTSPKg = Module['__ZTSPKg'] = 451776;
+var __ZTIPKg = Module['__ZTIPKg'] = 451780;
+var __ZTSDu = Module['__ZTSDu'] = 451796;
+var __ZTIDu = Module['__ZTIDu'] = 451800;
+var __ZTSPDu = Module['__ZTSPDu'] = 451808;
+var __ZTIPDu = Module['__ZTIPDu'] = 451812;
+var __ZTSPKDu = Module['__ZTSPKDu'] = 451828;
+var __ZTIPKDu = Module['__ZTIPKDu'] = 451836;
+var __ZTSDs = Module['__ZTSDs'] = 451852;
+var __ZTIDs = Module['__ZTIDs'] = 451856;
+var __ZTSPDs = Module['__ZTSPDs'] = 451864;
+var __ZTIPDs = Module['__ZTIPDs'] = 451868;
+var __ZTSPKDs = Module['__ZTSPKDs'] = 451884;
+var __ZTIPKDs = Module['__ZTIPKDs'] = 451892;
+var __ZTSDi = Module['__ZTSDi'] = 451908;
+var __ZTIDi = Module['__ZTIDi'] = 451912;
+var __ZTSPDi = Module['__ZTSPDi'] = 451920;
+var __ZTIPDi = Module['__ZTIPDi'] = 451924;
+var __ZTSPKDi = Module['__ZTSPKDi'] = 451940;
+var __ZTIPKDi = Module['__ZTIPKDi'] = 451948;
+var __ZTVN10__cxxabiv117__array_type_infoE = Module['__ZTVN10__cxxabiv117__array_type_infoE'] = 451964;
+var __ZTIN10__cxxabiv117__array_type_infoE = Module['__ZTIN10__cxxabiv117__array_type_infoE'] = 452028;
+var __ZTSN10__cxxabiv117__array_type_infoE = Module['__ZTSN10__cxxabiv117__array_type_infoE'] = 451992;
+var __ZTVN10__cxxabiv120__function_type_infoE = Module['__ZTVN10__cxxabiv120__function_type_infoE'] = 452040;
+var __ZTVN10__cxxabiv116__enum_type_infoE = Module['__ZTVN10__cxxabiv116__enum_type_infoE'] = 452068;
+var __ZTIN10__cxxabiv116__enum_type_infoE = Module['__ZTIN10__cxxabiv116__enum_type_infoE'] = 452132;
+var __ZTSN10__cxxabiv116__enum_type_infoE = Module['__ZTSN10__cxxabiv116__enum_type_infoE'] = 452096;
+var __ZTIN10__cxxabiv120__si_class_type_infoE = Module['__ZTIN10__cxxabiv120__si_class_type_infoE'] = 452264;
+var __ZTSN10__cxxabiv120__si_class_type_infoE = Module['__ZTSN10__cxxabiv120__si_class_type_infoE'] = 452224;
+var __ZTIN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTIN10__cxxabiv121__vmi_class_type_infoE'] = 452356;
+var __ZTSN10__cxxabiv121__vmi_class_type_infoE = Module['__ZTSN10__cxxabiv121__vmi_class_type_infoE'] = 452316;
+var __ZTVN10__cxxabiv117__pbase_type_infoE = Module['__ZTVN10__cxxabiv117__pbase_type_infoE'] = 452368;
+var __ZTVN10__cxxabiv129__pointer_to_member_type_infoE = Module['__ZTVN10__cxxabiv129__pointer_to_member_type_infoE'] = 452424;
+var __ZTVSt9bad_alloc = Module['__ZTVSt9bad_alloc'] = 452452;
+var __ZTVSt20bad_array_new_length = Module['__ZTVSt20bad_array_new_length'] = 452472;
+var __ZTISt9bad_alloc = Module['__ZTISt9bad_alloc'] = 452604;
+var __ZTSSt9exception = Module['__ZTSSt9exception'] = 452512;
+var __ZTVSt13bad_exception = Module['__ZTVSt13bad_exception'] = 452536;
+var __ZTISt13bad_exception = Module['__ZTISt13bad_exception'] = 452576;
+var __ZTSSt13bad_exception = Module['__ZTSSt13bad_exception'] = 452556;
+var __ZTSSt9bad_alloc = Module['__ZTSSt9bad_alloc'] = 452588;
+var __ZTSSt20bad_array_new_length = Module['__ZTSSt20bad_array_new_length'] = 452616;
+var __ZTVSt12domain_error = Module['__ZTVSt12domain_error'] = 452696;
+var __ZTISt12domain_error = Module['__ZTISt12domain_error'] = 452764;
+var __ZTSSt12domain_error = Module['__ZTSSt12domain_error'] = 452716;
+var __ZTSSt11logic_error = Module['__ZTSSt11logic_error'] = 452733;
+var __ZTVSt16invalid_argument = Module['__ZTVSt16invalid_argument'] = 452776;
+var __ZTISt16invalid_argument = Module['__ZTISt16invalid_argument'] = 452820;
+var __ZTSSt16invalid_argument = Module['__ZTSSt16invalid_argument'] = 452796;
+var __ZTSSt12length_error = Module['__ZTSSt12length_error'] = 452852;
+var __ZTVSt12out_of_range = Module['__ZTVSt12out_of_range'] = 452884;
+var __ZTISt12out_of_range = Module['__ZTISt12out_of_range'] = 452924;
+var __ZTSSt12out_of_range = Module['__ZTSSt12out_of_range'] = 452904;
+var __ZTVSt11range_error = Module['__ZTVSt11range_error'] = 452936;
+var __ZTISt11range_error = Module['__ZTISt11range_error'] = 453004;
+var __ZTSSt11range_error = Module['__ZTSSt11range_error'] = 452956;
+var __ZTSSt13runtime_error = Module['__ZTSSt13runtime_error'] = 452972;
+var __ZTVSt14overflow_error = Module['__ZTVSt14overflow_error'] = 453016;
+var __ZTISt14overflow_error = Module['__ZTISt14overflow_error'] = 453056;
+var __ZTSSt14overflow_error = Module['__ZTSSt14overflow_error'] = 453036;
+var __ZTVSt15underflow_error = Module['__ZTVSt15underflow_error'] = 453068;
+var __ZTISt15underflow_error = Module['__ZTISt15underflow_error'] = 453108;
+var __ZTSSt15underflow_error = Module['__ZTSSt15underflow_error'] = 453088;
+var __ZTVSt8bad_cast = Module['__ZTVSt8bad_cast'] = 453120;
+var __ZTVSt10bad_typeid = Module['__ZTVSt10bad_typeid'] = 453140;
+var __ZTISt10bad_typeid = Module['__ZTISt10bad_typeid'] = 453240;
+var __ZTVSt9type_info = Module['__ZTVSt9type_info'] = 453160;
+var __ZTSSt9type_info = Module['__ZTSSt9type_info'] = 453176;
+var __ZTSSt8bad_cast = Module['__ZTSSt8bad_cast'] = 453200;
+var __ZTSSt10bad_typeid = Module['__ZTSSt10bad_typeid'] = 453224;
+var _in6addr_any = Module['_in6addr_any'] = 453252;
+var _in6addr_loopback = Module['_in6addr_loopback'] = 453268;
 
 
 

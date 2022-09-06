@@ -15,7 +15,8 @@ Universe::Universe(Graph graph,
         dt{dt},
         default_repulsion{default_repulsion},
         default_spring_k{default_spring_k},
-        default_damping{default_damping}
+        default_damping{default_damping},
+        n_iterations{0}
     {}
 
   // Hooke's Law: F_spring = kx
@@ -39,6 +40,7 @@ Vec3D Universe::compute_repulsion_force(Node n1, Node n2) {
 void Universe::set_graph(Graph graph) {
     this->graph = graph;
     this->graph.update_degrees();
+    n_iterations = 0;
 }
 
 void Universe::update(double deltaT) {
@@ -87,4 +89,5 @@ void Universe::update(double deltaT) {
         n1.vel = new_vel;
         n1.acc = new_acc;
     }
+    n_iterations += 1;
 }

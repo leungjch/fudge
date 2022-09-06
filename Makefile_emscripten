@@ -2,7 +2,8 @@ CXX= emcc
 CXXFLAGS=-std=c++17 -MMD -Oz
 OBJECTS=main.o graph.o node.o utils/vec3d.o utils/rgb.o \
 	 universe.o  mycamera.o \
-	 draw_utils/solid_sphere.o draw_utils/line.o
+	 draw_utils/solid_sphere.o draw_utils/line.o \
+	 imgui/imgui.o imgui/imgui_impl_opengl3.o imgui/imgui_draw.o imgui/imgui_impl_glfw.o imgui/imgui_tables.o imgui/imgui_widgets.o
 
 DEPENDS=${OBJECTS:.o=.d}
 EXEC=build/index.js
