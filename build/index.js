@@ -18097,9 +18097,6 @@ var __ZN5ImGui5BeginEPKcPbi = Module["__ZN5ImGui5BeginEPKcPbi"] = createExportWr
 var __ZN5ImGui11SliderFloatEPKcPfffS1_i = Module["__ZN5ImGui11SliderFloatEPKcPfffS1_i"] = createExportWrapper("_ZN5ImGui11SliderFloatEPKcPfffS1_i");
 
 /** @type {function(...*):?} */
-var __ZN5ImGui9SliderIntEPKcPiiiS1_i = Module["__ZN5ImGui9SliderIntEPKcPiiiS1_i"] = createExportWrapper("_ZN5ImGui9SliderIntEPKcPiiiS1_i");
-
-/** @type {function(...*):?} */
 var __ZN6ImVec2C2Eff = Module["__ZN6ImVec2C2Eff"] = createExportWrapper("_ZN6ImVec2C2Eff");
 
 /** @type {function(...*):?} */
@@ -21134,6 +21131,9 @@ var __ZNK8ImVectorIcE5frontEv = Module["__ZNK8ImVectorIcE5frontEv"] = createExpo
 
 /** @type {function(...*):?} */
 var __ZN5ImGui10LogButtonsEv = Module["__ZN5ImGui10LogButtonsEv"] = createExportWrapper("_ZN5ImGui10LogButtonsEv");
+
+/** @type {function(...*):?} */
+var __ZN5ImGui9SliderIntEPKcPiiiS1_i = Module["__ZN5ImGui9SliderIntEPKcPiiiS1_i"] = createExportWrapper("_ZN5ImGui9SliderIntEPKcPiiiS1_i");
 
 /** @type {function(...*):?} */
 var __ZN5ImGui20MarkIniSettingsDirtyEv = Module["__ZN5ImGui20MarkIniSettingsDirtyEv"] = createExportWrapper("_ZN5ImGui20MarkIniSettingsDirtyEv");
@@ -41383,13 +41383,14 @@ var dynCall_iiiiiijj = Module["dynCall_iiiiiijj"] = createExportWrapper("dynCall
 
 var _graph = Module['_graph'] = 454408;
 var _camera = Module['_camera'] = 454432;
-var _universe = Module['_universe'] = 454712;
-var _repulsion_force = Module['_repulsion_force'] = 453400;
-var _spring_force = Module['_spring_force'] = 453404;
-var _damping_coefficient = Module['_damping_coefficient'] = 453408;
-var _gravitational_force = Module['_gravitational_force'] = 454704;
-var _sphere = Module['_sphere'] = 454784;
-var _line = Module['_line'] = 455048;
+var _universe = Module['_universe'] = 454704;
+var _timeDelta = Module['_timeDelta'] = 453400;
+var _repulsion_force = Module['_repulsion_force'] = 453404;
+var _spring_force = Module['_spring_force'] = 453408;
+var _damping_coefficient = Module['_damping_coefficient'] = 453412;
+var _gravitational_force = Module['_gravitational_force'] = 453416;
+var _sphere = Module['_sphere'] = 454776;
+var _line = Module['_line'] = 455040;
 var _show_degree = Module['_show_degree'] = 454574;
 var _view = Module['_view'] = 454640;
 var _projection = Module['_projection'] = 454576;
@@ -41398,7 +41399,7 @@ var _MIN_DISTANCE_ORIGIN = Module['_MIN_DISTANCE_ORIGIN'] = 453392;
 var _scroll_sensitivity = Module['_scroll_sensitivity'] = 453380;
 var _mouseDown = Module['_mouseDown'] = 454572;
 var _mouseDownFirst = Module['_mouseDownFirst'] = 454573;
-var _loop = Module['_loop'] = 455184;
+var _loop = Module['_loop'] = 455176;
 var _stderr = Module['_stderr'] = 288128;
 var _autoRotateX = Module['_autoRotateX'] = 453388;
 var _mouseY = Module['_mouseY'] = 454552;
@@ -41422,36 +41423,36 @@ var __ZTSNSt3__210__function6__baseIFvvEEE = Module['__ZTSNSt3__210__function6__
 var __ZTINSt3__210__function6__baseIFvvEEE = Module['__ZTINSt3__210__function6__baseIFvvEEE'] = 66248;
 var __ZTVN10__cxxabiv117__class_type_infoE = Module['__ZTVN10__cxxabiv117__class_type_infoE'] = 452224;
 var __ZTVN10__cxxabiv120__si_class_type_infoE = Module['__ZTVN10__cxxabiv120__si_class_type_infoE'] = 452264;
-var _GImGui = Module['_GImGui'] = 455208;
+var _GImGui = Module['_GImGui'] = 455200;
 var _stdout = Module['_stdout'] = 288136;
-var __ZN15ImGuiTextBuffer11EmptyStringE = Module['__ZN15ImGuiTextBuffer11EmptyStringE'] = 455212;
-var ___environ = Module['___environ'] = 477412;
-var ____environ = Module['____environ'] = 477412;
-var __environ = Module['__environ'] = 477412;
-var _environ = Module['_environ'] = 477412;
-var _timezone = Module['_timezone'] = 477960;
-var _daylight = Module['_daylight'] = 477964;
-var _tzname = Module['_tzname'] = 477968;
-var ___progname = Module['___progname'] = 479184;
-var _optind = Module['_optind'] = 453440;
-var ___optreset = Module['___optreset'] = 478148;
-var ___optpos = Module['___optpos'] = 478152;
-var _optarg = Module['_optarg'] = 478156;
-var _optopt = Module['_optopt'] = 478160;
-var _opterr = Module['_opterr'] = 453444;
-var _optreset = Module['_optreset'] = 478148;
-var _h_errno = Module['_h_errno'] = 478284;
-var ___signgam = Module['___signgam'] = 493484;
+var __ZN15ImGuiTextBuffer11EmptyStringE = Module['__ZN15ImGuiTextBuffer11EmptyStringE'] = 455204;
+var ___environ = Module['___environ'] = 477396;
+var ____environ = Module['____environ'] = 477396;
+var __environ = Module['__environ'] = 477396;
+var _environ = Module['_environ'] = 477396;
+var _timezone = Module['_timezone'] = 477944;
+var _daylight = Module['_daylight'] = 477948;
+var _tzname = Module['_tzname'] = 477952;
+var ___progname = Module['___progname'] = 479168;
+var _optind = Module['_optind'] = 453448;
+var ___optreset = Module['___optreset'] = 478132;
+var ___optpos = Module['___optpos'] = 478136;
+var _optarg = Module['_optarg'] = 478140;
+var _optopt = Module['_optopt'] = 478144;
+var _opterr = Module['_opterr'] = 453452;
+var _optreset = Module['_optreset'] = 478132;
+var _h_errno = Module['_h_errno'] = 478268;
+var ___signgam = Module['___signgam'] = 493468;
 var __ns_flagdata = Module['__ns_flagdata'] = 282752;
-var ___progname_full = Module['___progname_full'] = 479188;
-var _program_invocation_short_name = Module['_program_invocation_short_name'] = 479184;
-var _program_invocation_name = Module['_program_invocation_name'] = 479188;
-var ___sig_pending = Module['___sig_pending'] = 483536;
-var ___sig_actions = Module['___sig_actions'] = 484384;
-var _signgam = Module['_signgam'] = 493484;
+var ___progname_full = Module['___progname_full'] = 479172;
+var _program_invocation_short_name = Module['_program_invocation_short_name'] = 479168;
+var _program_invocation_name = Module['_program_invocation_name'] = 479172;
+var ___sig_pending = Module['___sig_pending'] = 483520;
+var ___sig_actions = Module['___sig_actions'] = 484368;
+var _signgam = Module['_signgam'] = 493468;
 var _stdin = Module['_stdin'] = 288132;
-var ___THREW__ = Module['___THREW__'] = 500288;
-var ___threwValue = Module['___threwValue'] = 500292;
+var ___THREW__ = Module['___THREW__'] = 500272;
+var ___threwValue = Module['___threwValue'] = 500276;
 var __ZTVSt12bad_any_cast = Module['__ZTVSt12bad_any_cast'] = 302064;
 var __ZTISt12bad_any_cast = Module['__ZTISt12bad_any_cast'] = 302104;
 var __ZTSSt12bad_any_cast = Module['__ZTSSt12bad_any_cast'] = 302084;

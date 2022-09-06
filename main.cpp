@@ -55,13 +55,14 @@ glm::mat4 projection;
 glm::mat4 view;
 
 // Universe settings
+float timeDelta = 1.0f / (1000.0/60.0);
 float repulsion_force = 1.0f;
 float spring_force = 1.0f;
 float damping_coefficient = 0.5f;
-float gravitational_force = 0.0f;
+float gravitational_force = 0.5f;
 
 Universe universe(graph,
-                  0.05,
+                  timeDelta,
                   repulsion_force,
                   spring_force,
                   damping_coefficient,
@@ -297,7 +298,6 @@ int main(int ArgCount, char **Args)
     b32 running = 1;
     b32 fullScreen = 0;
 
-    double timeDelta = 1000 / 60;
     double timeAccumulator = 0;
     double timeSimulatedThisIteration = 0;
     double currentTime = glfwGetTime();
@@ -325,7 +325,7 @@ int main(int ArgCount, char **Args)
         // Run update logic
         if (universe.n_iterations < n_iterations)
         {
-            universe.update(1.0 / timeDelta);
+            universe.update(timeDelta);
         }
 
         currentTime = glfwGetTime();
@@ -342,21 +342,25 @@ int main(int ArgCount, char **Args)
         // cout << "Render time: " << renderEnd - renderStart << endl;
 
         ImGui::Begin("Settings", NULL, ImGuiWindowFlags_AlwaysAutoResize);
-        if (ImGui::SliderFloat("Spring force", &spring_force, 0.0f, 5.0f))
+        if (ImGui::SliderFloat("Spring force", &spring_force, 0.0f, 1.0f))
         {
             universe.spring_k = spring_force;
         }
-        if (ImGui::SliderFloat("Repulsion force", &repulsion_force, 0.0f, 5.0f))
+        if (ImGui::SliderFloat("Repulsion force", &repulsion_force, 0.0f, 1.0f))
         {
             universe.repulsion = repulsion_force;
         }
-        if (ImGui::SliderFloat("Gravitational force", &gravitational_force, 0.0f, 5.0f))
+        if (ImGui::SliderFloat("Gravitational force", &gravitational_force, 0.0f, 1.0f))
         {
             universe.gravity = gravitational_force;
         }
         if (ImGui::SliderFloat("Damping coefficient", &damping_coefficient, 0.0f, 1.0f))
         {
             universe.damping = damping_coefficient;
+        }
+        if (ImGui::SliderFloat("Render speed", &timeDelta, 0.001f, 0.40f))
+        {
+            universe.dt = timeDelta;   
         }
 
         // ImGui::SliderInt("Render time", &n_iterations, 50, 500);
@@ -378,7 +382,7 @@ int main(int ArgCount, char **Args)
         
         ImGui::Checkbox("Vertex degree", &show_degree);
         ImGui::Checkbox("Orbit camera", &autoRotateX);
-        if (ImGui::Button("Randomize"))
+        if (ImGui::Button("Random graph"))
         {
             init_graph();
         }
