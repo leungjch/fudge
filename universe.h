@@ -6,16 +6,18 @@ class Universe
 {
 public:
   double dt;
-  double default_repulsion;
-  double default_spring_k;
-  double default_damping;
+  double repulsion;
+  double spring_k;
+  double damping;
+  double gravity;
   int n_iterations;
   Graph graph;
   Universe(Graph graph, 
     double dt,
-    double default_repulsion,
-    double default_spring_k,
-    double default_damping);
+    double repulsion,
+    double spring_k,
+    double damping,
+    double gravity);
 
   void update(double deltaT);
   Vec3D compute_spring_force(Node n1, Node n2);

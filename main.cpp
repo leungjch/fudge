@@ -34,7 +34,7 @@ typedef int32_t b32;
 using namespace std;
 bool movingUp = false;  // Whether or not we are moving up or down
 float yLocation = 0.0f; // Keep track of our position on the y axis.
-int n_iterations = 500;
+int n_iterations = INT_FAST32_MAX;
 
 Graph graph;
 MyCamera camera(WIN_WIDTH, WIN_HEIGHT);
@@ -47,18 +47,25 @@ float drag_sensitivity = 1.5;
 float zoom = 0.0f;
 bool mouseDown = false;
 bool mouseDownFirst = false;
-bool autoRotateX = false;
+bool autoRotateX = true;
 bool show_degree = false;
 float MIN_DISTANCE_ORIGIN = 5.0f;
 float zoom_step = 2.5f;
 glm::mat4 projection;
 glm::mat4 view;
 
+// Universe settings
+float repulsion_force = 1.0f;
+float spring_force = 1.0f;
+float damping_coefficient = 0.5f;
+float gravitational_force = 0.0f;
+
 Universe universe(graph,
-                  0.05, // dt
-                  1.0,  // repulsion
-                  1.0,  // spring
-                  1.0   // damping
+                  0.05,
+                  repulsion_force,
+                  spring_force,
+                  damping_coefficient,
+                  gravitational_force
 );
 
 SolidSphere sphere(
@@ -334,8 +341,25 @@ int main(int ArgCount, char **Args)
         // double renderEnd = glfwGetTime();
         // cout << "Render time: " << renderEnd - renderStart << endl;
 
-        ImGui::Begin("Settings");
-        ImGui::SliderInt("Render time", &n_iterations, 50, 1000);
+        ImGui::Begin("Settings", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+        if (ImGui::SliderFloat("Spring force", &spring_force, 0.0f, 5.0f))
+        {
+            universe.spring_k = spring_force;
+        }
+        if (ImGui::SliderFloat("Repulsion force", &repulsion_force, 0.0f, 5.0f))
+        {
+            universe.repulsion = repulsion_force;
+        }
+        if (ImGui::SliderFloat("Gravitational force", &gravitational_force, 0.0f, 5.0f))
+        {
+            universe.gravity = gravitational_force;
+        }
+        if (ImGui::SliderFloat("Damping coefficient", &damping_coefficient, 0.0f, 1.0f))
+        {
+            universe.damping = damping_coefficient;
+        }
+
+        // ImGui::SliderInt("Render time", &n_iterations, 50, 500);
         if (ImGui::Button("+"))
         {
             if (glm::distance(camera.pos, glm::vec3(0.0f)) > MIN_DISTANCE_ORIGIN)
@@ -354,7 +378,7 @@ int main(int ArgCount, char **Args)
         
         ImGui::Checkbox("Vertex degree", &show_degree);
         ImGui::Checkbox("Orbit camera", &autoRotateX);
-        if (ImGui::Button("Reset"))
+        if (ImGui::Button("Randomize"))
         {
             init_graph();
         }
